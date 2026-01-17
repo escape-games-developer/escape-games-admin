@@ -1,0 +1,476 @@
+:root{
+  --bg:#0b0b0e;
+  --txt:#f3f5ff;
+  --mut: rgba(255,255,255,.75);
+  --line: rgba(255,255,255,.12);
+
+  --accent:#ff6a00;
+  --danger:#ff3c3c;
+
+  --shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+a{ color:inherit; text-decoration:none; }
+
+/* ✅ Fondo global */
+body{
+  color: var(--txt);
+  background-color: var(--bg);
+  background-image: url("../assets/Escape-Games-Admin-fondo.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+.shell{
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ✅ Scroll del contenido */
+.main{
+  padding-top:72px;
+  height: calc(100vh - 72px);
+  overflow-y: auto;
+}
+
+.content{
+  padding:18px;
+  max-width: 1180px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* ✅ Header fijo */
+.header{
+  position:fixed; top:0; left:0; right:0; height:72px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 0 14px;
+  background: rgba(10,10,14,.62);
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+  z-index: 50;
+}
+
+/* ✅ Logo centrado (sin texto) */
+.headerCenter{
+  position:absolute;
+  left:50%;
+  transform: translateX(-50%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:72px;
+}
+
+/* FIX definitivo del tamaño */
+.headerLogo{
+  height: 52px !important;
+  max-height: 52px !important;
+  width: auto !important;
+  max-width: 220px !important;
+  display:block !important;
+  object-fit: contain !important;
+}
+
+.statusPill{
+  font-size:12px; color: var(--accent);
+  border:1px solid rgba(255,106,0,.35);
+  background: rgba(255,106,0,.10);
+  padding:6px 10px;
+  border-radius:999px;
+}
+
+/* Botones */
+.iconBtn{
+  width:44px; height:44px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.05);
+  color: var(--txt);
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.iconBtn:hover{ border-color: rgba(255,106,0,.35); }
+
+.burger{ display:flex; flex-direction:column; gap:5px; }
+.burger i{
+  display:block;
+  width:18px;
+  height:2px;
+  background: var(--txt);
+  opacity:.9;
+}
+
+/* Backdrop */
+.backdrop{
+  position:fixed; inset:0;
+  background: rgba(0,0,0,.55);
+  opacity:0;
+  pointer-events:none;
+  transition: opacity .18s ease;
+  z-index: 60;
+}
+.backdrop.show{ opacity:1; pointer-events:auto; }
+
+/* ✅ Drawer oscuro */
+.drawer{
+  position:fixed;
+  top:0; left:0;
+  height:100vh;
+  width: 270px;
+  background: rgba(28, 28, 34, 0.92);
+  color: var(--txt);
+  border-right: 1px solid rgba(255,255,255,.10);
+  transform: translateX(-102%);
+  transition: transform .20s ease;
+  z-index: 70;
+  display:flex;
+  flex-direction:column;
+}
+.drawer.open{ transform: translateX(0); }
+
+.drawerHeader{
+  position: relative;
+  height:72px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+/* logo del drawer centrado */
+.drawerHeaderCenter{
+  position:absolute;
+  left:50%;
+  transform: translateX(-50%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:72px;
+}
+
+/* FIX definitivo del tamaño */
+.drawerLogoOnly{
+  height: 40px !important;
+  max-height: 40px !important;
+  width: auto !important;
+  max-width: 200px !important;
+  display:block !important;
+  object-fit: contain !important;
+}
+
+.drawerCloseBtn{
+  border-color: rgba(255,255,255,.14) !important;
+  background: rgba(255,255,255,.06) !important;
+  color: var(--txt) !important;
+}
+.drawerCloseBtn:hover{
+  border-color: rgba(255,106,0,.45) !important;
+}
+
+.drawerSection{ padding:12px; }
+.drawerSectionTitle{
+  color: rgba(255,255,255,.70);
+  font-size:12px;
+  letter-spacing:.4px;
+  text-transform: uppercase;
+  margin-bottom:10px;
+}
+
+/* Perfil */
+.profileCard{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:12px;
+  border-radius:16px;
+  background: rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.10);
+}
+.avatarCircle{
+  width:38px; height:38px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:900;
+  background: rgba(255,106,0,.18);
+  border:1px solid rgba(255,106,0,.35);
+}
+.profileName{ font-weight:900; }
+.profileRole{
+  font-size: 11px; /* ✅ más chico */
+  opacity: .78;
+}
+
+/* Secciones */
+.drawerNav{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.navItem{
+  padding:12px 12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.06);
+  color: rgba(255,255,255,.85);
+}
+.navItem:hover{
+  border-color: rgba(255,106,0,.35);
+}
+.navItem.active{
+  background: rgba(120, 200, 255, 0.20);
+  border-color: rgba(120, 200, 255, 0.40);
+  color: var(--txt);
+}
+
+.drawerFooter{
+  margin-top:auto;
+  padding:12px;
+  border-top: 1px solid rgba(255,255,255,.10);
+}
+
+/* ✅ cerrar sesión: rojizo, más chico */
+.logoutBtn{
+  width:100%;
+  padding: 10px 12px;
+  border-radius:14px;
+  cursor:pointer;
+  font-weight:800;
+  background: rgba(255, 60, 60, 0.18);
+  border: 1px solid rgba(255, 60, 60, 0.40);
+  color: rgba(255,255,255,.92);
+}
+.logoutBtn:hover{
+  background: rgba(255, 60, 60, 0.24);
+  border-color: rgba(255, 60, 60, 0.55);
+}
+
+/* ✅ Neutraliza cualquier img global que te rompa los logos */
+.header img, .drawer img{
+  width: auto !important;
+}
+
+/* ===== Páginas / paneles ===== */
+.page{ display:flex; flex-direction:column; gap:10px; }
+.pageTitle{ font-size:22px; font-weight:900; }
+.pageSub{ color: var(--mut); font-size:13px; }
+
+.panel,
+.roomCard,
+.authCard,
+.modalBox{
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.72);
+  backdrop-filter: blur(8px);
+  border-radius:18px;
+  box-shadow: var(--shadow);
+}
+
+.authWrap{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+.authCard{
+  width:min(420px, 92vw);
+  padding:16px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.field{ display:flex; flex-direction:column; gap:6px; }
+.label{ color: var(--mut); font-size:12px; }
+.input{
+  width:100%;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.25);
+  color: var(--txt);
+  outline:none;
+}
+.input:focus{
+  border-color: rgba(255,106,0,.45);
+  box-shadow: 0 0 0 3px rgba(255,106,0,.10);
+}
+
+.btnSmall{
+  padding:10px 12px;
+  border-radius:14px;
+  cursor:pointer;
+  border:1px solid rgba(255,106,0,.38);
+  background: linear-gradient(180deg, rgba(255,106,0,.22), rgba(255,106,0,.12));
+  color: var(--txt);
+  font-weight:800;
+}
+.btnSmall:hover{
+  border-color: rgba(255,106,0,.55);
+}
+
+.ghostBtn{
+  padding:10px 12px;
+  border-radius:14px;
+  cursor:pointer;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.05);
+  color: var(--txt);
+}
+.ghostBtn:hover{ border-color: rgba(255,106,0,.30); }
+
+.dangerBtnInline{
+  padding:10px 12px;
+  border-radius:14px;
+  cursor:pointer;
+  background: rgba(255,45,85,.12);
+  border:1px solid rgba(255,45,85,.35);
+  color: var(--txt);
+}
+
+/* ===== Salas grid ===== */
+.pageHeadRow{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:14px;
+}
+.toolbarRow{ display:flex; gap:10px; margin-top:6px; }
+
+.roomsGrid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap:14px;
+  margin-top:14px;
+}
+
+.roomCard{ overflow:hidden; }
+
+.roomImgWrap{ position:relative; }
+.roomImgWrap img{
+  width:100%;
+  height:170px;
+  object-fit:cover;
+  display:block;
+}
+
+.roomBadge{
+  position:absolute;
+  top:10px;
+  right:10px;
+  font-size:12px;
+  padding:6px 10px;
+  border-radius:999px;
+  background: rgba(0,0,0,.45);
+  border:1px solid rgba(255,255,255,.12);
+}
+.roomBadge.off{
+  left:10px;
+  right:auto;
+  background: rgba(255,45,85,.25);
+  border-color: rgba(255,45,85,.45);
+}
+
+.roomBody{ padding:12px; }
+.roomTitle{ font-weight:900; margin-bottom:8px; }
+
+.roomMeta{ display:flex; flex-direction:column; gap:10px; }
+.metaRow{ display:flex; align-items:center; gap:10px; }
+.metaLabel{ color: var(--mut); font-size:12px; width:74px; }
+.metaValue{ color: var(--mut); font-size:12px; }
+
+.dots{ display:flex; gap:4px; flex:1; }
+.dot{
+  width:10px; height:10px;
+  border-radius:999px;
+  background: rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.12);
+}
+.dot.on{
+  background: rgba(255,106,0,.85);
+  border-color: rgba(255,106,0,.55);
+  box-shadow: 0 0 14px rgba(255,106,0,.20);
+}
+
+.metaMini{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 10px;
+  color: var(--mut);
+  font-size:12px;
+}
+
+.roomActions{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  margin-top:12px;
+}
+
+/* ===== MODAL RESPONSIVO (scroll, no tapa botones) ===== */
+.modalCenter{
+  position:fixed;
+  inset:0;
+  z-index: 80;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  padding:14px;
+  overflow:auto;
+}
+
+.modalBox{
+  width:min(820px, 94vw);
+  max-height: calc(100vh - 28px);
+  display:flex;
+  flex-direction:column;
+}
+
+.modalHead{
+  height:56px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 0 12px;
+  border-bottom:1px solid rgba(255,255,255,.12);
+}
+
+.modalTitle{ font-weight:900; }
+
+.modalBody{
+  padding:12px;
+  overflow-y:auto;
+  max-height: calc(100vh - 56px - 64px - 28px);
+}
+
+.modalFoot{
+  padding:12px;
+  border-top:1px solid rgba(255,255,255,.12);
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+
+  position: sticky;
+  bottom: 0;
+  background: rgba(12,12,16,.92);
+  backdrop-filter: blur(8px);
+}
+
+.formGrid2{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+}
+@media (max-width: 900px){
+  .formGrid2{ grid-template-columns: 1fr; }
+}

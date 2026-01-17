@@ -1,0 +1,80 @@
+import React, { useEffect, useState } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import Drawer from "./Drawer";
+import Header from "./Header";
+import { supabase } from "../../lib/supabase";
+
+type AdminInfo = {
+  userName: string;
+};
+
+export default function AdminLayout() {
+  const nav = useNavigate();
+  const loc = useLocation();
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [admin, setAdmin] = useState<AdminInfo>({ userName: "Administrador" });
+
+  useEffect(() => {
+    let mounted = true;
+
+    const boot = async () => {
+      // ✅ Requiere sesión
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        nav("/login", { replace: true });
+        return;
+      }
+
+      // ✅ Requiere estar en tabla admins
+      const { data: adminRow } = await supabase
+        .from("admins")
+        .select("mail, branch_id")
+        .eq("user_id", data.session.user.id)
+        .maybeSingle();
+
+      if (!adminRow) {
+        await supabase.auth.signOut();
+        nav("/login", { replace: true });
+        return;
+      }
+
+      if (mounted) {
+        setAdmin({ userName: adminRow.mail || "Administrador" });
+        setReady(true);
+      }
+    };
+
+    boot();
+
+    // si cambia la sesión, revalida
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      boot();
+    });
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, [nav]);
+
+  // Cierra drawer al cambiar de ruta
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [loc.pathname]);
+
+  if (!ready) return null;
+
+  return (
+    <div className="shell">
+      <Header onOpenMenu={() => setDrawerOpen(true)} />
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} userName={admin.userName} />
+      <main className="main">
+        <div className="content">
+          <Outlet />
+        </div>
+      </main>
+    </div>
+  );
+}
