@@ -1,8 +1,8 @@
 :root{
   --bg:#0b0b0e;
   --txt:#f3f5ff;
-  --mut: rgba(255,255,255,.75);
-  --line: rgba(255,255,255,.12);
+  --mut: rgba(255, 255, 255, 0.75);
+  --line: rgba(255, 255, 255, 0.895);
 
   --accent:#ff6a00;
   --danger:#ff3c3c;
@@ -31,22 +31,52 @@ body{
 }
 
 /* ✅ Scroll del contenido */
+/* ✅ contenedor principal: tiene que ser FLEX para que el hijo pueda scrollear */
 .main{
   padding-top:72px;
   height: calc(100vh - 72px);
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
+/* ✅ este contenedor también debe poder “encoger” */
 .content{
   padding:18px;
   max-width: 1180px;
   margin: 0 auto;
   width: 100%;
+
+  height: 100%;
+  min-height: 0;
+
+  display: flex;
+  flex-direction: column;
 }
+
+/* ✅ página: flex column y que deje al scroll tomar altura */
+.page{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+
+  flex: 1;
+  min-height: 0;
+}
+
+/* ✅ SCROLL SOLO DE CARDS */
+.roomsScroll{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
 
 /* ✅ Header fijo */
 .header{
-  position:fixed; top:0; left:0; right:0; height:72px;
+  position:fixed; top:0; left:0; right:0; height:84px;
   display:flex; align-items:center; justify-content:space-between;
   padding: 0 14px;
   background: rgba(10,10,14,.62);
@@ -62,14 +92,14 @@ body{
   transform: translateX(-50%);
   display:flex;
   align-items:center;
-  justify-content:center;
+  justify-content:auto-center;
   height:72px;
 }
 
 /* FIX definitivo del tamaño */
 .headerLogo{
-  height: 52px !important;
-  max-height: 52px !important;
+  height: 80px !important;
+  max-height: 80px !important;
   width: auto !important;
   max-width: 220px !important;
   display:block !important;
@@ -79,7 +109,8 @@ body{
 .statusPill{
   font-size:12px; color: var(--accent);
   border:1px solid rgba(255,106,0,.35);
-  background: rgba(255,106,0,.10);
+  background: rgba
+  255,106,0,.10;
   padding:6px 10px;
   border-radius:999px;
 }
@@ -206,7 +237,7 @@ body{
 }
 .profileName{ font-weight:900; }
 .profileRole{
-  font-size: 11px; /* ✅ más chico */
+  font-size: 11px;
   opacity: .78;
 }
 
@@ -221,7 +252,7 @@ body{
   border-radius:14px;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.06);
-  color: rgba(255,255,255,.85);
+  color: rgba(255, 255, 255, 0.478);
 }
 .navItem:hover{
   border-color: rgba(255,106,0,.35);
@@ -260,7 +291,14 @@ body{
 }
 
 /* ===== Páginas / paneles ===== */
-.page{ display:flex; flex-direction:column; gap:10px; }
+.page{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+
+  height: 100%;
+  min-height: 0;
+}
 .pageTitle{ font-size:22px; font-weight:900; }
 .pageSub{ color: var(--mut); font-size:13px; }
 
@@ -473,4 +511,120 @@ body{
 }
 @media (max-width: 900px){
   .formGrid2{ grid-template-columns: 1fr; }
+}
+
+/* ✅ color opciones del select (depende del browser, pero ayuda) */
+select.input option {
+  background-color: #1a1a1f !important;
+  color: #ffffff !important;
+}
+select.input option:checked {
+  background-color: rgba(36, 36, 39, 0.315) !important;
+  color: #000 !important;
+}
+
+/* ✅ SCROLL SOLO DE CARDS (Salas) */
+.roomsScroll{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+/* scrollbar suave */
+.roomsScroll::-webkit-scrollbar{ width: 10px; }
+.roomsScroll::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.12);
+  border-radius: 999px;
+  border: 2px solid rgba(0,0,0,.2);
+}
+
+/* ===== MultiSelect (temáticas hasta 4) ===== */
+.multiSelectBtn{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  cursor:pointer;
+  text-align:left;
+}
+
+.multiSelectValue{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+.tagChip{
+  font-size:12px;
+  padding:6px 10px;
+  border-radius:999px;
+  background: rgba(255,106,0,.14);
+  border: 1px solid rgba(255,106,0,.35);
+  color: rgba(255,255,255,.92);
+}
+
+.multiSelectCaret{
+  opacity:.8;
+  user-select:none;
+}
+
+.multiSelectPanel{
+  margin-top:8px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.88);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+}
+
+.multiSelectTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px;
+  border-bottom:1px solid rgba(255,255,255,.10);
+}
+
+.multiSelectList{
+  max-height: 240px;
+  overflow:auto;
+  padding:10px;
+  display:grid;
+  grid-template-columns: 1fr;
+  gap:8px;
+}
+
+.multiSelectItem{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:8px 10px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  cursor:pointer;
+}
+
+.multiSelectItem:hover{
+  border-color: rgba(255,106,0,.25);
+}
+
+.multiSelectItem input{
+  accent-color: var(--accent);
+}
+
+.multiSelectItem.disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
+
+.multiSelectHint{
+  padding:10px;
+  font-size:12px;
+  color: rgba(255,255,255,.72);
+  border-top:1px solid rgba(255,255,255,.10);
 }

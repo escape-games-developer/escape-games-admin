@@ -1,3 +1,4 @@
+import "../../styles/app.css";
 import React from "react";
 import logo from "../../assets/escape-logo.png";
 

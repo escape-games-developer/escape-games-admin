@@ -2,30 +2,100 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 type RoomCategory = "WOW" | "CLASICO" | "DESPEDIDA";
-type RoomLevel = "FACIL" | "INTERMEDIO" | "DIFICIL";
+type RoomLevel = "FACIL" | "INTERMEDIO" | "AVANZADO";
 
-// ✅ NUEVO: temática (2 opciones por ahora)
-type RoomTheme = "TERROR" | "MISTERIO";
+// ✅ sucursales fijas (admin only)
+const BRANCHES = [
+  "Nuñez",
+  "San Telmo",
+  "Saavedra",
+  "Caballito",
+  "Palermo",
+  "Almagro",
+  "Urquiza",
+  "Studios",
+  "La Plata",
+  "Bariloche",
+  "Salta",
+] as const;
+
+type Branch = (typeof BRANCHES)[number];
+
+// ✅ Temáticas múltiples (hasta 4)
+const ROOM_THEMES_MULTI = [
+  "magia",
+  "hallazgo",
+  "mision secreta",
+  "espacial",
+  "allanamiento",
+  "maldicion",
+  "fantasia",
+  "Terror Psicologico",
+  "accion",
+  "surrealista",
+  "humor",
+  "fuga policial",
+  "venganza",
+  "fuga",
+  "Terror",
+  "suspenso",
+  "aventura",
+  "rescate",
+  "investigación",
+  "thriller",
+  "problemas",
+  "clandestina",
+  "zombies",
+  "psicologico",
+  "paranormal",
+  "robo",
+  "enredos",
+  "policial",
+] as const;
+
+// ✅ helpers
+const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
+const isMMSS = (v: string) => /^\d{2}:\d{2}$/.test(v);
+const isBranch = (v: any): v is Branch => BRANCHES.includes(v);
+
+const uniq = (arr: string[]) => Array.from(new Set(arr));
+const normalizeThemes = (arr: string[]) => uniq(arr.map((x) => (x || "").trim()).filter(Boolean)).slice(0, 4);
+
+const isHttpUrl = (v: string) => {
+  try {
+    const u = new URL(v);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
 
 type Room = {
   id: string;
-  photo: string; // URL pública
-  photoPosition: number; // 0..100 (vertical)
+  photo: string;
+  photoPosition: number;
   name: string;
   description: string;
+
   category: RoomCategory;
 
-  // ✅ NUEVO: tema
-  theme: RoomTheme;
+  // ✅ sucursal
+  branch: Branch;
 
-  playersMin: number; // 1..6 ✅ NUEVO (sin tocar UI)
-  playersMax: number; // 1..6
+  // ✅ OJO: en DB se guarda en `tags` (text[])
+  tags: string[];
 
-  difficulty: number; // 1..10
+  // ✅ NUEVO: link reserva (DB: reserve_url)
+  reserveUrl: string;
+
+  playersMin: number;
+  playersMax: number;
+
+  difficulty: number;
   level: RoomLevel;
-  surprise: number; // 1..10
-  record1: string; // MM:SS
-  record2: string; // MM:SS
+  surprise: number;
+  record1: string;
+  record2: string;
   points: 1 | 2 | 3;
   active: boolean;
 };
@@ -39,11 +109,8 @@ const CAT_LABEL: Record<RoomCategory, string> = {
 const LEVEL_LABEL: Record<RoomLevel, string> = {
   FACIL: "Fácil",
   INTERMEDIO: "Intermedio",
-  DIFICIL: "Difícil",
+  AVANZADO: "Avanzado",
 };
-
-const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
-const isMMSS = (v: string) => /^\d{2}:\d{2}$/.test(v);
 
 function Dots({ total, value }: { total: number; value: number }) {
   const v = clamp(value, 0, total);
@@ -60,13 +127,17 @@ function fromDb(row: any): Room {
   return {
     id: row.id,
     photo: row.photo_url || "",
-photoPosition: typeof row.photo_position === "number" ? Math.round(row.photo_position) : 50,
+    photoPosition: typeof row.photo_position === "number" ? Math.round(row.photo_position) : 50,
     name: row.name || "",
     description: row.description || "",
     category: row.category as RoomCategory,
+    branch: isBranch(row.branch) ? row.branch : "Nuñez",
 
-    // ✅ NUEVO: theme (fallback)
-    theme: (row.theme as RoomTheme) || "TERROR",
+    // ✅ temáticas múltiples: vienen de tags
+    tags: Array.isArray(row.tags) ? normalizeThemes(row.tags.map(String)) : [],
+
+    // ✅ NUEVO
+    reserveUrl: String(row.reserve_url || ""),
 
     playersMin: Number(row.players_min ?? 1),
     playersMax: Number(row.players_max ?? 6),
@@ -91,8 +162,13 @@ function toDb(room: Room) {
     description: room.description || null,
     category: room.category,
 
-    // ✅ NUEVO: theme
-    theme: room.theme,
+    branch: room.branch,
+
+    // ✅ temáticas múltiples a DB: tags text[]
+    tags: normalizeThemes(room.tags || []),
+
+    // ✅ NUEVO: link reserva
+    reserve_url: room.reserveUrl ? room.reserveUrl.trim() : null,
 
     players_min: clamp(Number(room.playersMin ?? 1), 1, 6),
     players_max: clamp(Number(room.playersMax ?? 6), 1, 6),
@@ -130,6 +206,8 @@ async function uploadRoomImage(file: File, roomId: string): Promise<string> {
 export default function Rooms() {
   const [items, setItems] = useState<Room[]>([]);
   const [q, setQ] = useState("");
+  const [branchFilter, setBranchFilter] = useState<string>("");
+
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Room | null>(null);
 
@@ -140,26 +218,70 @@ export default function Rooms() {
   const [editingPhotoFile, setEditingPhotoFile] = useState<File | null>(null);
   const [tempPreviewUrl, setTempPreviewUrl] = useState<string | null>(null);
 
-  // ✅ NUEVO: refs para drag vertical en preview (sin tocar UI)
   const previewWrapRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
   const dragStartRef = useRef<{ y: number; startPos: number; h: number } | null>(null);
 
+  // ✅ Multi-select temáticas (guardan en tags)
+  const [themesOpen, setThemesOpen] = useState(false);
+  const themesWrapRef = useRef<HTMLDivElement | null>(null);
+
+  const selectedThemes = normalizeThemes(editing?.tags || []);
+  const atThemesLimit = selectedThemes.length >= 4;
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!themesOpen) return;
+      const el = themesWrapRef.current;
+      if (!el) return;
+      if (!el.contains(e.target as Node)) setThemesOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setThemesOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [themesOpen]);
+
+  const toggleTheme = (t: string) => {
+    if (!editing) return;
+    const current = normalizeThemes(editing.tags || []);
+    const has = current.includes(t);
+
+    let next = current;
+    if (has) next = current.filter((x) => x !== t);
+    else {
+      if (current.length >= 4) return;
+      next = [...current, t];
+    }
+
+    setEditing({ ...editing, tags: next });
+  };
+
+  const clearThemes = () => {
+    if (!editing) return;
+    setEditing({ ...editing, tags: [] });
+  };
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return items;
-    return items.filter((r) => r.name.toLowerCase().includes(s));
-  }, [items, q]);
+    return items.filter((r) => {
+      const okSearch = !s ? true : r.name.toLowerCase().includes(s);
+      const okBranch = !branchFilter ? true : r.branch === branchFilter;
+      return okSearch && okBranch;
+    });
+  }, [items, q, branchFilter]);
 
   useEffect(() => {
     let mounted = true;
 
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("rooms_v2")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("rooms_v2").select("*").order("created_at", { ascending: false });
 
       if (!mounted) return;
 
@@ -184,6 +306,7 @@ export default function Rooms() {
     setOpen(false);
     setEditing(null);
     setEditingPhotoFile(null);
+    setThemesOpen(false);
     if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
     setTempPreviewUrl(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -198,11 +321,14 @@ export default function Rooms() {
       name: "",
       description: "",
       category: "WOW",
+      branch: "Nuñez",
 
-      // ✅ NUEVO: default
-      theme: "TERROR",
+      tags: [],
 
-      playersMin: 1, // ✅ fijo para no tocar UI
+      // ✅ NUEVO
+      reserveUrl: "",
+
+      playersMin: 1,
       playersMax: 6,
 
       difficulty: 5,
@@ -220,7 +346,13 @@ export default function Rooms() {
   };
 
   const startEdit = (r: Room) => {
-    setEditing({ ...r, playersMin: r.playersMin ?? 1, theme: r.theme ?? "TERROR" });
+    setEditing({
+      ...r,
+      playersMin: r.playersMin ?? 1,
+      branch: r.branch ?? "Nuñez",
+      tags: Array.isArray(r.tags) ? normalizeThemes(r.tags) : [],
+      reserveUrl: r.reserveUrl || "",
+    });
     setEditingPhotoFile(null);
     if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
     setTempPreviewUrl(null);
@@ -245,7 +377,6 @@ export default function Rooms() {
     const url = URL.createObjectURL(file);
     setTempPreviewUrl(url);
 
-    // ✅ mantenemos lo mismo, pero si querés resetear posición al cambiar:
     setEditing((prev) => (prev ? { ...prev, photo: url, photoPosition: prev.photoPosition ?? 50 } : prev));
   };
 
@@ -257,7 +388,6 @@ export default function Rooms() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  // ✅ NUEVO: drag vertical desde la preview (mapea arrastre -> 0..100)
   const onPreviewMouseDown: React.MouseEventHandler<HTMLDivElement> = (e) => {
     if (!editing?.photo) return;
 
@@ -276,8 +406,7 @@ export default function Rooms() {
   const onPreviewMouseMove: React.MouseEventHandler<HTMLDivElement> = (e) => {
     if (!draggingRef.current || !dragStartRef.current || !editing) return;
 
-    const dy = e.clientY - dragStartRef.current.y; // px
-    // sensibilidad: arrastrar toda la altura ≈ 100 puntos
+    const dy = e.clientY - dragStartRef.current.y;
     const delta = (dy / dragStartRef.current.h) * 100;
     const next = Math.round(clamp(dragStartRef.current.startPos + delta, 0, 100));
 
@@ -295,6 +424,11 @@ export default function Rooms() {
     if (!editing.name.trim()) return alert("Poné el nombre de la sala.");
     if (!isMMSS(editing.record1) || !isMMSS(editing.record2)) {
       return alert("Récord debe ser MM:SS (ej: 12:34).");
+    }
+
+    // ✅ valida link si está
+    if (editing.reserveUrl && !isHttpUrl(editing.reserveUrl)) {
+      return alert("El link de reserva debe empezar con http/https (ej: https://...).");
     }
 
     const isNew = !items.some((x) => x.id === editing.id);
@@ -316,15 +450,12 @@ export default function Rooms() {
         ...editing,
         photo: finalPhotoUrl,
         playersMin: editing.playersMin ?? 1,
-        theme: editing.theme ?? "TERROR",
+        branch: (editing.branch ?? "Nuñez") as Branch,
+        tags: normalizeThemes(editing.tags || []),
+        reserveUrl: (editing.reserveUrl || "").trim(),
       });
 
-      const { data, error } = await supabase
-        .from("rooms_v2")
-        .upsert(payload, { onConflict: "id" })
-        .select("*")
-        .single();
-
+      const { data, error } = await supabase.from("rooms_v2").upsert(payload, { onConflict: "id" }).select("*").single();
       if (error) throw error;
 
       const saved = fromDb(data);
@@ -351,11 +482,37 @@ export default function Rooms() {
     setItems((prev) => prev.map((p) => (p.id === id ? next : p)));
 
     const { error } = await supabase.from("rooms_v2").update({ active: next.active }).eq("id", id);
-
     if (error) {
       console.error(error);
       alert("No pude actualizar estado (revisá rol admin / policies).");
       setItems((prev) => prev.map((p) => (p.id === id ? current : p)));
+    }
+  };
+
+  // ✅ NUEVO: borrar sala (DB + intento de borrar imagen)
+  const deleteRoom = async (room: Room) => {
+    const ok = confirm(`¿Seguro que querés borrar "${room.name}"? Esta acción no se puede deshacer.`);
+    if (!ok) return;
+
+    const prev = items;
+    setItems((p) => p.filter((x) => x.id !== room.id));
+
+    try {
+      // (Opcional) intento borrar la imagen del bucket "rooms" si viene de publicUrl del mismo bucket
+      if (room.photo && room.photo.includes("/storage/v1/object/public/rooms/")) {
+        const idx = room.photo.indexOf("/storage/v1/object/public/rooms/");
+        const path = room.photo.slice(idx + "/storage/v1/object/public/rooms/".length).split("?")[0];
+
+        const { error: storageErr } = await supabase.storage.from("rooms").remove([path]);
+        if (storageErr) console.warn("No pude borrar imagen en storage:", storageErr);
+      }
+
+      const { error } = await supabase.from("rooms_v2").delete().eq("id", room.id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || "No pude borrar la sala (revisá RLS / permisos).");
+      setItems(prev); // rollback
     }
   };
 
@@ -372,8 +529,17 @@ export default function Rooms() {
         </button>
       </div>
 
-      <div className="toolbarRow">
-        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre…" />
+      <div className="toolbarRow" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre…" style={{ flex: 1 }} />
+
+        <select className="input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={{ width: 220 }}>
+          <option value="">Todas las sucursales</option>
+          {BRANCHES.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </select>
       </div>
 
       {loading ? (
@@ -381,69 +547,90 @@ export default function Rooms() {
           Cargando salas…
         </div>
       ) : (
-        <div className="roomsGrid">
-          {filtered.map((r) => (
-            <div key={r.id} className="roomCard">
-              <div className="roomImgWrap">
-                <img
-                  src={r.photo || "https://picsum.photos/seed/placeholder/900/520"}
-                  alt={r.name}
-                  style={{
-                    objectFit: "cover",
-                    objectPosition: `50% ${r.photoPosition}%`,
-                  }}
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/placeholder/900/520";
-                  }}
-                />
-                <div className="roomBadge">{CAT_LABEL[r.category]}</div>
-                {!r.active && <div className="roomBadge off">INACTIVA</div>}
-              </div>
+        <div className="roomsScroll">
+          <div className="roomsGrid">
+            {filtered.map((r) => (
+              <div key={r.id} className="roomCard">
+                <div className="roomImgWrap">
+                  <img
+                    src={r.photo || "https://picsum.photos/seed/placeholder/900/520"}
+                    alt={r.name}
+                    style={{ objectFit: "cover", objectPosition: `50% ${r.photoPosition}%` }}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/placeholder/900/520";
+                    }}
+                  />
+                  <div className="roomBadge">{CAT_LABEL[r.category]}</div>
+                  {!r.active && <div className="roomBadge off">INACTIVA</div>}
+                </div>
 
-              <div className="roomBody">
-                <div className="roomTitle">{r.name}</div>
+                <div className="roomBody">
+                  <div className="roomTitle">{r.name}</div>
 
-                {r.description ? (
                   <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
-                    {r.description}
-                  </div>
-                ) : null}
-
-                <div className="roomMeta">
-                  <div className="metaRow">
-                    <span className="metaLabel">Jugadores</span>
-                    <Dots total={6} value={r.playersMax} />
-                    <span className="metaValue">
-                      {r.playersMin}–{r.playersMax}
-                    </span>
+                    <b>Sucursal:</b> {r.branch}
                   </div>
 
-                  <div className="metaRow">
-                    <span className="metaLabel">Dificultad</span>
-                    <Dots total={10} value={r.difficulty} />
-                    <span className="metaValue">{r.difficulty}/10</span>
+                  {/* ✅ NUEVO: mostrar link (solo visual) */}
+                  {r.reserveUrl ? (
+                    <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
+                      <b>Reserva:</b> {r.reserveUrl.length > 48 ? r.reserveUrl.slice(0, 48) + "…" : r.reserveUrl}
+                    </div>
+                  ) : null}
+
+                  {Array.isArray(r.tags) && r.tags.length ? (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                      {r.tags.slice(0, 4).map((t) => (
+                        <span key={t} className="tagChip">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {r.description ? <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>{r.description}</div> : null}
+
+                  <div className="roomMeta">
+                    <div className="metaRow">
+                      <span className="metaLabel">Jugadores</span>
+                      <Dots total={6} value={r.playersMax} />
+                      <span className="metaValue">
+                        {r.playersMin}–{r.playersMax}
+                      </span>
+                    </div>
+
+                    <div className="metaRow">
+                      <span className="metaLabel">Dificultad</span>
+                      <Dots total={10} value={r.difficulty} />
+                      <span className="metaValue">{r.difficulty}/10</span>
+                    </div>
+
+                    <div className="metaMini">
+                      <span>✨ Sorpresa {r.surprise}/10</span>
+                      <span>🏆 {r.record1}</span>
+                      <span>🥈 {r.record2}</span>
+                      <span>🎖️ {r.points}/3</span>
+                      <span>📌 {LEVEL_LABEL[r.level]}</span>
+                    </div>
                   </div>
 
-                  <div className="metaMini">
-                    <span>📌 {LEVEL_LABEL[r.level]}</span>
-                    <span>✨ Sorpresa {r.surprise}/10</span>
-                    <span>🏆 {r.record1}</span>
-                    <span>🥈 {r.record2}</span>
-                    <span>🎖️ {r.points}/3</span>
-                  </div>
-                </div>
+                  <div className="roomActions">
+                    <button className="ghostBtn" onClick={() => startEdit(r)}>
+                      Editar
+                    </button>
 
-                <div className="roomActions">
-                  <button className="ghostBtn" onClick={() => startEdit(r)}>
-                    Editar
-                  </button>
-                  <button className={r.active ? "dangerBtnInline" : "btnSmall"} onClick={() => toggleActive(r.id)}>
-                    {r.active ? "Desactivar" : "Activar"}
-                  </button>
+                    <button className={r.active ? "dangerBtnInline" : "btnSmall"} onClick={() => toggleActive(r.id)}>
+                      {r.active ? "Desactivar" : "Activar"}
+                    </button>
+
+                    <button className="dangerBtnInline" onClick={() => deleteRoom(r)}>
+                      Borrar
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
@@ -477,12 +664,75 @@ export default function Rooms() {
                     </select>
                   </label>
 
-                  {/* ✅ NUEVO: Temática (sin tocar layout: ocupa 1 campo normal) */}
+                  {/* ✅ NUEVO: Link de reserva (manual) */}
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span className="label">Link de reserva</span>
+                    <input
+                      className="input"
+                      value={editing.reserveUrl}
+                      onChange={(e) => setEditing({ ...editing, reserveUrl: e.target.value })}
+                      placeholder="https://..."
+                      inputMode="url"
+                    />
+                  </label>
+
+                  {/* ✅ Temáticas multi (hasta 4) - guardan en tags */}
+                  <div className="field" ref={themesWrapRef}>
+                    <span className="label">Temáticas (hasta 4)</span>
+
+                    <button type="button" className="input multiSelectBtn" onClick={() => setThemesOpen((v) => !v)} aria-expanded={themesOpen}>
+                      {selectedThemes.length ? (
+                        <span className="multiSelectValue">
+                          {selectedThemes.map((t) => (
+                            <span key={t} className="tagChip">
+                              {t}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span style={{ opacity: 0.75 }}>Elegí hasta 4…</span>
+                      )}
+                      <span className="multiSelectCaret">▾</span>
+                    </button>
+
+                    {themesOpen && (
+                      <div className="multiSelectPanel">
+                        <div className="multiSelectTop">
+                          <div style={{ opacity: 0.85, fontSize: 12 }}>
+                            Seleccionadas: <b>{selectedThemes.length}</b>/4
+                          </div>
+                          <button type="button" className="ghostBtn" onClick={clearThemes} disabled={!selectedThemes.length}>
+                            Limpiar
+                          </button>
+                        </div>
+
+                        <div className="multiSelectList">
+                          {ROOM_THEMES_MULTI.map((t) => {
+                            const checked = selectedThemes.includes(t);
+                            const disabled = !checked && atThemesLimit;
+                            return (
+                              <label key={t} className={`multiSelectItem ${disabled ? "disabled" : ""}`}>
+                                <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleTheme(t)} />
+                                <span>{t}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+
+                        {atThemesLimit ? <div className="multiSelectHint">Llegaste al máximo de 4 temáticas.</div> : null}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ✅ Sucursal */}
                   <label className="field">
-                    <span className="label">Temática</span>
-                    <select className="input" value={editing.theme} onChange={(e) => setEditing({ ...editing, theme: e.target.value as RoomTheme })}>
-                      <option value="TERROR">Terror</option>
-                      <option value="MISTERIO">Misterio</option>
+                    <span className="label">Sucursal</span>
+                    <select className="input" value={editing.branch} onChange={(e) => setEditing({ ...editing, branch: e.target.value as Branch })}>
+                      {BRANCHES.map((b) => (
+                        <option key={b} value={b}>
+                          {b}
+                        </option>
+                      ))}
                     </select>
                   </label>
 
@@ -513,16 +763,9 @@ export default function Rooms() {
                       ) : (
                         <span style={{ opacity: 0.8, fontSize: 12 }}>No hay imagen seleccionada</span>
                       )}
-
-                      {editingPhotoFile ? (
-                        <span style={{ opacity: 0.85, fontSize: 12 }}>
-                          Archivo: <b>{editingPhotoFile.name}</b>
-                        </span>
-                      ) : null}
                     </div>
 
                     {editing.photo ? (
-                      // ✅ MISMO CONTENEDOR / MISMO LOOK, solo sumo drag + objectPosition
                       <div
                         ref={previewWrapRef}
                         onMouseDown={onPreviewMouseDown}
@@ -538,7 +781,6 @@ export default function Rooms() {
                           cursor: "grab",
                           userSelect: "none",
                         }}
-                        title="Arrastrá la imagen para subir/bajar el encuadre"
                       >
                         <img
                           src={editing.photo}
@@ -556,17 +798,24 @@ export default function Rooms() {
                     ) : null}
                   </div>
 
-                  {/* ✅ SE ELIMINA EL SLIDER (porque ahora se hace desde la preview)
-                      Si preferís dejarlo además del drag, decímelo y lo re-agrego sin romper nada. */}
-
                   <label className="field">
                     <span className="label">Jugadores (1–6)</span>
-                    <input className="input" value={String(editing.playersMax)} onChange={(e) => setEditing({ ...editing, playersMax: clamp(Number(e.target.value || 1), 1, 6) })} inputMode="numeric" />
+                    <input
+                      className="input"
+                      value={String(editing.playersMax)}
+                      onChange={(e) => setEditing({ ...editing, playersMax: clamp(Number(e.target.value || 1), 1, 6) })}
+                      inputMode="numeric"
+                    />
                   </label>
 
                   <label className="field">
                     <span className="label">Dificultad (1–10)</span>
-                    <input className="input" value={String(editing.difficulty)} onChange={(e) => setEditing({ ...editing, difficulty: clamp(Number(e.target.value || 1), 1, 10) })} inputMode="numeric" />
+                    <input
+                      className="input"
+                      value={String(editing.difficulty)}
+                      onChange={(e) => setEditing({ ...editing, difficulty: clamp(Number(e.target.value || 1), 1, 10) })}
+                      inputMode="numeric"
+                    />
                   </label>
 
                   <label className="field">
@@ -574,13 +823,18 @@ export default function Rooms() {
                     <select className="input" value={editing.level} onChange={(e) => setEditing({ ...editing, level: e.target.value as RoomLevel })}>
                       <option value="FACIL">Fácil</option>
                       <option value="INTERMEDIO">Intermedio</option>
-                      <option value="DIFICIL">Difícil</option>
+                      <option value="AVANZADO">Avanzado</option>
                     </select>
                   </label>
 
                   <label className="field">
                     <span className="label">Factor Sorpresa (1–10)</span>
-                    <input className="input" value={String(editing.surprise)} onChange={(e) => setEditing({ ...editing, surprise: clamp(Number(e.target.value || 1), 1, 10) })} inputMode="numeric" />
+                    <input
+                      className="input"
+                      value={String(editing.surprise)}
+                      onChange={(e) => setEditing({ ...editing, surprise: clamp(Number(e.target.value || 1), 1, 10) })}
+                      inputMode="numeric"
+                    />
                   </label>
 
                   <label className="field">
@@ -595,7 +849,12 @@ export default function Rooms() {
 
                   <label className="field">
                     <span className="label">Puntaje (1–3)</span>
-                    <input className="input" value={String(editing.points)} onChange={(e) => setEditing({ ...editing, points: clamp(Number(e.target.value || 1), 1, 3) as 1 | 2 | 3 })} inputMode="numeric" />
+                    <input
+                      className="input"
+                      value={String(editing.points)}
+                      onChange={(e) => setEditing({ ...editing, points: clamp(Number(e.target.value || 1), 1, 3) as 1 | 2 | 3 })}
+                      inputMode="numeric"
+                    />
                   </label>
                 </div>
               </div>
