@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { QRCodeCanvas } from "qrcode.react";
 
 type RoomCategory = "WOW" | "CLASICO" | "DESPEDIDA";
 type RoomLevel = "FACIL" | "INTERMEDIO" | "AVANZADO";
@@ -53,13 +54,18 @@ const ROOM_THEMES_MULTI = [
   "policial",
 ] as const;
 
+// ✅ Bomb Ticket QR (beneficio)
+const BOMB_TICKET_QR = "EG-BOMB-2026-NUÑEZ";
+const BOMB_CANVAS_ID = "qr_canvas_bomb_ticket";
+
 // ✅ helpers
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const isMMSS = (v: string) => /^\d{2}:\d{2}$/.test(v);
 const isBranch = (v: any): v is Branch => BRANCHES.includes(v);
 
 const uniq = (arr: string[]) => Array.from(new Set(arr));
-const normalizeThemes = (arr: string[]) => uniq(arr.map((x) => (x || "").trim()).filter(Boolean)).slice(0, 4);
+const normalizeThemes = (arr: string[]) =>
+  uniq(arr.map((x) => (x || "").trim()).filter(Boolean)).slice(0, 4);
 
 const isHttpUrl = (v: string) => {
   try {
@@ -70,6 +76,9 @@ const isHttpUrl = (v: string) => {
   }
 };
 
+// ✅ QR estable por sala (si no lo completan)
+const makeRoomQr = (roomId: string) => `EG-ROOM-${roomId}`;
+
 type Room = {
   id: string;
   photo: string;
@@ -78,15 +87,16 @@ type Room = {
   description: string;
 
   category: RoomCategory;
-
-  // ✅ sucursal
   branch: Branch;
 
-  // ✅ OJO: en DB se guarda en `tags` (text[])
+  // DB: tags text[]
   tags: string[];
 
-  // ✅ NUEVO: link reserva (DB: reserve_url)
+  // DB: reserve_url
   reserveUrl: string;
+
+  // DB: whatsapp_phone
+  whatsappPhone: string;
 
   playersMin: number;
   playersMax: number;
@@ -96,7 +106,12 @@ type Room = {
   surprise: number;
   record1: string;
   record2: string;
+
   points: 1 | 2 | 3;
+
+  // DB: qr_code
+  qrCode: string;
+
   active: boolean;
 };
 
@@ -124,20 +139,21 @@ function Dots({ total, value }: { total: number; value: number }) {
 }
 
 function fromDb(row: any): Room {
+  const qr = String(row.qr_code || "").trim();
   return {
     id: row.id,
     photo: row.photo_url || "",
-    photoPosition: typeof row.photo_position === "number" ? Math.round(row.photo_position) : 50,
+    photoPosition:
+      typeof row.photo_position === "number" ? Math.round(row.photo_position) : 50,
     name: row.name || "",
     description: row.description || "",
     category: row.category as RoomCategory,
     branch: isBranch(row.branch) ? row.branch : "Nuñez",
 
-    // ✅ temáticas múltiples: vienen de tags
     tags: Array.isArray(row.tags) ? normalizeThemes(row.tags.map(String)) : [],
 
-    // ✅ NUEVO
     reserveUrl: String(row.reserve_url || ""),
+    whatsappPhone: String(row.whatsapp_phone || ""),
 
     playersMin: Number(row.players_min ?? 1),
     playersMax: Number(row.players_max ?? 6),
@@ -148,6 +164,8 @@ function fromDb(row: any): Room {
     record1: row.record1 || "00:00",
     record2: row.record2 || "00:00",
     points: Number(row.points ?? 1) as 1 | 2 | 3,
+
+    qrCode: qr || makeRoomQr(String(row.id)),
     active: Boolean(row.active),
   };
 }
@@ -164,11 +182,10 @@ function toDb(room: Room) {
 
     branch: room.branch,
 
-    // ✅ temáticas múltiples a DB: tags text[]
     tags: normalizeThemes(room.tags || []),
 
-    // ✅ NUEVO: link reserva
     reserve_url: room.reserveUrl ? room.reserveUrl.trim() : null,
+    whatsapp_phone: room.whatsappPhone ? room.whatsappPhone.trim() : null,
 
     players_min: clamp(Number(room.playersMin ?? 1), 1, 6),
     players_max: clamp(Number(room.playersMax ?? 6), 1, 6),
@@ -181,6 +198,9 @@ function toDb(room: Room) {
     record2: room.record2,
 
     points: room.points,
+
+    qr_code: room.qrCode ? room.qrCode.trim() : null,
+
     active: room.active,
     updated_at: new Date().toISOString(),
   };
@@ -203,6 +223,117 @@ async function uploadRoomImage(file: File, roomId: string): Promise<string> {
   return data.publicUrl;
 }
 
+// ✅ descargar PNG desde el canvas (sin popups)
+function downloadPngFromCanvas(canvasId: string, filename: string) {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas) return alert("No encontré el QR (canvas) para exportar.");
+
+  const dataUrl = canvas.toDataURL("image/png");
+  const a = document.createElement("a");
+  a.href = dataUrl;
+  a.download = filename.endsWith(".png") ? filename : `${filename}.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// ✅ imprimir PNG sin popup: iframe oculto (no lo bloquea el navegador)
+function printPngFromCanvas(canvasId: string, title: string) {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas) return alert("No encontré el QR (canvas) para imprimir.");
+
+  const dataUrl = canvas.toDataURL("image/png");
+
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.setAttribute("aria-hidden", "true");
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow?.document;
+  if (!doc) {
+    document.body.removeChild(iframe);
+    return alert("No pude abrir el frame de impresión.");
+  }
+
+  const safeTitle = String(title || "").replace(/[<>]/g, "");
+
+  doc.open();
+  doc.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${safeTitle}</title>
+        <style>
+          body { font-family: system-ui; padding: 24px; }
+          .wrap { display:flex; flex-direction:column; gap:12px; align-items:flex-start; }
+          img { width: 320px; height: 320px; image-rendering: pixelated; }
+          h2 { margin: 0; }
+          .hint { opacity:.7; font-size:12px; }
+        </style>
+      </head>
+      <body>
+        <div class="wrap">
+          <h2>${safeTitle}</h2>
+          <img id="qrimg" src="${dataUrl}" />
+          <div class="hint">Imprimí al 100% (sin “ajustar a página”) para mejor lectura.</div>
+        </div>
+        <script>
+          const img = document.getElementById("qrimg");
+          img.onload = () => setTimeout(() => window.print(), 120);
+        </script>
+      </body>
+    </html>
+  `);
+  doc.close();
+
+  const remove = () => {
+    try {
+      document.body.removeChild(iframe);
+    } catch {}
+  };
+  iframe.contentWindow?.addEventListener("afterprint", remove);
+  setTimeout(remove, 15000);
+}
+
+type BombCardState = {
+  title: string;
+  description: string;
+  imageUrl: string;
+};
+
+const BOMB_STORAGE_KEY = "eg_admin_bomb_card_v1";
+
+function loadBombCard(): BombCardState {
+  try {
+    const raw = localStorage.getItem(BOMB_STORAGE_KEY);
+    if (!raw) throw new Error("no data");
+    const parsed = JSON.parse(raw);
+    return {
+      title: String(parsed.title || "Bomb Ticket (50% OFF)"),
+      description: String(parsed.description || "QR para imprimir y entregar al cliente."),
+      imageUrl: String(parsed.imageUrl || ""),
+    };
+  } catch {
+    return {
+      title: "Bomb Ticket (50% OFF)",
+      description: "QR para imprimir y entregar al cliente.",
+      imageUrl: "",
+    };
+  }
+}
+
+function saveBombCard(next: BombCardState) {
+  try {
+    localStorage.setItem(BOMB_STORAGE_KEY, JSON.stringify(next));
+  } catch {}
+}
+
 export default function Rooms() {
   const [items, setItems] = useState<Room[]>([]);
   const [q, setQ] = useState("");
@@ -222,9 +353,16 @@ export default function Rooms() {
   const draggingRef = useRef(false);
   const dragStartRef = useRef<{ y: number; startPos: number; h: number } | null>(null);
 
-  // ✅ Multi-select temáticas (guardan en tags)
   const [themesOpen, setThemesOpen] = useState(false);
   const themesWrapRef = useRef<HTMLDivElement | null>(null);
+
+  // ✅ Bomb card editable
+  const [bombEditing, setBombEditing] = useState(false);
+  const [bomb, setBomb] = useState<BombCardState>(() => loadBombCard());
+  const bombFileRef = useRef<HTMLInputElement | null>(null);
+
+  // ✅ Modal descripción completa
+  const [descModal, setDescModal] = useState<{ title: string; text: string } | null>(null);
 
   const selectedThemes = normalizeThemes(editing?.tags || []);
   const atThemesLimit = selectedThemes.length >= 4;
@@ -238,6 +376,8 @@ export default function Rooms() {
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setThemesOpen(false);
+      if (e.key === "Escape") setBombEditing(false);
+      if (e.key === "Escape") setDescModal(null);
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -246,6 +386,10 @@ export default function Rooms() {
       document.removeEventListener("keydown", onKey);
     };
   }, [themesOpen]);
+
+  useEffect(() => {
+    saveBombCard(bomb);
+  }, [bomb]);
 
   const toggleTheme = (t: string) => {
     if (!editing) return;
@@ -281,7 +425,11 @@ export default function Rooms() {
 
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase.from("rooms_v2").select("*").order("created_at", { ascending: false });
+
+      const { data, error } = await supabase
+        .from("rooms_v2")
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (!mounted) return;
 
@@ -322,21 +470,18 @@ export default function Rooms() {
       description: "",
       category: "WOW",
       branch: "Nuñez",
-
       tags: [],
-
-      // ✅ NUEVO
       reserveUrl: "",
-
+      whatsappPhone: "",
       playersMin: 1,
       playersMax: 6,
-
       difficulty: 5,
       level: "FACIL",
       surprise: 5,
       record1: "00:00",
       record2: "00:00",
       points: 1,
+      qrCode: makeRoomQr(id),
       active: true,
     });
     setEditingPhotoFile(null);
@@ -349,9 +494,12 @@ export default function Rooms() {
     setEditing({
       ...r,
       playersMin: r.playersMin ?? 1,
-      branch: r.branch ?? "Nuñez",
+      playersMax: r.playersMax ?? 6,
+      branch: (r.branch ?? "Nuñez") as Branch,
       tags: Array.isArray(r.tags) ? normalizeThemes(r.tags) : [],
       reserveUrl: r.reserveUrl || "",
+      whatsappPhone: r.whatsappPhone || "",
+      qrCode: (r.qrCode || "").trim() || makeRoomQr(r.id),
     });
     setEditingPhotoFile(null);
     if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
@@ -377,7 +525,9 @@ export default function Rooms() {
     const url = URL.createObjectURL(file);
     setTempPreviewUrl(url);
 
-    setEditing((prev) => (prev ? { ...prev, photo: url, photoPosition: prev.photoPosition ?? 50 } : prev));
+    setEditing((prev) =>
+      prev ? { ...prev, photo: url, photoPosition: prev.photoPosition ?? 50 } : prev
+    );
   };
 
   const removeImage = () => {
@@ -418,6 +568,21 @@ export default function Rooms() {
     dragStartRef.current = null;
   };
 
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {}
+    }
+  };
+
   const save = async () => {
     if (!editing) return;
 
@@ -426,9 +591,12 @@ export default function Rooms() {
       return alert("Récord debe ser MM:SS (ej: 12:34).");
     }
 
-    // ✅ valida link si está
     if (editing.reserveUrl && !isHttpUrl(editing.reserveUrl)) {
       return alert("El link de reserva debe empezar con http/https (ej: https://...).");
+    }
+
+    if (!String(editing.qrCode || "").trim()) {
+      return alert("El QR único no puede quedar vacío.");
     }
 
     const isNew = !items.some((x) => x.id === editing.id);
@@ -438,24 +606,43 @@ export default function Rooms() {
 
     setSaving(true);
     try {
-      let finalPhotoUrl = editing.photo;
+      let finalPhotoUrl = String(editing.photo || "").trim();
 
       if (editingPhotoFile) {
         finalPhotoUrl = await uploadRoomImage(editingPhotoFile, editing.id);
-      } else {
-        if (finalPhotoUrl && !/^https?:\/\//i.test(finalPhotoUrl)) finalPhotoUrl = "";
+      }
+
+      if (finalPhotoUrl && !/^https?:\/\//i.test(finalPhotoUrl)) {
+        finalPhotoUrl = "";
+      }
+
+      if (isNew && !finalPhotoUrl) {
+        return alert(
+          "No pude generar la URL pública de la imagen. Revisá Storage/Policies y volvé a subir."
+        );
       }
 
       const payload = toDb({
         ...editing,
         photo: finalPhotoUrl,
-        playersMin: editing.playersMin ?? 1,
+        playersMin: clamp(Number(editing.playersMin ?? 1), 1, 6),
+        playersMax: clamp(Number(editing.playersMax ?? 6), 1, 6),
+        difficulty: clamp(Number(editing.difficulty ?? 5), 1, 10),
+        surprise: clamp(Number(editing.surprise ?? 5), 1, 10),
+        points: clamp(Number(editing.points ?? 1), 1, 3) as 1 | 2 | 3,
         branch: (editing.branch ?? "Nuñez") as Branch,
         tags: normalizeThemes(editing.tags || []),
         reserveUrl: (editing.reserveUrl || "").trim(),
+        whatsappPhone: (editing.whatsappPhone || "").trim(),
+        qrCode: String(editing.qrCode || "").trim(),
       });
 
-      const { data, error } = await supabase.from("rooms_v2").upsert(payload, { onConflict: "id" }).select("*").single();
+      const { data, error } = await supabase
+        .from("rooms_v2")
+        .upsert(payload, { onConflict: "id" })
+        .select("*")
+        .single();
+
       if (error) throw error;
 
       const saved = fromDb(data);
@@ -489,7 +676,6 @@ export default function Rooms() {
     }
   };
 
-  // ✅ NUEVO: borrar sala (DB + intento de borrar imagen)
   const deleteRoom = async (room: Room) => {
     const ok = confirm(`¿Seguro que querés borrar "${room.name}"? Esta acción no se puede deshacer.`);
     if (!ok) return;
@@ -498,10 +684,11 @@ export default function Rooms() {
     setItems((p) => p.filter((x) => x.id !== room.id));
 
     try {
-      // (Opcional) intento borrar la imagen del bucket "rooms" si viene de publicUrl del mismo bucket
       if (room.photo && room.photo.includes("/storage/v1/object/public/rooms/")) {
         const idx = room.photo.indexOf("/storage/v1/object/public/rooms/");
-        const path = room.photo.slice(idx + "/storage/v1/object/public/rooms/".length).split("?")[0];
+        const path = room.photo
+          .slice(idx + "/storage/v1/object/public/rooms/".length)
+          .split("?")[0];
 
         const { error: storageErr } = await supabase.storage.from("rooms").remove([path]);
         if (storageErr) console.warn("No pude borrar imagen en storage:", storageErr);
@@ -512,13 +699,30 @@ export default function Rooms() {
     } catch (err: any) {
       console.error(err);
       alert(err?.message || "No pude borrar la sala (revisá RLS / permisos).");
-      setItems(prev); // rollback
+      setItems(prev);
     }
+  };
+
+  const onBombPickImage = () => bombFileRef.current?.click();
+
+  const onBombFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Elegí una imagen (JPG/PNG/WebP).");
+      e.target.value = "";
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    setBomb((prev) => ({ ...prev, imageUrl: url }));
+    e.target.value = "";
   };
 
   return (
     <div className="page">
-      <div className="pageHeadRow">
+      <div className="pageHeadRow" style={{ gap: 12 }}>
         <div>
           <div className="pageTitle">Salas</div>
           <div className="pageSub">Panel conectado a Supabase (DB + Storage).</div>
@@ -530,9 +734,20 @@ export default function Rooms() {
       </div>
 
       <div className="toolbarRow" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre…" style={{ flex: 1 }} />
+        <input
+          className="input"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nombre…"
+          style={{ flex: 1 }}
+        />
 
-        <select className="input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={{ width: 220 }}>
+        <select
+          className="input"
+          value={branchFilter}
+          onChange={(e) => setBranchFilter(e.target.value)}
+          style={{ width: 220 }}
+        >
           <option value="">Todas las sucursales</option>
           {BRANCHES.map((b) => (
             <option key={b} value={b}>
@@ -549,122 +764,423 @@ export default function Rooms() {
       ) : (
         <div className="roomsScroll">
           <div className="roomsGrid">
-            {filtered.map((r) => (
-              <div key={r.id} className="roomCard">
-                <div className="roomImgWrap">
-                  <img
-                    src={r.photo || "https://picsum.photos/seed/placeholder/900/520"}
-                    alt={r.name}
-                    style={{ objectFit: "cover", objectPosition: `50% ${r.photoPosition}%` }}
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/placeholder/900/520";
-                    }}
-                  />
-                  <div className="roomBadge">{CAT_LABEL[r.category]}</div>
-                  {!r.active && <div className="roomBadge off">INACTIVA</div>}
-                </div>
-
-                <div className="roomBody">
-                  <div className="roomTitle">{r.name}</div>
-
-                  <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
-                    <b>Sucursal:</b> {r.branch}
-                  </div>
-
-                  {/* ✅ NUEVO: mostrar link (solo visual) */}
-                  {r.reserveUrl ? (
-                    <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
-                      <b>Reserva:</b> {r.reserveUrl.length > 48 ? r.reserveUrl.slice(0, 48) + "…" : r.reserveUrl}
-                    </div>
-                  ) : null}
-
-                  {Array.isArray(r.tags) && r.tags.length ? (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                      {r.tags.slice(0, 4).map((t) => (
-                        <span key={t} className="tagChip">
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {r.description ? <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>{r.description}</div> : null}
-
-                  <div className="roomMeta">
-                    <div className="metaRow">
-                      <span className="metaLabel">Jugadores</span>
-                      <Dots total={6} value={r.playersMax} />
-                      <span className="metaValue">
-                        {r.playersMin}–{r.playersMax}
-                      </span>
-                    </div>
-
-                    <div className="metaRow">
-                      <span className="metaLabel">Dificultad</span>
-                      <Dots total={10} value={r.difficulty} />
-                      <span className="metaValue">{r.difficulty}/10</span>
-                    </div>
-
-                    <div className="metaMini">
-                      <span>✨ Sorpresa {r.surprise}/10</span>
-                      <span>🏆 {r.record1}</span>
-                      <span>🥈 {r.record2}</span>
-                      <span>🎖️ {r.points}/3</span>
-                      <span>📌 {LEVEL_LABEL[r.level]}</span>
-                    </div>
-                  </div>
-
-                  <div className="roomActions">
-                    <button className="ghostBtn" onClick={() => startEdit(r)}>
-                      Editar
-                    </button>
-
-                    <button className={r.active ? "dangerBtnInline" : "btnSmall"} onClick={() => toggleActive(r.id)}>
-                      {r.active ? "Desactivar" : "Activar"}
-                    </button>
-
-                    <button className="dangerBtnInline" onClick={() => deleteRoom(r)}>
-                      Borrar
-                    </button>
-                  </div>
-                </div>
+            {/* ✅ CARD EDITABLE: BOMB TICKET */}
+            <div className="roomCard">
+              <div className="roomImgWrap" style={{ position: "relative" }}>
+                <img
+                  src={bomb.imageUrl || "https://picsum.photos/seed/bombticket/900/520"}
+                  alt={bomb.title}
+                  style={{ objectFit: "cover", width: "100%", height: "100%" }}
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src =
+                      "https://picsum.photos/seed/bombticket/900/520";
+                  }}
+                />
+                <div className="roomBadge">Beneficio</div>
               </div>
-            ))}
+
+              <div className="roomBody">
+                <div className="roomTitle">{bomb.title}</div>
+
+                {bomb.description ? (
+                  <div
+                    className="descClamp2"
+                    style={{ opacity: 0.82, fontSize: 12, marginBottom: 10, lineHeight: 1.3 }}
+                    title="Click para ver completa"
+                    onClick={() => setDescModal({ title: bomb.title, text: bomb.description })}
+                  >
+                    {bomb.description}
+                  </div>
+                ) : null}
+
+                {/* ✅ QR + BOTONES AL LADO (FORZADO POR GRID) */}
+                <div className="qrBlock">
+                  <div className="qrBox">
+                    <QRCodeCanvas
+                      id={BOMB_CANVAS_ID}
+                      value={BOMB_TICKET_QR}
+                      size={130}
+                      includeMargin
+                      bgColor="#ffffff"
+                      fgColor="#000000"
+                    />
+                  </div>
+
+                  <div className="qrActions">
+                    <button className="ghostBtn" onClick={() => copy(BOMB_TICKET_QR)}>
+                      Copiar
+                    </button>
+
+                    <button
+                      className="ghostBtn"
+                      onClick={() =>
+                        downloadPngFromCanvas(BOMB_CANVAS_ID, `bomb-ticket-${Date.now()}.png`)
+                      }
+                      title="Descargar PNG"
+                    >
+                      PNG
+                    </button>
+
+                    <button
+                      className="ghostBtn"
+                      onClick={() => printPngFromCanvas(BOMB_CANVAS_ID, bomb.title)}
+                      title="Imprimir (sin popup)"
+                    >
+                      Imprimir
+                    </button>
+                  </div>
+                </div>
+
+                <div className="roomActions">
+                  <button className="ghostBtn" onClick={() => setBombEditing(true)}>
+                    Editar
+                  </button>
+                </div>
+
+                {/* Modal editar Bomb Ticket */}
+                {bombEditing ? (
+                  <>
+                    <div className="backdrop show" onMouseDown={() => setBombEditing(false)} />
+                    <div className="modalCenter" onMouseDown={() => setBombEditing(false)}>
+                      <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
+                        <div className="modalHead">
+                          <div className="modalTitle">Editar Bomb Ticket</div>
+                          <button
+                            className="iconBtn"
+                            onClick={() => setBombEditing(false)}
+                            aria-label="Cerrar"
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        <div className="modalBody">
+                          <input
+                            ref={bombFileRef}
+                            type="file"
+                            accept="image/*"
+                            style={{ display: "none" }}
+                            onChange={onBombFileChange}
+                          />
+
+                          <div className="formGrid2">
+                            <label className="field" style={{ gridColumn: "1 / -1" }}>
+                              <span className="label">Título</span>
+                              <input
+                                className="input"
+                                value={bomb.title}
+                                onChange={(e) => setBomb((p) => ({ ...p, title: e.target.value }))}
+                              />
+                            </label>
+
+                            <label className="field" style={{ gridColumn: "1 / -1" }}>
+                              <span className="label">Descripción</span>
+                              <textarea
+                                className="input"
+                                rows={3}
+                                value={bomb.description}
+                                onChange={(e) =>
+                                  setBomb((p) => ({ ...p, description: e.target.value }))
+                                }
+                                style={{ resize: "vertical" }}
+                              />
+                            </label>
+
+                            <div className="field" style={{ gridColumn: "1 / -1" }}>
+                              <span className="label">Imagen</span>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 10,
+                                  alignItems: "center",
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <button type="button" className="btnSmall" onClick={onBombPickImage}>
+                                  Elegir imagen…
+                                </button>
+                                {bomb.imageUrl ? (
+                                  <button
+                                    type="button"
+                                    className="ghostBtn"
+                                    onClick={() => setBomb((p) => ({ ...p, imageUrl: "" }))}
+                                  >
+                                    Quitar
+                                  </button>
+                                ) : (
+                                  <span style={{ opacity: 0.8, fontSize: 12 }}>
+                                    Sin imagen (usa placeholder)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="modalFoot">
+                          <button className="ghostBtn" onClick={() => setBombEditing(false)}>
+                            Listo
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </div>
+
+            {/* ✅ CARDS DE SALAS */}
+            {filtered.map((r) => {
+              const canvasId = `qr_canvas_room_${r.id}`;
+              const qrValue = String(r.qrCode || "").trim() || makeRoomQr(r.id);
+
+              return (
+                <div key={r.id} className="roomCard">
+                  <div className="roomImgWrap">
+                    <img
+                      src={r.photo || "https://picsum.photos/seed/placeholder/900/520"}
+                      alt={r.name}
+                      style={{ objectFit: "cover", objectPosition: `50% ${r.photoPosition}%` }}
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src =
+                          "https://picsum.photos/seed/placeholder/900/520";
+                      }}
+                    />
+                    <div className="roomBadge">{CAT_LABEL[r.category]}</div>
+                    {!r.active && <div className="roomBadge off">INACTIVA</div>}
+                  </div>
+
+                  <div className="roomBody">
+                    <div className="roomTitle">{r.name}</div>
+
+                    <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
+                      <b>Sucursal:</b> {r.branch}
+                    </div>
+
+                    {r.reserveUrl ? (
+                      <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
+                        <b>Reserva:</b>{" "}
+                        {r.reserveUrl.length > 48 ? r.reserveUrl.slice(0, 48) + "…" : r.reserveUrl}
+                      </div>
+                    ) : null}
+
+                    {r.whatsappPhone ? (
+                      <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
+                        <b>WhatsApp:</b>{" "}
+                        {r.whatsappPhone.length > 32
+                          ? r.whatsappPhone.slice(0, 32) + "…"
+                          : r.whatsappPhone}
+                      </div>
+                    ) : null}
+
+                    {Array.isArray(r.tags) && r.tags.length ? (
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                        {r.tags.slice(0, 4).map((t) => (
+                          <span key={t} className="tagChip">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {r.description ? (
+                      <div
+                        className="descClamp2"
+                        style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}
+                        title="Click para ver completa"
+                        onClick={() => setDescModal({ title: r.name, text: r.description })}
+                      >
+                        {r.description}
+                      </div>
+                    ) : null}
+
+                    <div className="roomMeta">
+                      <div className="metaRow">
+                        <span className="metaLabel">Jugadores</span>
+                        <Dots total={6} value={r.playersMax} />
+                        <span className="metaValue">
+                          {r.playersMin}–{r.playersMax}
+                        </span>
+                      </div>
+
+                      <div className="metaRow">
+                        <span className="metaLabel">Dificultad</span>
+                        <Dots total={10} value={r.difficulty} />
+                        <span className="metaValue">{r.difficulty}/10</span>
+                      </div>
+
+                      <div className="metaMini">
+                        <span>✨ Sorpresa {r.surprise}/10</span>
+                        <span>🏆 {r.record1}</span>
+                        <span>🥈 {r.record2}</span>
+                        <span>🎖️ {r.points}/3</span>
+                        <span>📌 {LEVEL_LABEL[r.level]}</span>
+                      </div>
+
+                      {/* ✅ QR + BOTONES AL LADO (FORZADO POR GRID) */}
+                      <div className="qrBlock">
+                        <div className="qrBox">
+                          <QRCodeCanvas
+                            id={canvasId}
+                            value={qrValue}
+                            size={120}
+                            includeMargin
+                            bgColor="#ffffff"
+                            fgColor="#000000"
+                          />
+                        </div>
+
+                        <div className="qrActions">
+                          <button className="ghostBtn" onClick={() => copy(qrValue)} title="Copiar">
+                            Copiar
+                          </button>
+
+                          <button
+                            className="ghostBtn"
+                            onClick={() => downloadPngFromCanvas(canvasId, `qr-${r.id}.png`)}
+                            title="Descargar PNG"
+                          >
+                            PNG
+                          </button>
+
+                          <button
+                            className="ghostBtn"
+                            onClick={() => printPngFromCanvas(canvasId, r.name || "QR Sala")}
+                            title="Imprimir (sin popup)"
+                          >
+                            Imprimir
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="roomActions">
+                      <button className="ghostBtn" onClick={() => startEdit(r)}>
+                        Editar
+                      </button>
+
+                      <button
+                        className={r.active ? "dangerBtnInline" : "btnSmall"}
+                        onClick={() => toggleActive(r.id)}
+                      >
+                        {r.active ? "Desactivar" : "Activar"}
+                      </button>
+
+                      <button className="dangerBtnInline" onClick={() => deleteRoom(r)}>
+                        Borrar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
+      {/* ✅ Modal descripción completa */}
+      {descModal ? (
+        <>
+          <div className="backdrop show" onMouseDown={() => setDescModal(null)} />
+          <div className="modalCenter" onMouseDown={() => setDescModal(null)}>
+            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="modalHead">
+                <div className="modalTitle">{descModal.title || "Descripción"}</div>
+                <button className="iconBtn" onClick={() => setDescModal(null)} aria-label="Cerrar">
+                  ✕
+                </button>
+              </div>
+              <div className="modalBody">
+                <div style={{ textAlign: "left", whiteSpace: "pre-wrap", lineHeight: 1.45, fontSize: 14 }}>
+                  {descModal.text}
+                </div>
+              </div>
+              <div className="modalFoot">
+                <button className="ghostBtn" onClick={() => setDescModal(null)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {/* ✅ Modal crear/editar sala (lo tuyo, intacto) */}
       {open && editing && (
         <>
           <div className="backdrop show" onMouseDown={closeModal} />
           <div className="modalCenter" onMouseDown={closeModal}>
             <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
               <div className="modalHead">
-                <div className="modalTitle">{items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}</div>
+                <div className="modalTitle">
+                  {items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}
+                </div>
                 <button className="iconBtn" onClick={closeModal} aria-label="Cerrar">
                   ✕
                 </button>
               </div>
 
               <div className="modalBody">
-                <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFileChange} />
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={onFileChange}
+                />
 
                 <div className="formGrid2">
                   <label className="field">
                     <span className="label">Nombre</span>
-                    <input className="input" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+                    <input
+                      className="input"
+                      value={editing.name}
+                      onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                    />
                   </label>
 
                   <label className="field">
                     <span className="label">Categoría</span>
-                    <select className="input" value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as RoomCategory })}>
+                    <select
+                      className="input"
+                      value={editing.category}
+                      onChange={(e) => setEditing({ ...editing, category: e.target.value as RoomCategory })}
+                    >
                       <option value="WOW">WOW</option>
                       <option value="CLASICO">Clásico (20%)</option>
                       <option value="DESPEDIDA">Despedida</option>
                     </select>
                   </label>
 
-                  {/* ✅ NUEVO: Link de reserva (manual) */}
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span className="label">QR único</span>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <input
+                        className="input"
+                        value={editing.qrCode || ""}
+                        onChange={(e) => setEditing({ ...editing, qrCode: e.target.value })}
+                        placeholder={`Ej: ${makeRoomQr(editing.id)}`}
+                        style={{ flex: 1, minWidth: 260, fontFamily: "monospace" }}
+                      />
+                      <button
+                        type="button"
+                        className="ghostBtn"
+                        onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}
+                        title="Regenerar basado en el ID"
+                      >
+                        Regenerar
+                      </button>
+                      <button
+                        type="button"
+                        className="ghostBtn"
+                        onClick={() => editing.qrCode && copy(editing.qrCode)}
+                        disabled={!editing.qrCode}
+                      >
+                        Copiar
+                      </button>
+                    </div>
+                  </label>
+
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Link de reserva</span>
                     <input
@@ -676,11 +1192,26 @@ export default function Rooms() {
                     />
                   </label>
 
-                  {/* ✅ Temáticas multi (hasta 4) - guardan en tags */}
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span className="label">Teléfono WhatsApp</span>
+                    <input
+                      className="input"
+                      value={editing.whatsappPhone}
+                      onChange={(e) => setEditing({ ...editing, whatsappPhone: e.target.value })}
+                      placeholder="Ej: +54911XXXXXXXX o 54911XXXXXXXX"
+                      inputMode="tel"
+                    />
+                  </label>
+
                   <div className="field" ref={themesWrapRef}>
                     <span className="label">Temáticas (hasta 4)</span>
 
-                    <button type="button" className="input multiSelectBtn" onClick={() => setThemesOpen((v) => !v)} aria-expanded={themesOpen}>
+                    <button
+                      type="button"
+                      className="input multiSelectBtn"
+                      onClick={() => setThemesOpen((v) => !v)}
+                      aria-expanded={themesOpen}
+                    >
                       {selectedThemes.length ? (
                         <span className="multiSelectValue">
                           {selectedThemes.map((t) => (
@@ -701,7 +1232,12 @@ export default function Rooms() {
                           <div style={{ opacity: 0.85, fontSize: 12 }}>
                             Seleccionadas: <b>{selectedThemes.length}</b>/4
                           </div>
-                          <button type="button" className="ghostBtn" onClick={clearThemes} disabled={!selectedThemes.length}>
+                          <button
+                            type="button"
+                            className="ghostBtn"
+                            onClick={clearThemes}
+                            disabled={!selectedThemes.length}
+                          >
                             Limpiar
                           </button>
                         </div>
@@ -712,7 +1248,12 @@ export default function Rooms() {
                             const disabled = !checked && atThemesLimit;
                             return (
                               <label key={t} className={`multiSelectItem ${disabled ? "disabled" : ""}`}>
-                                <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleTheme(t)} />
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={disabled}
+                                  onChange={() => toggleTheme(t)}
+                                />
                                 <span>{t}</span>
                               </label>
                             );
@@ -724,10 +1265,13 @@ export default function Rooms() {
                     )}
                   </div>
 
-                  {/* ✅ Sucursal */}
                   <label className="field">
                     <span className="label">Sucursal</span>
-                    <select className="input" value={editing.branch} onChange={(e) => setEditing({ ...editing, branch: e.target.value as Branch })}>
+                    <select
+                      className="input"
+                      value={editing.branch}
+                      onChange={(e) => setEditing({ ...editing, branch: e.target.value as Branch })}
+                    >
                       {BRANCHES.map((b) => (
                         <option key={b} value={b}>
                           {b}
@@ -799,28 +1343,71 @@ export default function Rooms() {
                   </div>
 
                   <label className="field">
-                    <span className="label">Jugadores (1–6)</span>
-                    <input
+                    <span className="label">Jugadores mín (1–6)</span>
+                    <select
                       className="input"
-                      value={String(editing.playersMax)}
-                      onChange={(e) => setEditing({ ...editing, playersMax: clamp(Number(e.target.value || 1), 1, 6) })}
-                      inputMode="numeric"
-                    />
+                      value={String(editing.playersMin ?? 1)}
+                      onChange={(e) => {
+                        const min = Number(e.target.value);
+                        setEditing({
+                          ...editing,
+                          playersMin: min,
+                          playersMax: Math.max(min, editing.playersMax ?? 6),
+                        });
+                      }}
+                    >
+                      {[1, 2, 3, 4, 5, 6].map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="field">
+                    <span className="label">Jugadores máx (1–6)</span>
+                    <select
+                      className="input"
+                      value={String(editing.playersMax ?? 6)}
+                      onChange={(e) => {
+                        const max = Number(e.target.value);
+                        setEditing({
+                          ...editing,
+                          playersMax: max,
+                          playersMin: Math.min(editing.playersMin ?? 1, max),
+                        });
+                      }}
+                    >
+                      {[1, 2, 3, 4, 5, 6].map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
                   <label className="field">
                     <span className="label">Dificultad (1–10)</span>
-                    <input
+                    <select
                       className="input"
-                      value={String(editing.difficulty)}
-                      onChange={(e) => setEditing({ ...editing, difficulty: clamp(Number(e.target.value || 1), 1, 10) })}
-                      inputMode="numeric"
-                    />
+                      value={String(editing.difficulty ?? 5)}
+                      onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}
+                    >
+                      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
                   <label className="field">
                     <span className="label">Nivel</span>
-                    <select className="input" value={editing.level} onChange={(e) => setEditing({ ...editing, level: e.target.value as RoomLevel })}>
+                    <select
+                      className="input"
+                      value={editing.level}
+                      onChange={(e) => setEditing({ ...editing, level: e.target.value as RoomLevel })}
+                    >
                       <option value="FACIL">Fácil</option>
                       <option value="INTERMEDIO">Intermedio</option>
                       <option value="AVANZADO">Avanzado</option>
@@ -829,32 +1416,52 @@ export default function Rooms() {
 
                   <label className="field">
                     <span className="label">Factor Sorpresa (1–10)</span>
-                    <input
+                    <select
                       className="input"
-                      value={String(editing.surprise)}
-                      onChange={(e) => setEditing({ ...editing, surprise: clamp(Number(e.target.value || 1), 1, 10) })}
-                      inputMode="numeric"
-                    />
+                      value={String(editing.surprise ?? 5)}
+                      onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}
+                    >
+                      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
                   </label>
 
                   <label className="field">
                     <span className="label">Récord 1 (copa) MM:SS</span>
-                    <input className="input" value={editing.record1} onChange={(e) => setEditing({ ...editing, record1: e.target.value })} placeholder="12:34" />
+                    <input
+                      className="input"
+                      value={editing.record1}
+                      onChange={(e) => setEditing({ ...editing, record1: e.target.value })}
+                      placeholder="12:34"
+                    />
                   </label>
 
                   <label className="field">
                     <span className="label">Récord 2 (medalla) MM:SS</span>
-                    <input className="input" value={editing.record2} onChange={(e) => setEditing({ ...editing, record2: e.target.value })} placeholder="14:10" />
+                    <input
+                      className="input"
+                      value={editing.record2}
+                      onChange={(e) => setEditing({ ...editing, record2: e.target.value })}
+                      placeholder="14:10"
+                    />
                   </label>
 
                   <label className="field">
                     <span className="label">Puntaje (1–3)</span>
-                    <input
+                    <select
                       className="input"
-                      value={String(editing.points)}
-                      onChange={(e) => setEditing({ ...editing, points: clamp(Number(e.target.value || 1), 1, 3) as 1 | 2 | 3 })}
-                      inputMode="numeric"
-                    />
+                      value={String(editing.points ?? 1)}
+                      onChange={(e) => setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })}
+                    >
+                      {[1, 2, 3].map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                 </div>
               </div>

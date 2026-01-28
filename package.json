@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "emoji-picker-react": "^4.17.1",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.12.0"

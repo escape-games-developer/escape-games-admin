@@ -30,7 +30,6 @@ body{
   overflow: hidden;
 }
 
-/* ✅ Scroll del contenido */
 /* ✅ contenedor principal: tiene que ser FLEX para que el hijo pueda scrollear */
 .main{
   padding-top:72px;
@@ -73,7 +72,6 @@ body{
   padding-right: 6px;
 }
 
-
 /* ✅ Header fijo */
 .header{
   position:fixed; top:0; left:0; right:0; height:84px;
@@ -106,11 +104,11 @@ body{
   object-fit: contain !important;
 }
 
+/* ✅ FIX: estaba roto el background */
 .statusPill{
   font-size:12px; color: var(--accent);
   border:1px solid rgba(255,106,0,.35);
-  background: rgba
-  255,106,0,.10;
+  background: rgba(255,106,0,.10);
   padding:6px 10px;
   border-radius:999px;
 }
@@ -392,7 +390,13 @@ body{
   margin-top:14px;
 }
 
-.roomCard{ overflow:hidden; }
+/* ✅ Cards iguales + acciones abajo */
+.roomCard{
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  min-height: 640px;
+}
 
 .roomImgWrap{ position:relative; }
 .roomImgWrap img{
@@ -419,7 +423,13 @@ body{
   border-color: rgba(255,45,85,.45);
 }
 
-.roomBody{ padding:12px; }
+.roomBody{
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  flex: 1;
+  min-height: 0;
+}
 .roomTitle{ font-weight:900; margin-bottom:8px; }
 
 .roomMeta{ display:flex; flex-direction:column; gap:10px; }
@@ -452,7 +462,10 @@ body{
   display:flex;
   justify-content:flex-end;
   gap:10px;
-  margin-top:12px;
+  margin-top:auto;
+  align-items:center;
+
+  padding-top: 9px;     /* ✅ los baja 1mm */
 }
 
 /* ===== MODAL RESPONSIVO (scroll, no tapa botones) ===== */
@@ -513,7 +526,7 @@ body{
   .formGrid2{ grid-template-columns: 1fr; }
 }
 
-/* ✅ color opciones del select (depende del browser, pero ayuda) */
+/* ✅ color opciones del select */
 select.input option {
   background-color: #1a1a1f !important;
   color: #ffffff !important;
@@ -521,14 +534,6 @@ select.input option {
 select.input option:checked {
   background-color: rgba(36, 36, 39, 0.315) !important;
   color: #000 !important;
-}
-
-/* ✅ SCROLL SOLO DE CARDS (Salas) */
-.roomsScroll{
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 6px;
 }
 
 /* scrollbar suave */
@@ -627,4 +632,898 @@ select.input option:checked {
   font-size:12px;
   color: rgba(255,255,255,.72);
   border-top:1px solid rgba(255,255,255,.10);
+}
+
+/* =========================
+   ✅ NUEVO: descripción 2 líneas + QR al lado
+========================= */
+.descClamp2{
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+
+  line-clamp: 2;              /* ✅ estándar para compatibilidad */
+
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  cursor:pointer;
+}
+
+
+/* ✅ bloque QR SI O SI en 2 columnas: QR + acciones (al lado) */
+.qrBlock{
+  display:grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  margin-top: 10px;
+}
+
+.qrBox{
+  background:#fff;
+  border-radius:14px;
+  padding:10px;
+  box-shadow: var(--shadow);
+  width: fit-content;
+}
+
+.qrActions{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  align-items:flex-start;
+}
+
+.qrActions .ghostBtn{
+  padding: 8px 12px;
+  width: 120px;
+}
+
+@media (max-width: 420px){
+  .qrBlock{
+    grid-template-columns: 1fr;
+  }
+  .qrActions{
+    flex-direction:row;
+    flex-wrap:wrap;
+  }
+  .qrActions .ghostBtn{
+    width:auto;
+  }
+}
+/* =========================
+   USERS (Panel de usuarios)
+========================= */
+.usersScroll{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+  margin-top: 12px;
+}
+
+.usersScroll::-webkit-scrollbar{ width: 10px; }
+.usersScroll::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.12);
+  border-radius: 999px;
+  border: 2px solid rgba(0,0,0,.2);
+}
+
+.usersList{
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.userRow{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+}
+
+.userRow.off{
+  opacity: .62;
+}
+
+.userMain{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.userTopLine{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.userName{
+  font-weight: 900;
+  font-size: 14px;
+}
+
+.userPill{
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.35);
+}
+
+.userPill.off{
+  background: rgba(255,45,85,.18);
+  border-color: rgba(255,45,85,.35);
+}
+
+.role-ADMIN{
+  border-color: rgba(255,106,0,.40);
+  background: rgba(255,106,0,.12);
+}
+.role-GM{
+  border-color: rgba(120, 200, 255, 0.40);
+  background: rgba(120, 200, 255, 0.16);
+}
+.role-CLIENT{
+  border-color: rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+}
+
+.userFields{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.userEditGrid{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 900px){
+  .userFields{ grid-template-columns: 1fr; }
+  .userEditGrid{ grid-template-columns: 1fr; }
+}
+
+.uf{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ufLabel{
+  color: var(--mut);
+  font-size: 12px;
+}
+
+.ufInput{
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.userBottomBar{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* 3 dots */
+.userMenuCol{
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+
+.kebabBtn{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.05);
+  color: var(--txt);
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 0;
+}
+
+.kebabBtn:hover{
+  border-color: rgba(255,106,0,.30);
+}
+
+.kebabMenu{
+  position: absolute;
+  top: 48px;
+  right: 0;
+  width: 210px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.94);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+  padding: 8px;
+  z-index: 40;
+}
+
+.kebabItem{
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  color: var(--txt);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.kebabItem:hover{
+  border-color: rgba(255,106,0,.25);
+}
+
+.kebabItem:disabled{
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.kebabItem.danger{
+  border-color: rgba(255,45,85,.25);
+  background: rgba(255,45,85,.10);
+}
+
+.kebabDivider{
+  height: 1px;
+  margin: 8px 0;
+  background: rgba(255,255,255,.10);
+}
+/* =========================
+   USERS
+========================= */
+
+.usersScroll{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+/* scrollbar suave */
+.usersScroll::-webkit-scrollbar{ width: 10px; }
+.usersScroll::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.12);
+  border-radius: 999px;
+  border: 2px solid rgba(0,0,0,.2);
+}
+
+.usersGrid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap:14px;
+  margin-top:14px;
+}
+
+.usersList{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  margin-top:14px;
+}
+
+/* card usuarios, mismo look que panel/roomCard */
+.userCard{
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.72);
+  backdrop-filter: blur(8px);
+  border-radius:18px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+
+  display:flex;
+  flex-direction:column;
+}
+
+.userCard.isOff{
+  opacity: .85;
+}
+
+.userTop{
+  padding: 12px;
+}
+
+.userTitleRow{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom: 10px;
+}
+
+.userTitle{
+  font-weight: 900;
+}
+
+.userBadges{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.userBadge{
+  font-size:12px;
+  padding:6px 10px;
+  border-radius:999px;
+  background: rgba(0,0,0,.45);
+  border:1px solid rgba(255,255,255,.12);
+}
+
+.userBadge.off{
+  background: rgba(255,45,85,.25);
+  border-color: rgba(255,45,85,.45);
+}
+
+/* ✅ todo en el mismo renglón */
+.userOneRow{
+  display:grid;
+  grid-template-columns: repeat(6, minmax(160px, 1fr));
+  gap:10px;
+  align-items:end;
+}
+
+.uf{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.ufLabel{ color: var(--mut); font-size:12px; }
+.ufInput{ width:100%; }
+
+/* columnas “fantasma” para que quede alineado cuando no hay alias/sucursal */
+.ghostCol{
+  opacity:0;
+  pointer-events:none;
+}
+
+/* responsive */
+@media (max-width: 1200px){
+  .userOneRow{ grid-template-columns: repeat(3, minmax(200px, 1fr)); }
+}
+@media (max-width: 760px){
+  .userOneRow{ grid-template-columns: 1fr; }
+}
+
+/* pie de card: botones alineados */
+.userFoot{
+  margin-top: 2px;
+  padding: 12px;
+  border-top: 1px solid rgba(255,255,255,.10);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+
+  /* ✅ “bajarlos 1 milímetro” sin romper nada */
+  transform: translateY(1px);
+}
+
+.userFootLeft{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.userFootRight{
+  position: relative;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+}
+
+/* botón ⋯ */
+.dotsBtn{
+  width:44px;
+  height:44px;
+  border-radius:14px;
+  cursor:pointer;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: var(--txt);
+  font-size:20px;
+  line-height: 1;
+}
+.dotsBtn:hover{
+  border-color: rgba(255,106,0,.35);
+}
+
+/* dropdown */
+.dotsMenu{
+  position:absolute;
+  right:0;
+  top:48px;
+  min-width: 220px;
+  z-index: 20;
+
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.94);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+}
+
+.dotsItem{
+  width:100%;
+  text-align:left;
+  padding:12px 12px;
+  cursor:pointer;
+  background: transparent;
+  border:0;
+  color: var(--txt);
+}
+.dotsItem:hover{
+  background: rgba(255,255,255,.06);
+}
+.dotsItem.danger{
+  color: rgba(255,255,255,.92);
+  background: rgba(255,45,85,.10);
+}
+.dotsItem.danger:hover{
+  background: rgba(255,45,85,.18);
+}
+
+/* permisos */
+.permGrid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+}
+@media (max-width: 900px){
+  .permGrid{ grid-template-columns: 1fr; }
+}
+
+.permItem{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+}
+.permItem input{
+  accent-color: var(--accent);
+}
+
+/* ⚠️ si en algún lugar usás line-clamp, evitá warning:
+   -webkit-line-clamp + line-clamp (standard) */
+.lineClamp2{
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+
+  line-clamp: 2; /* ✅ standard (compatibilidad) */
+
+  overflow: hidden;
+}
+/* =========================
+   USERS - EXCEL GRID
+========================= */
+
+.usersGridScroll{
+  flex: 1;
+  min-height: 0;
+  overflow: auto; /* ✅ scroll horizontal + vertical */
+  padding-right: 6px;
+}
+
+.usersGridScroll::-webkit-scrollbar{ height: 10px; width: 10px; }
+.usersGridScroll::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.12);
+  border-radius: 999px;
+  border: 2px solid rgba(0,0,0,.2);
+}
+
+/* contenedor estilo planilla */
+.usersSheet{
+  min-width: 1120px; /* ✅ fuerza a que sea tipo excel si pantalla chica */
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.72);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* filas */
+.usersRow{
+  display:grid;
+  grid-template-columns:
+    180px   /* Nombre */
+    180px   /* Apellido */
+    180px   /* Alias */
+    320px   /* Mail */
+    160px   /* Rol */
+    200px   /* Sucursal */
+    130px   /* Estado */
+    60px;   /* ⋯ */
+  align-items:center;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+.usersRow:last-child{ border-bottom: 0; }
+
+.usersHeader{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: rgba(10,10,14,.85);
+  backdrop-filter: blur(10px);
+}
+
+.usersCell{
+  padding: 10px 10px;
+  min-width: 0;
+  border-right: 1px solid rgba(255,255,255,.08);
+}
+
+.usersCell:last-child{ border-right: 0; }
+
+.usersHeader .usersCell{
+  font-size: 12px;
+  color: rgba(255,255,255,.75);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+
+/* fila inactiva */
+.usersRow.isOff{
+  opacity: .75;
+}
+
+/* inputs dentro de la planilla */
+.sheetInput,
+.sheetSelect{
+  width:100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.18);
+  color: var(--txt);
+  padding: 10px 10px;
+  outline: none;
+}
+
+.sheetInput:focus,
+.sheetSelect:focus{
+  border-color: rgba(255,106,0,.45);
+  box-shadow: 0 0 0 3px rgba(255,106,0,.10);
+}
+
+/* botón estado adaptado */
+.sheetBtn{
+  width:100%;
+  padding: 10px 10px !important;
+  border-radius: 12px !important;
+}
+
+/* ⋯ y menú */
+.sheetActions{ position: relative; display:flex; justify-content:center; }
+.sheetDots{
+  width:44px;
+  height:44px;
+  border-radius:14px;
+  cursor:pointer;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: var(--txt);
+  font-size:20px;
+  line-height:1;
+}
+.sheetDots:hover{ border-color: rgba(255,106,0,.35); }
+
+.sheetMenu{
+  position:absolute;
+  right: 0;
+  top: 48px;
+  min-width: 220px;
+  z-index: 30;
+
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.94);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+}
+
+.sheetMenuItem{
+  width:100%;
+  text-align:left;
+  padding:12px 12px;
+  cursor:pointer;
+  background: transparent;
+  border:0;
+  color: var(--txt);
+}
+.sheetMenuItem:hover{ background: rgba(255,255,255,.06); }
+.sheetMenuItem.danger{
+  background: rgba(255,45,85,.10);
+}
+.sheetMenuItem.danger:hover{
+  background: rgba(255,45,85,.18);
+}
+/* =========================================
+   USERS: FULL WIDTH SOLO EN /usuarios
+   (No rompe el resto del panel)
+========================================= */
+body.users-fullwidth .content{
+  max-width: none !important;
+  width: 100% !important;
+}
+
+/* que el scroll de la planilla use mejor el alto */
+body.users-fullwidth .page{
+  width: 100%;
+}
+
+/* =========================================
+   USERS - EXCEL GRID FIX (MENU ⋯ visible)
+========================================= */
+.usersGridScroll{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+/* ✅ antes lo tenías con overflow hidden y te recortaba el menú */
+.usersSheet{
+  min-width: 1120px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.72);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+
+  overflow: visible; /* ✅ clave: no recortar popups */
+  position: relative;
+}
+
+.usersRow{
+  display:grid;
+  grid-template-columns:
+    180px
+    180px
+    180px
+    320px
+    160px
+    200px
+    130px
+    60px;
+  align-items:center;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+.usersHeader{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: rgba(10,10,14,.85);
+  backdrop-filter: blur(10px);
+}
+
+.usersCell{
+  padding: 10px 10px;
+  min-width: 0;
+  border-right: 1px solid rgba(255,255,255,.08);
+}
+.usersCell:last-child{ border-right: 0; }
+
+/* inputs planilla */
+.sheetInput,
+.sheetSelect{
+  width:100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.18);
+  color: var(--txt);
+  padding: 10px 10px;
+  outline: none;
+}
+.sheetInput:focus,
+.sheetSelect:focus{
+  border-color: rgba(255,106,0,.45);
+  box-shadow: 0 0 0 3px rgba(255,106,0,.10);
+}
+
+.sheetBtn{
+  width:100%;
+  padding: 10px 10px !important;
+  border-radius: 12px !important;
+}
+
+/* menú ⋯ */
+.sheetActions{
+  position: relative;
+  display:flex;
+  justify-content:center;
+}
+
+.sheetDots{
+  width:44px;
+  height:44px;
+  border-radius:14px;
+  cursor:pointer;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: var(--txt);
+  font-size:20px;
+  line-height:1;
+}
+.sheetDots:hover{ border-color: rgba(255,106,0,.35); }
+
+.sheetMenu{
+  position:absolute;
+  right: 0;
+  top: 48px;
+  min-width: 220px;
+
+  z-index: 9999; /* ✅ arriba de todo */
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.94);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+}
+
+.sheetMenuItem{
+  width:100%;
+  text-align:left;
+  padding:12px 12px;
+  cursor:pointer;
+  background: transparent;
+  border:0;
+  color: var(--txt);
+}
+.sheetMenuItem:hover{ background: rgba(255,255,255,.06); }
+.sheetMenuItem.danger{ background: rgba(255,45,85,.10); }
+.sheetMenuItem.danger:hover{ background: rgba(255,45,85,.18); }
+/* ===== USERS: full width SOLO /usuarios ===== */
+body.users-fullwidth .content{
+  max-width: none !important;
+  width: 100% !important;
+}
+
+/* Scroll de grilla */
+.usersGridScroll{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+/* Grilla (sin columna de acciones) */
+.usersSheet{
+  min-width: 1120px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.72);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  overflow: visible;
+  position: relative;
+}
+
+/* ✅ ahora son 7 columnas (se fue la de acciones) */
+.usersRow{
+  display:grid;
+  grid-template-columns:
+    180px
+    180px
+    180px
+    320px
+    160px
+    200px
+    130px;
+  align-items:center;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+
+  /* espacio a la derecha para el ⋯ sin tapar contenido */
+  padding-right: 62px;
+  position: relative;
+}
+
+.usersHeader{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: rgba(10,10,14,.85);
+  backdrop-filter: blur(10px);
+}
+
+.usersCell{
+  padding: 10px 10px;
+  min-width: 0;
+  border-right: 1px solid rgba(255,255,255,.08);
+}
+.usersCell:last-child{ border-right: 0; }
+
+.sheetInput,
+.sheetSelect{
+  width:100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.18);
+  color: var(--txt);
+  padding: 10px 10px;
+  outline: none;
+}
+.sheetInput:focus,
+.sheetSelect:focus{
+  border-color: rgba(255,106,0,.45);
+  box-shadow: 0 0 0 3px rgba(255,106,0,.10);
+}
+
+.sheetBtn{
+  width:100%;
+  padding: 10px 10px !important;
+  border-radius: 12px !important;
+}
+
+/* ✅ ⋯ pegado al costado, NO columna */
+.sheetActions{
+  position:absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display:flex;
+  justify-content:center;
+  z-index: 20;
+}
+
+.sheetDots{
+  width:44px;
+  height:44px;
+  border-radius:14px;
+  cursor:pointer;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: var(--txt);
+  font-size:20px;
+  line-height:1;
+}
+.sheetDots:hover{ border-color: rgba(255,106,0,.35); }
+
+.sheetMenu{
+  position:absolute;
+  right: 0;
+  top: 50px;
+  min-width: 220px;
+  z-index: 9999;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.94);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow);
+  overflow:hidden;
+}
+
+.sheetMenuItem{
+  width:100%;
+  text-align:left;
+  padding:12px 12px;
+  cursor:pointer;
+  background: transparent;
+  border:0;
+  color: var(--txt);
+}
+.sheetMenuItem:hover{ background: rgba(255,255,255,.06); }
+.sheetMenuItem.danger{ background: rgba(255,45,85,.10); }
+.sheetMenuItem.danger:hover{ background: rgba(255,45,85,.18); }
+/* ✅ Full width SOLO en /salas /novedades /usuarios */
+body.adminWide .content{
+  max-width: none !important;
+  width: 100% !important;
 }

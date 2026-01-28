@@ -64,6 +64,20 @@ export default function AdminLayout() {
     setDrawerOpen(false);
   }, [loc.pathname]);
 
+  // ✅ FULL WIDTH solo en ciertas páginas
+  useEffect(() => {
+    const widePaths = ["/salas", "/novedades", "/usuarios"];
+    const isWide = widePaths.includes(loc.pathname);
+
+    const cls = "adminWide";
+    if (isWide) document.body.classList.add(cls);
+    else document.body.classList.remove(cls);
+
+    return () => {
+      document.body.classList.remove(cls);
+    };
+  }, [loc.pathname]);
+
   if (!ready) return null;
 
   return (
