@@ -8,21 +8,12 @@ import Rooms from ".././pages/Rooms";
 import News from ".././pages/News";
 import Users from ".././pages/Users";
 
-type UserRole = "CLIENT" | "GM" | "ADMIN";
-const SESSION_KEY = "admin_demo_session";
+type UserRole = "CLIENT" | "GM" | "ADMIN" | "ADMIN_GENERAL";
 
-function safeJsonParse<T>(raw: string | null): T | null {
-  try {
-    if (!raw) return null;
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
-}
-
+/** ✅ Fuente de verdad: lo que ya persistís desde DB en Drawer/Login */
 function getRole(): UserRole {
-  const parsed = safeJsonParse<any>(localStorage.getItem(SESSION_KEY));
-  return (parsed?.role as UserRole) || "ADMIN";
+  const r = localStorage.getItem("eg_admin_role") as UserRole | null;
+  return r || "CLIENT";
 }
 
 function RequireRole({
@@ -45,21 +36,31 @@ export default function AppRoutes() {
       <Route element={<AdminLayout />}>
         <Route path="/" element={<Navigate to="/salas" replace />} />
 
-        <Route path="/salas" element={<Rooms />} />
+        {/* ✅ GM puede ver salas (pero después filtramos por sucursal en Rooms) */}
+        <Route
+          path="/salas"
+          element={
+            <RequireRole allow={["ADMIN_GENERAL", "ADMIN", "GM"]}>
+              <Rooms />
+            </RequireRole>
+          }
+        />
 
+        {/* ✅ SOLO ADMIN_GENERAL */}
         <Route
           path="/novedades"
           element={
-            <RequireRole allow={["ADMIN"]}>
+            <RequireRole allow={["ADMIN_GENERAL"]}>
               <News />
             </RequireRole>
           }
         />
 
+        {/* ✅ SOLO ADMIN_GENERAL */}
         <Route
           path="/usuarios"
           element={
-            <RequireRole allow={["ADMIN", "GM"]}>
+            <RequireRole allow={["ADMIN_GENERAL"]}>
               <Users />
             </RequireRole>
           }

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
+type AdminRole = "ADMIN_GENERAL" | "ADMIN" | "GM";
+
 export default function Login() {
   const nav = useNavigate();
 
@@ -33,17 +35,38 @@ export default function Login() {
       if (!data.session) throw new Error("No se pudo iniciar sesión.");
 
       // ✅ Chequeo de admin: debe existir en public.admins
+      // ✅ Traemos campos para decidir rol correctamente
       const { data: adminRow, error: adminErr } = await supabase
         .from("admins")
-        .select("user_id, mail, branch_id")
+        .select("user_id, mail, branch_id, gm_code, is_super")
         .eq("user_id", data.session.user.id)
         .maybeSingle();
 
       if (adminErr) throw adminErr;
+
       if (!adminRow) {
         await supabase.auth.signOut();
         throw new Error("No autorizado: este usuario no está habilitado como admin.");
       }
+
+      // ✅ Rol final (manda is_super)
+      let role: AdminRole;
+      if (adminRow.is_super) role = "ADMIN_GENERAL";
+      else if (adminRow.gm_code) role = "GM";
+      else role = "ADMIN";
+
+      // ✅ Validación extra: admins NO super deben tener sucursal asignada
+      if (!adminRow.is_super && (adminRow.branch_id == null || adminRow.branch_id === undefined)) {
+        await supabase.auth.signOut();
+        throw new Error("No autorizado: admin sin sucursal asignada.");
+      }
+
+      // ✅ Persistimos para que el resto del panel lo use
+      // (si ya tenías otro sistema de estado global, esto no molesta)
+      localStorage.setItem("eg_admin_role", role);
+      localStorage.setItem("eg_admin_mail", adminRow.mail ?? email.trim());
+      localStorage.setItem("eg_admin_branch_id", String(adminRow.branch_id ?? ""));
+      localStorage.setItem("eg_admin_is_super", adminRow.is_super ? "true" : "false");
 
       nav("/salas", { replace: true });
     } catch (e: any) {
