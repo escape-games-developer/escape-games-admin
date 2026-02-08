@@ -5,24 +5,64 @@ import { QRCodeCanvas } from "qrcode.react";
 type RoomCategory = "WOW" | "CLASICO" | "DESPEDIDA";
 type RoomLevel = "FACIL" | "INTERMEDIO" | "AVANZADO";
 
-// ✅ sucursales fijas
-const BRANCHES = [
-  "Nuñez",
-  "San Telmo",
-  "Saavedra",
-  "Caballito",
-  "Palermo",
-  "Almagro",
-  "Urquiza",
-  "Studios",
-  "La Plata",
-  "Bariloche",
-  "Salta",
-] as const;
+type BranchRow = { id: string; name: string };
 
-type Branch = (typeof BRANCHES)[number];
+type Room = {
+  id: string;
 
-// ✅ Temáticas múltiples (hasta 4)
+  // ✅ UUID real
+  branch_id?: string | null;
+
+  photo: string;
+  photoPosition: number;
+
+  name: string;
+  slug?: string;
+  description: string;
+
+  category: RoomCategory;
+  level: RoomLevel;
+
+  // (lo guardamos por compat y display, pero el “real” es branch_id)
+  branch: string;
+
+  tags: string[];
+  reserveUrl: string;
+  whatsappPhone: string;
+
+  playersMin: number;
+  playersMax: number;
+  difficulty: number;
+  surprise: number;
+
+  record1: string;
+  record2: string;
+
+  points: 1 | 2 | 3;
+  qrCode: string;
+
+  active: boolean;
+};
+
+type StaffPerms = {
+  canManageRooms: boolean;
+  canEditRankings: boolean;
+};
+
+type MyAuth = {
+  isAuthed: boolean;
+  isSuper: boolean;
+  isGM: boolean;
+
+  // ✅ scoped = no super + tiene branch_id asignada
+  isBranchScoped: boolean;
+
+  branchId: string | null; // ✅ UUID
+  perms: StaffPerms;
+
+  ready: boolean;
+};
+
 const ROOM_THEMES_MULTI = [
   "magia",
   "hallazgo",
@@ -58,10 +98,8 @@ const ROOM_THEMES_MULTI = [
 const BOMB_TICKET_QR = "EG-BOMB-2026-NUÑEZ";
 const BOMB_CANVAS_ID = "qr_canvas_bomb_ticket";
 
-// ✅ helpers
+// helpers
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
-const isBranch = (v: any): v is Branch => BRANCHES.includes(v);
-// MM:SS (00:00 a 99:59)
 const isMMSS = (v: string) => /^\d{2}:\d{2}$/.test(v);
 
 const uniq = (arr: string[]) => Array.from(new Set(arr));
@@ -77,50 +115,7 @@ const isHttpUrl = (v: string) => {
   }
 };
 
-// ✅ QR estable por sala
 const makeRoomQr = (roomId: string) => `EG-ROOM-${roomId}`;
-
-type Room = {
-  id: string;
-  branch_id?: number | null; // ✅ NUEVO: para scoping real
-  photo: string;
-  photoPosition: number;
-  name: string;
-  description: string;
-  category: RoomCategory;
-  branch: Branch;
-  tags: string[];
-  reserveUrl: string;
-  whatsappPhone: string;
-  playersMin: number;
-  playersMax: number;
-  difficulty: number;
-  level: RoomLevel;
-  surprise: number;
-  record1: string;
-  record2: string;
-  points: 1 | 2 | 3;
-  qrCode: string;
-  active: boolean;
-};
-
-type StaffPerms = {
-  canManageRooms: boolean;
-  canEditRankings: boolean;
-};
-
-type MyAuth = {
-  isAuthed: boolean;
-  isSuper: boolean;
-  // “GM” clásico por gm_code
-  isGM: boolean;
-  // scoped = no super y con branch asignada (aunque gm_code sea null)
-  isBranchScoped: boolean;
-  branchId: number | null;
-  branchLabel: Branch | "";
-  perms: StaffPerms;
-  ready: boolean; // ✅ auth loaded
-};
 
 const CAT_LABEL: Record<RoomCategory, string> = {
   WOW: "WOW",
@@ -149,24 +144,36 @@ function fromDb(row: any): Room {
   const qr = String(row.qr_code || "").trim();
   return {
     id: row.id,
-    branch_id: row.branch_id ?? null, // ✅ NUEVO
+    branch_id: row.branch_id ?? null,
+
     photo: row.photo_url || "",
     photoPosition: typeof row.photo_position === "number" ? Math.round(row.photo_position) : 50,
+
     name: row.name || "",
+    slug: row.slug || "",
     description: row.description || "",
-    category: row.category as RoomCategory,
-    branch: isBranch(row.branch) ? row.branch : "Nuñez",
+
+    category: (row.category as RoomCategory) || "WOW",
+    level: (row.level as RoomLevel) || "FACIL",
+
+    branch: String(row.branch || "").trim(),
+
     tags: Array.isArray(row.tags) ? normalizeThemes(row.tags.map(String)) : [],
+
     reserveUrl: String(row.reserve_url || ""),
     whatsappPhone: String(row.whatsapp_phone || ""),
+
     playersMin: Number(row.players_min ?? 1),
     playersMax: Number(row.players_max ?? 6),
+
     difficulty: Number(row.difficulty ?? 5),
-    level: row.level as RoomLevel,
     surprise: Number(row.surprise ?? 5),
+
     record1: row.record1 || "00:00",
     record2: row.record2 || "00:00",
+
     points: Number(row.points ?? 1) as 1 | 2 | 3,
+
     qrCode: qr || makeRoomQr(String(row.id)),
     active: Boolean(row.active),
   };
@@ -175,31 +182,42 @@ function fromDb(row: any): Room {
 function toDb(room: Room) {
   return {
     id: room.id,
-    photo_url: room.photo || null,
-    photo_position: Math.round(clamp(room.photoPosition, 0, 100)),
+
     name: room.name,
+    slug: room.slug || null,
     description: room.description || null,
+
     category: room.category,
-    branch: room.branch,
+    level: room.level,
+
+    // ✅ display/compat
+    branch: room.branch || null,
+
+    // ✅ REAL
+    branch_id: room.branch_id ?? null,
 
     tags: normalizeThemes(room.tags || []),
+
     reserve_url: room.reserveUrl ? room.reserveUrl.trim() : null,
     whatsapp_phone: room.whatsappPhone ? room.whatsappPhone.trim() : null,
 
-    players_min: clamp(Number(room.playersMin ?? 1), 1, 6),
-    players_max: clamp(Number(room.playersMax ?? 6), 1, 6),
+    players_min: clamp(Number(room.playersMin ?? 1), 1, 50),
+    players_max: clamp(Number(room.playersMax ?? 6), 1, 50),
 
     difficulty: clamp(Number(room.difficulty ?? 5), 1, 10),
-    level: room.level,
     surprise: clamp(Number(room.surprise ?? 5), 1, 10),
 
     record1: room.record1,
     record2: room.record2,
 
-    points: room.points,
+    points: clamp(Number(room.points ?? 1), 1, 3),
+
+    photo_url: room.photo || null,
+    photo_position: Math.round(clamp(room.photoPosition ?? 50, 0, 100)),
+
     qr_code: room.qrCode ? room.qrCode.trim() : null,
 
-    active: room.active,
+    active: !!room.active,
     updated_at: new Date().toISOString(),
   };
 }
@@ -296,12 +314,8 @@ function printPngFromCanvas(canvasId: string, title: string) {
   setTimeout(remove, 15000);
 }
 
-type BombCardState = {
-  title: string;
-  description: string;
-  imageUrl: string;
-};
-
+// Bomb card local
+type BombCardState = { title: string; description: string; imageUrl: string };
 const BOMB_STORAGE_KEY = "eg_admin_bomb_card_v1";
 
 function loadBombCard(): BombCardState {
@@ -330,9 +344,21 @@ function saveBombCard(next: BombCardState) {
 }
 
 export default function Rooms() {
+  const [branches, setBranches] = useState<BranchRow[]>([]);
+  const branchesById = useMemo(() => {
+    const m = new Map<string, string>();
+    branches.forEach((b) => m.set(b.id, b.name));
+    return m;
+  }, [branches]);
+  const branchesByName = useMemo(() => {
+    const m = new Map<string, string>();
+    branches.forEach((b) => m.set(b.name, b.id));
+    return m;
+  }, [branches]);
+
   const [items, setItems] = useState<Room[]>([]);
   const [q, setQ] = useState("");
-  const [branchFilter, setBranchFilter] = useState<string>("");
+  const [branchFilter, setBranchFilter] = useState<string>(""); // name
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Room | null>(null);
@@ -370,7 +396,6 @@ export default function Rooms() {
     isGM: false,
     isBranchScoped: false,
     branchId: null,
-    branchLabel: "",
     perms: { canManageRooms: false, canEditRankings: false },
     ready: false,
   });
@@ -382,8 +407,7 @@ export default function Rooms() {
   const canManageRoomFull = me.isSuper || me.perms.canManageRooms;
   const canEditRankings = me.isSuper || me.perms.canEditRankings;
 
-  // ✅ sucursal efectiva para scoping (GM o staff con branch)
-  const scopedBranch: Branch | "" = me.isBranchScoped ? me.branchLabel : "";
+  const myBranchName = me.branchId ? branchesById.get(me.branchId) || "" : "";
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -413,7 +437,26 @@ export default function Rooms() {
     saveBombCard(bomb);
   }, [bomb]);
 
-  // ✅ cargar rol/permisos desde admins
+  // ✅ cargar branches desde DB (fuente de verdad)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data, error } = await supabase.from("branches").select("id,name").order("name");
+      if (!mounted) return;
+      if (error) {
+        console.error(error);
+        alert("Error cargando sucursales (branches).");
+        setBranches([]);
+      } else {
+        setBranches((data as BranchRow[]) ?? []);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // ✅ cargar rol/permisos desde admins (UUID)
   useEffect(() => {
     let mounted = true;
 
@@ -443,7 +486,6 @@ export default function Rooms() {
               isGM: false,
               isBranchScoped: false,
               branchId: null,
-              branchLabel: "",
               perms: { canManageRooms: false, canEditRankings: false },
               ready: true,
             });
@@ -452,23 +494,11 @@ export default function Rooms() {
         }
 
         const isSuper = Boolean(row.is_super);
-        const branchId = row.branch_id != null ? Number(row.branch_id) : null;
-
-        // soporta branch_id 0-based o 1-based
-        const branchLabel = (() => {
-          if (branchId == null) return "";
-          const zeroBased = BRANCHES[branchId as number];
-          if (zeroBased) return zeroBased as any;
-          const oneBased = BRANCHES[(branchId as number) - 1];
-          if (oneBased) return oneBased as any;
-          return "";
-        })();
-
+        const branchId = row.branch_id ? String(row.branch_id) : null;
         const isGM = !isSuper && Boolean(row.gm_code);
 
-        // ✅ CLAVE: si NO es super y tiene branch asignada => usuario “scoped”
-        // (sea GM o un admin de sucursal con permisos)
-        const isBranchScoped = !isSuper && isBranch(branchLabel) && branchLabel !== "";
+        // ✅ si NO es super y tiene branch_id => scoped
+        const isBranchScoped = !isSuper && !!branchId;
 
         const permsRaw = (row.permissions || {}) as Partial<StaffPerms>;
         const perms: StaffPerms = {
@@ -483,7 +513,6 @@ export default function Rooms() {
             isGM,
             isBranchScoped,
             branchId,
-            branchLabel: isBranch(branchLabel) ? branchLabel : "",
             perms,
             ready: true,
           });
@@ -510,7 +539,6 @@ export default function Rooms() {
       if (current.length >= 4) return;
       next = [...current, t];
     }
-
     setEditing({ ...editing, tags: next });
   };
 
@@ -519,7 +547,7 @@ export default function Rooms() {
     setEditing({ ...editing, tags: [] });
   };
 
-  // ✅ cargar salas (FILTRADO DESDE LA QUERY si está “scoped”)
+  // ✅ cargar salas (filtrado desde query por branch_id UUID)
   useEffect(() => {
     if (!me.ready) return;
 
@@ -527,13 +555,11 @@ export default function Rooms() {
 
     (async () => {
       setLoading(true);
-
       try {
         let query = supabase.from("rooms_v2").select("*").order("created_at", { ascending: false });
 
-        // ✅ si el usuario es “scoped”, traemos SOLO su branch_id (si no hay => nada)
         if (me.isBranchScoped) {
-          if (me.branchId == null) {
+          if (!me.branchId) {
             if (mounted) {
               setItems([]);
               setLoading(false);
@@ -572,16 +598,15 @@ export default function Rooms() {
     return items.filter((r) => {
       const okSearch = !s ? true : r.name.toLowerCase().includes(s);
 
-      // ✅ filtro UI (solo para NO scoped)
+      // UI filter: branch por nombre (solo super/no-scoped)
       const okBranch = !branchFilter ? true : r.branch === branchFilter;
 
-      // ✅ scoped (doble seguridad REAL por branch_id)
-      const okScoped =
-        me.isBranchScoped && me.branchId != null ? r.branch_id === me.branchId : true;
+      // doble seguridad en memoria: UUID
+      const okScoped = me.isBranchScoped && me.branchId ? r.branch_id === me.branchId : true;
 
       return okSearch && okBranch && okScoped;
     });
-  }, [items, q, branchFilter, me.isBranchScoped, me.branchId, scopedBranch]);
+  }, [items, q, branchFilter, me.isBranchScoped, me.branchId]);
 
   const closeModal = () => {
     setOpen(false);
@@ -596,32 +621,45 @@ export default function Rooms() {
   const startCreate = () => {
     if (!canCreateRoom) return alert("No tenés permiso para crear salas.");
 
-    // si está scoped, la sucursal debe existir
-    if (me.isBranchScoped && !me.branchLabel) {
+    // default branch para crear
+    const defaultBranchName =
+      (me.isBranchScoped ? myBranchName : branches[0]?.name) || "Nuñez";
+    const defaultBranchId =
+      (me.isBranchScoped ? me.branchId : branchesByName.get(defaultBranchName) || null) || null;
+
+    if (me.isBranchScoped && !defaultBranchId) {
       return alert("Tenés permisos, pero tu usuario no tiene sucursal asignada.");
     }
 
     const id = crypto.randomUUID();
     setEditing({
       id,
-      branch_id: me.isBranchScoped ? me.branchId ?? null : null, // ✅ NO rompe nada
+      branch_id: defaultBranchId,
+      branch: defaultBranchName,
+
       photo: "",
       photoPosition: 50,
+
       name: "",
+      slug: "",
       description: "",
+
       category: "WOW",
-      branch: me.isBranchScoped && me.branchLabel ? me.branchLabel : "Nuñez",
+      level: "FACIL",
+
       tags: [],
       reserveUrl: "",
       whatsappPhone: "",
+
       playersMin: 1,
       playersMax: 6,
       difficulty: 5,
-      level: "FACIL",
       surprise: 5,
+
       record1: "00:00",
       record2: "00:00",
       points: 1,
+
       qrCode: makeRoomQr(id),
       active: true,
     });
@@ -632,13 +670,10 @@ export default function Rooms() {
     setOpen(true);
   };
 
-  // ✅ modal chico de récords
   const openRecordsEditor = (r: Room) => {
     if (!canEditRankings) return alert("No tenés permiso para editar récords.");
-
-    if (me.isBranchScoped) {
-      if (me.branchId == null) return alert("Tu usuario no tiene sucursal asignada.");
-      if (r.branch_id !== me.branchId) return alert("No podés editar salas de otra sucursal.");
+    if (me.isBranchScoped && me.branchId && r.branch_id !== me.branchId) {
+      return alert("No podés editar salas de otra sucursal.");
     }
 
     setRecordsModal({
@@ -654,16 +689,11 @@ export default function Rooms() {
 
     const r1 = String(recordsModal.record1 || "").trim();
     const r2 = String(recordsModal.record2 || "").trim();
-
     if (!isMMSS(r1) || !isMMSS(r2)) return alert("Formato inválido. Usá MM:SS (ej: 12:34).");
 
     setSaving(true);
     try {
-      const payload = {
-        record1: r1,
-        record2: r2,
-        updated_at: new Date().toISOString(),
-      };
+      const payload = { record1: r1, record2: r2, updated_at: new Date().toISOString() };
 
       const { data, error } = await supabase
         .from("rooms_v2")
@@ -688,20 +718,17 @@ export default function Rooms() {
   const startEditFull = (r: Room) => {
     if (!canManageRoomFull) return openRecordsEditor(r);
 
-    if (me.isBranchScoped) {
-      if (me.branchId == null) return alert("Tu usuario no tiene sucursal asignada.");
-      if (r.branch_id !== me.branchId) return alert("No podés editar salas de otra sucursal.");
+    if (me.isBranchScoped && me.branchId && r.branch_id !== me.branchId) {
+      return alert("No podés editar salas de otra sucursal.");
     }
 
     setEditing({
       ...r,
-      playersMin: r.playersMin ?? 1,
-      playersMax: r.playersMax ?? 6,
-      branch: (r.branch ?? "Nuñez") as Branch,
       tags: Array.isArray(r.tags) ? normalizeThemes(r.tags) : [],
       reserveUrl: r.reserveUrl || "",
       whatsappPhone: r.whatsappPhone || "",
       qrCode: (r.qrCode || "").trim() || makeRoomQr(r.id),
+      branch: r.branch || (r.branch_id ? branchesById.get(r.branch_id) || "" : ""),
     });
 
     setEditingPhotoFile(null);
@@ -733,9 +760,7 @@ export default function Rooms() {
     const url = URL.createObjectURL(file);
     setTempPreviewUrl(url);
 
-    setEditing((prev) =>
-      prev ? { ...prev, photo: url, photoPosition: prev.photoPosition ?? 50 } : prev
-    );
+    setEditing((prev) => (prev ? { ...prev, photo: url, photoPosition: prev.photoPosition ?? 50 } : prev));
   };
 
   const removeImage = () => {
@@ -800,22 +825,26 @@ export default function Rooms() {
 
     if (!canManageRoomFull) return alert("No tenés permiso para crear/editar salas completas.");
 
+    // ✅ resolver branch_id desde branch (nombre)
+    const resolvedBranchId =
+      editing.branch_id ||
+      (editing.branch ? branchesByName.get(editing.branch) || null : null);
+
+    // ✅ si es scoped, forzamos a la del usuario
     if (me.isBranchScoped) {
-      if (me.branchId == null) return alert("Tu usuario no tiene sucursal asignada.");
+      if (!me.branchId) return alert("Tu usuario no tiene sucursal asignada.");
 
-      // ✅ chequeo real
-      if (editing.branch_id != null && editing.branch_id !== me.branchId) {
+      if (resolvedBranchId && resolvedBranchId !== me.branchId) {
         return alert("No podés crear/editar en otra sucursal.");
       }
-      // si venía null, lo fijamos
-      if (editing.branch_id == null) {
-        editing.branch_id = me.branchId;
-      }
 
-      // además mantenemos el label para mostrar
-      if (editing.branch !== me.branchLabel) {
-        return alert("No podés crear/editar en otra sucursal.");
-      }
+      editing.branch_id = me.branchId;
+      editing.branch = myBranchName || editing.branch || "";
+    } else {
+      // super/no-scoped: igual exigimos branch_id válido
+      if (!resolvedBranchId) return alert("Elegí una sucursal válida.");
+      editing.branch_id = resolvedBranchId;
+      editing.branch = branchesById.get(resolvedBranchId) || editing.branch || "";
     }
 
     if (!editing.name.trim()) return alert("Poné el nombre de la sala.");
@@ -838,31 +867,22 @@ export default function Rooms() {
       if (finalPhotoUrl && !/^https?:\/\//i.test(finalPhotoUrl)) finalPhotoUrl = "";
 
       if (isNew && !finalPhotoUrl) {
-        return alert(
-          "No pude generar la URL pública de la imagen. Revisá Storage/Policies y volvé a subir."
-        );
+        return alert("No pude generar la URL pública de la imagen. Revisá Storage/Policies y volvé a subir.");
       }
 
-      // ✅ payload sin romper tu esquema: si tu tabla tiene branch_id int, viaja.
-      // Si NO la tiene, se ignora en DB (pero ojo: supabase update con columna inexistente tira error).
-      // Como vos ya la tenés, va bien.
-      const payload = {
-        ...toDb({
-          ...editing,
-          photo: finalPhotoUrl,
-          playersMin: clamp(Number(editing.playersMin ?? 1), 1, 6),
-          playersMax: clamp(Number(editing.playersMax ?? 6), 1, 6),
-          difficulty: clamp(Number(editing.difficulty ?? 5), 1, 10),
-          surprise: clamp(Number(editing.surprise ?? 5), 1, 10),
-          points: clamp(Number(editing.points ?? 1), 1, 3) as 1 | 2 | 3,
-          branch: (editing.branch ?? "Nuñez") as Branch,
-          tags: normalizeThemes(editing.tags || []),
-          reserveUrl: (editing.reserveUrl || "").trim(),
-          whatsappPhone: (editing.whatsappPhone || "").trim(),
-          qrCode: String(editing.qrCode || "").trim(),
-        }),
-        branch_id: editing.branch_id ?? null, // ✅ NUEVO
-      };
+      const payload = toDb({
+        ...editing,
+        photo: finalPhotoUrl,
+        playersMin: clamp(Number(editing.playersMin ?? 1), 1, 50),
+        playersMax: clamp(Number(editing.playersMax ?? 6), 1, 50),
+        difficulty: clamp(Number(editing.difficulty ?? 5), 1, 10),
+        surprise: clamp(Number(editing.surprise ?? 5), 1, 10),
+        points: clamp(Number(editing.points ?? 1), 1, 3) as 1 | 2 | 3,
+        tags: normalizeThemes(editing.tags || []),
+        reserveUrl: (editing.reserveUrl || "").trim(),
+        whatsappPhone: (editing.whatsappPhone || "").trim(),
+        qrCode: String(editing.qrCode || "").trim(),
+      });
 
       const { data, error } = await supabase
         .from("rooms_v2")
@@ -893,7 +913,7 @@ export default function Rooms() {
     const current = items.find((x) => x.id === id);
     if (!current) return;
 
-    if (me.isBranchScoped && me.branchId != null && current.branch_id !== me.branchId) {
+    if (me.isBranchScoped && me.branchId && current.branch_id !== me.branchId) {
       return alert("No podés cambiar estado de otra sucursal.");
     }
 
@@ -911,7 +931,7 @@ export default function Rooms() {
   const deleteRoom = async (room: Room) => {
     if (!canManageRoomFull) return alert("No tenés permiso para borrar salas.");
 
-    if (me.isBranchScoped && me.branchId != null && room.branch_id !== me.branchId) {
+    if (me.isBranchScoped && me.branchId && room.branch_id !== me.branchId) {
       return alert("No podés borrar salas de otra sucursal.");
     }
 
@@ -924,9 +944,7 @@ export default function Rooms() {
     try {
       if (room.photo && room.photo.includes("/storage/v1/object/public/rooms/")) {
         const idx = room.photo.indexOf("/storage/v1/object/public/rooms/");
-        const path = room.photo
-          .slice(idx + "/storage/v1/object/public/rooms/".length)
-          .split("?")[0];
+        const path = room.photo.slice(idx + "/storage/v1/object/public/rooms/".length).split("?")[0];
 
         const { error: storageErr } = await supabase.storage.from("rooms").remove([path]);
         if (storageErr) console.warn("No pude borrar imagen en storage:", storageErr);
@@ -992,18 +1010,15 @@ export default function Rooms() {
             style={{ width: 220 }}
           >
             <option value="">Todas las sucursales</option>
-            {BRANCHES.map((b) => (
-              <option key={b} value={b}>
-                {b}
+            {branches.map((b) => (
+              <option key={b.id} value={b.name}>
+                {b.name}
               </option>
             ))}
           </select>
         ) : (
-          <div
-            className="input"
-            style={{ width: 220, opacity: 0.85, display: "flex", alignItems: "center" }}
-          >
-            {me.branchLabel ? `Sucursal: ${me.branchLabel}` : "Sucursal: sin asignar"}
+          <div className="input" style={{ width: 220, opacity: 0.85, display: "flex", alignItems: "center" }}>
+            {myBranchName ? `Sucursal: ${myBranchName}` : "Sucursal: sin asignar"}
           </div>
         )}
       </div>
@@ -1023,8 +1038,7 @@ export default function Rooms() {
                   alt={bomb.title}
                   style={{ objectFit: "cover", width: "100%", height: "100%" }}
                   onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src =
-                      "https://picsum.photos/seed/bombticket/900/520";
+                    (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/bombticket/900/520";
                   }}
                 />
                 <div className="roomBadge">Beneficio</div>
@@ -1046,14 +1060,7 @@ export default function Rooms() {
 
                 <div className="qrBlock">
                   <div className="qrBox">
-                    <QRCodeCanvas
-                      id={BOMB_CANVAS_ID}
-                      value={BOMB_TICKET_QR}
-                      size={130}
-                      includeMargin
-                      bgColor="#ffffff"
-                      fgColor="#000000"
-                    />
+                    <QRCodeCanvas id={BOMB_CANVAS_ID} value={BOMB_TICKET_QR} size={130} includeMargin bgColor="#ffffff" fgColor="#000000" />
                   </div>
 
                   <div className="qrActions">
@@ -1061,21 +1068,11 @@ export default function Rooms() {
                       Copiar
                     </button>
 
-                    <button
-                      className="ghostBtn"
-                      onClick={() =>
-                        downloadPngFromCanvas(BOMB_CANVAS_ID, `bomb-ticket-${Date.now()}.png`)
-                      }
-                      title="Descargar PNG"
-                    >
+                    <button className="ghostBtn" onClick={() => downloadPngFromCanvas(BOMB_CANVAS_ID, `bomb-ticket-${Date.now()}.png`)} title="Descargar PNG">
                       PNG
                     </button>
 
-                    <button
-                      className="ghostBtn"
-                      onClick={() => printPngFromCanvas(BOMB_CANVAS_ID, bomb.title)}
-                      title="Imprimir"
-                    >
+                    <button className="ghostBtn" onClick={() => printPngFromCanvas(BOMB_CANVAS_ID, bomb.title)} title="Imprimir">
                       Imprimir
                     </button>
                   </div>
@@ -1096,32 +1093,18 @@ export default function Rooms() {
                       <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
                         <div className="modalHead">
                           <div className="modalTitle">Editar Bomb Ticket</div>
-                          <button
-                            className="iconBtn"
-                            onClick={() => setBombEditing(false)}
-                            aria-label="Cerrar"
-                          >
+                          <button className="iconBtn" onClick={() => setBombEditing(false)} aria-label="Cerrar">
                             ✕
                           </button>
                         </div>
 
                         <div className="modalBody">
-                          <input
-                            ref={bombFileRef}
-                            type="file"
-                            accept="image/*"
-                            style={{ display: "none" }}
-                            onChange={onBombFileChange}
-                          />
+                          <input ref={bombFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onBombFileChange} />
 
                           <div className="formGrid2">
                             <label className="field" style={{ gridColumn: "1 / -1" }}>
                               <span className="label">Título</span>
-                              <input
-                                className="input"
-                                value={bomb.title}
-                                onChange={(e) => setBomb((p) => ({ ...p, title: e.target.value }))}
-                              />
+                              <input className="input" value={bomb.title} onChange={(e) => setBomb((p) => ({ ...p, title: e.target.value }))} />
                             </label>
 
                             <label className="field" style={{ gridColumn: "1 / -1" }}>
@@ -1142,11 +1125,7 @@ export default function Rooms() {
                                   Elegir imagen…
                                 </button>
                                 {bomb.imageUrl ? (
-                                  <button
-                                    type="button"
-                                    className="ghostBtn"
-                                    onClick={() => setBomb((p) => ({ ...p, imageUrl: "" }))}
-                                  >
+                                  <button type="button" className="ghostBtn" onClick={() => setBomb((p) => ({ ...p, imageUrl: "" }))}>
                                     Quitar
                                   </button>
                                 ) : (
@@ -1182,8 +1161,7 @@ export default function Rooms() {
                       alt={r.name}
                       style={{ objectFit: "cover", objectPosition: `50% ${r.photoPosition}%` }}
                       onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src =
-                          "https://picsum.photos/seed/placeholder/900/520";
+                        (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/placeholder/900/520";
                       }}
                     />
                     <div className="roomBadge">{CAT_LABEL[r.category]}</div>
@@ -1194,7 +1172,7 @@ export default function Rooms() {
                     <div className="roomTitle">{r.name}</div>
 
                     <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
-                      <b>Sucursal:</b> {r.branch}
+                      <b>Sucursal:</b> {r.branch || (r.branch_id ? branchesById.get(r.branch_id) : "")}
                     </div>
 
                     {Array.isArray(r.tags) && r.tags.length ? (
@@ -1243,14 +1221,7 @@ export default function Rooms() {
 
                       <div className="qrBlock">
                         <div className="qrBox">
-                          <QRCodeCanvas
-                            id={canvasId}
-                            value={qrValue}
-                            size={120}
-                            includeMargin
-                            bgColor="#ffffff"
-                            fgColor="#000000"
-                          />
+                          <QRCodeCanvas id={canvasId} value={qrValue} size={120} includeMargin bgColor="#ffffff" fgColor="#000000" />
                         </div>
 
                         <div className="qrActions">
@@ -1258,19 +1229,11 @@ export default function Rooms() {
                             Copiar
                           </button>
 
-                          <button
-                            className="ghostBtn"
-                            onClick={() => downloadPngFromCanvas(canvasId, `qr-${r.id}.png`)}
-                            title="Descargar PNG"
-                          >
+                          <button className="ghostBtn" onClick={() => downloadPngFromCanvas(canvasId, `qr-${r.id}.png`)} title="Descargar PNG">
                             PNG
                           </button>
 
-                          <button
-                            className="ghostBtn"
-                            onClick={() => printPngFromCanvas(canvasId, r.name || "QR Sala")}
-                            title="Imprimir"
-                          >
+                          <button className="ghostBtn" onClick={() => printPngFromCanvas(canvasId, r.name || "QR Sala")} title="Imprimir">
                             Imprimir
                           </button>
                         </div>
@@ -1278,24 +1241,19 @@ export default function Rooms() {
                     </div>
 
                     <div className="roomActions">
-                      {/* ✅ si NO tiene manage rooms pero sí rankings: modal chico */}
                       {!canManageRoomFull && canEditRankings ? (
                         <button className="ghostBtn" onClick={() => openRecordsEditor(r)}>
                           Editar récords
                         </button>
                       ) : null}
 
-                      {/* ✅ full manage */}
                       {canManageRoomFull ? (
                         <>
                           <button className="ghostBtn" onClick={() => startEditFull(r)}>
                             Editar
                           </button>
 
-                          <button
-                            className={r.active ? "dangerBtnInline" : "btnSmall"}
-                            onClick={() => toggleActive(r.id)}
-                          >
+                          <button className={r.active ? "dangerBtnInline" : "btnSmall"} onClick={() => toggleActive(r.id)}>
                             {r.active ? "Desactivar" : "Activar"}
                           </button>
 
@@ -1313,7 +1271,7 @@ export default function Rooms() {
         </div>
       )}
 
-      {/* ✅ Modal descripción completa */}
+      {/* Modal descripción */}
       {descModal ? (
         <>
           <div className="backdrop show" onMouseDown={() => setDescModal(null)} />
@@ -1326,9 +1284,7 @@ export default function Rooms() {
                 </button>
               </div>
               <div className="modalBody">
-                <div style={{ textAlign: "left", whiteSpace: "pre-wrap", lineHeight: 1.45, fontSize: 14 }}>
-                  {descModal.text}
-                </div>
+                <div style={{ textAlign: "left", whiteSpace: "pre-wrap", lineHeight: 1.45, fontSize: 14 }}>{descModal.text}</div>
               </div>
               <div className="modalFoot">
                 <button className="ghostBtn" onClick={() => setDescModal(null)}>
@@ -1340,7 +1296,7 @@ export default function Rooms() {
         </>
       ) : null}
 
-      {/* ✅ Modal chico: récords */}
+      {/* Modal récords */}
       {recordsModal ? (
         <>
           <div className="backdrop show" onMouseDown={() => setRecordsModal(null)} />
@@ -1357,24 +1313,12 @@ export default function Rooms() {
                 <div className="formGrid2">
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Récord 1 (MM:SS)</span>
-                    <input
-                      className="input"
-                      value={recordsModal.record1}
-                      onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))}
-                      placeholder="12:34"
-                      inputMode="numeric"
-                    />
+                    <input className="input" value={recordsModal.record1} onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))} placeholder="12:34" inputMode="numeric" />
                   </label>
 
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Récord 2 (MM:SS)</span>
-                    <input
-                      className="input"
-                      value={recordsModal.record2}
-                      onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))}
-                      placeholder="14:10"
-                      inputMode="numeric"
-                    />
+                    <input className="input" value={recordsModal.record2} onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))} placeholder="14:10" inputMode="numeric" />
                   </label>
 
                   <div style={{ gridColumn: "1 / -1", opacity: 0.75, fontSize: 12 }}>
@@ -1396,16 +1340,14 @@ export default function Rooms() {
         </>
       ) : null}
 
-      {/* ✅ Modal full: crear/editar sala */}
+      {/* Modal crear/editar */}
       {open && editing ? (
         <>
           <div className="backdrop show" onMouseDown={closeModal} />
           <div className="modalCenter" onMouseDown={closeModal}>
             <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
               <div className="modalHead">
-                <div className="modalTitle">
-                  {items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}
-                </div>
+                <div className="modalTitle">{items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}</div>
                 <button className="iconBtn" onClick={closeModal} aria-label="Cerrar">
                   ✕
                 </button>
@@ -1422,11 +1364,7 @@ export default function Rooms() {
 
                   <label className="field">
                     <span className="label">Categoría</span>
-                    <select
-                      className="input"
-                      value={editing.category}
-                      onChange={(e) => setEditing({ ...editing, category: e.target.value as RoomCategory })}
-                    >
+                    <select className="input" value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as RoomCategory })}>
                       <option value="WOW">WOW</option>
                       <option value="CLASICO">Clásico (20%)</option>
                       <option value="DESPEDIDA">Despedida</option>
@@ -1443,12 +1381,7 @@ export default function Rooms() {
                         placeholder={`Ej: ${makeRoomQr(editing.id)}`}
                         style={{ flex: 1, minWidth: 260, fontFamily: "monospace" }}
                       />
-                      <button
-                        type="button"
-                        className="ghostBtn"
-                        onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}
-                        title="Regenerar basado en el ID"
-                      >
+                      <button type="button" className="ghostBtn" onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}>
                         Regenerar
                       </button>
                       <button type="button" className="ghostBtn" onClick={() => editing.qrCode && copy(editing.qrCode)} disabled={!editing.qrCode}>
@@ -1459,35 +1392,18 @@ export default function Rooms() {
 
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Link de reserva</span>
-                    <input
-                      className="input"
-                      value={editing.reserveUrl}
-                      onChange={(e) => setEditing({ ...editing, reserveUrl: e.target.value })}
-                      placeholder="https://..."
-                      inputMode="url"
-                    />
+                    <input className="input" value={editing.reserveUrl} onChange={(e) => setEditing({ ...editing, reserveUrl: e.target.value })} placeholder="https://..." inputMode="url" />
                   </label>
 
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Teléfono WhatsApp</span>
-                    <input
-                      className="input"
-                      value={editing.whatsappPhone}
-                      onChange={(e) => setEditing({ ...editing, whatsappPhone: e.target.value })}
-                      placeholder="Ej: +54911XXXXXXXX o 54911XXXXXXXX"
-                      inputMode="tel"
-                    />
+                    <input className="input" value={editing.whatsappPhone} onChange={(e) => setEditing({ ...editing, whatsappPhone: e.target.value })} placeholder="Ej: +54911XXXXXXXX" inputMode="tel" />
                   </label>
 
                   <div className="field" ref={themesWrapRef}>
                     <span className="label">Temáticas (hasta 4)</span>
 
-                    <button
-                      type="button"
-                      className="input multiSelectBtn"
-                      onClick={() => setThemesOpen((v) => !v)}
-                      aria-expanded={themesOpen}
-                    >
+                    <button type="button" className="input multiSelectBtn" onClick={() => setThemesOpen((v) => !v)} aria-expanded={themesOpen}>
                       {selectedThemes.length ? (
                         <span className="multiSelectValue">
                           {selectedThemes.map((t) => (
@@ -1536,12 +1452,16 @@ export default function Rooms() {
                     <select
                       className="input"
                       value={editing.branch}
-                      onChange={(e) => setEditing({ ...editing, branch: e.target.value as Branch })}
-                      disabled={me.isBranchScoped} // ✅ scoped: fija
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        const bid = branchesByName.get(name) || null;
+                        setEditing({ ...editing, branch: name, branch_id: bid });
+                      }}
+                      disabled={me.isBranchScoped} // scoped: fija
                     >
-                      {BRANCHES.map((b) => (
-                        <option key={b} value={b}>
-                          {b}
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.name}>
+                          {b.name}
                         </option>
                       ))}
                     </select>
@@ -1549,14 +1469,7 @@ export default function Rooms() {
 
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Descripción (breve)</span>
-                    <textarea
-                      className="input"
-                      value={editing.description}
-                      onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                      rows={3}
-                      placeholder="Ej: Terror psicológico..."
-                      style={{ resize: "vertical" }}
-                    />
+                    <textarea className="input" value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} rows={3} style={{ resize: "vertical" }} />
                   </label>
 
                   <div className="field" style={{ gridColumn: "1 / -1" }}>
@@ -1610,48 +1523,18 @@ export default function Rooms() {
                   </div>
 
                   <label className="field">
-                    <span className="label">Jugadores mín (1–6)</span>
-                    <select
-                      className="input"
-                      value={String(editing.playersMin ?? 1)}
-                      onChange={(e) => {
-                        const min = Number(e.target.value);
-                        setEditing({ ...editing, playersMin: min, playersMax: Math.max(min, editing.playersMax ?? 6) });
-                      }}
-                    >
-                      {[1, 2, 3, 4, 5, 6].map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="label">Jugadores mín</span>
+                    <input className="input" value={String(editing.playersMin ?? 1)} onChange={(e) => setEditing({ ...editing, playersMin: Number(e.target.value) })} inputMode="numeric" />
                   </label>
 
                   <label className="field">
-                    <span className="label">Jugadores máx (1–6)</span>
-                    <select
-                      className="input"
-                      value={String(editing.playersMax ?? 6)}
-                      onChange={(e) => {
-                        const max = Number(e.target.value);
-                        setEditing({ ...editing, playersMax: max, playersMin: Math.min(editing.playersMin ?? 1, max) });
-                      }}
-                    >
-                      {[1, 2, 3, 4, 5, 6].map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="label">Jugadores máx</span>
+                    <input className="input" value={String(editing.playersMax ?? 6)} onChange={(e) => setEditing({ ...editing, playersMax: Number(e.target.value) })} inputMode="numeric" />
                   </label>
 
                   <label className="field">
                     <span className="label">Dificultad (1–10)</span>
-                    <select
-                      className="input"
-                      value={String(editing.difficulty ?? 5)}
-                      onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}
-                    >
+                    <select className="input" value={String(editing.difficulty ?? 5)} onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}>
                       {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                         <option key={n} value={n}>
                           {n}
@@ -1671,11 +1554,7 @@ export default function Rooms() {
 
                   <label className="field">
                     <span className="label">Factor Sorpresa (1–10)</span>
-                    <select
-                      className="input"
-                      value={String(editing.surprise ?? 5)}
-                      onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}
-                    >
+                    <select className="input" value={String(editing.surprise ?? 5)} onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}>
                       {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                         <option key={n} value={n}>
                           {n}
@@ -1696,11 +1575,7 @@ export default function Rooms() {
 
                   <label className="field">
                     <span className="label">Puntaje (1–3)</span>
-                    <select
-                      className="input"
-                      value={String(editing.points ?? 1)}
-                      onChange={(e) => setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })}
-                    >
+                    <select className="input" value={String(editing.points ?? 1)} onChange={(e) => setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })}>
                       {[1, 2, 3].map((n) => (
                         <option key={n} value={n}>
                           {n}
@@ -1726,4 +1601,3 @@ export default function Rooms() {
     </div>
   );
 }
-  
