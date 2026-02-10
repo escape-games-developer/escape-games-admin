@@ -9,8 +9,6 @@ type BranchRow = { id: string; name: string };
 
 type Room = {
   id: string;
-
-  // ✅ UUID real
   branch_id?: string | null;
 
   photo: string;
@@ -23,7 +21,6 @@ type Room = {
   category: RoomCategory;
   level: RoomLevel;
 
-  // (lo guardamos por compat y display, pero el “real” es branch_id)
   branch: string;
 
   tags: string[];
@@ -53,13 +50,9 @@ type MyAuth = {
   isAuthed: boolean;
   isSuper: boolean;
   isGM: boolean;
-
-  // ✅ scoped = no super + tiene branch_id asignada
   isBranchScoped: boolean;
-
-  branchId: string | null; // ✅ UUID
+  branchId: string | null;
   perms: StaffPerms;
-
   ready: boolean;
 };
 
@@ -94,17 +87,14 @@ const ROOM_THEMES_MULTI = [
   "policial",
 ] as const;
 
-// ✅ Bomb Ticket QR (beneficio)
 const BOMB_TICKET_QR = "EG-BOMB-2026-NUÑEZ";
 const BOMB_CANVAS_ID = "qr_canvas_bomb_ticket";
 
-// helpers
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const isMMSS = (v: string) => /^\d{2}:\d{2}$/.test(v);
 
 const uniq = (arr: string[]) => Array.from(new Set(arr));
-const normalizeThemes = (arr: string[]) =>
-  uniq(arr.map((x) => (x || "").trim()).filter(Boolean)).slice(0, 4);
+const normalizeThemes = (arr: string[]) => uniq(arr.map((x) => (x || "").trim()).filter(Boolean)).slice(0, 4);
 
 const isHttpUrl = (v: string) => {
   try {
@@ -190,10 +180,7 @@ function toDb(room: Room) {
     category: room.category,
     level: room.level,
 
-    // ✅ display/compat
     branch: room.branch || null,
-
-    // ✅ REAL
     branch_id: room.branch_id ?? null,
 
     tags: normalizeThemes(room.tags || []),
@@ -343,6 +330,95 @@ function saveBombCard(next: BombCardState) {
   } catch {}
 }
 
+/* =========================
+   CROP POPUP (SALAS) - CURSOR ONLY ✅
+   - 2do popup al elegir imagen
+   - Ajuste con mouse:
+     * Arrastrar dentro = mover
+     * Arrastrar esquinas/bordes = resize
+     * Ruedita = zoom del recorte
+     * Doble click = máximo (imagen completa)
+     * SHIFT = mantener ratio de card (opcional)
+========================= */
+
+const ROOM_CARD_ASPECT = 900 / 520;
+
+type CropModalState = {
+  open: boolean;
+  srcUrl: string;
+  originalFile: File;
+};
+
+type NatImg = { w: number; h: number };
+type CropRect = { x: number; y: number; w: number; h: number };
+type Handle = "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
+type DragMode = "move" | "resize" | null;
+
+function toJpegName(fileName: string) {
+  const base = (fileName || "image").replace(/\.[a-z0-9]+$/i, "");
+  return `${base}.jpg`;
+}
+
+function clampRectToImage(r: CropRect, nat: NatImg, minSize = 80): CropRect {
+  let w = Math.max(minSize, Math.min(r.w, nat.w));
+  let h = Math.max(minSize, Math.min(r.h, nat.h));
+
+  let x = r.x;
+  let y = r.y;
+
+  x = Math.max(0, Math.min(x, nat.w - w));
+  y = Math.max(0, Math.min(y, nat.h - h));
+
+  return { x, y, w, h };
+}
+
+function rectCenter(r: CropRect) {
+  return { cx: r.x + r.w / 2, cy: r.y + r.h / 2 };
+}
+
+function zoomRect(r: CropRect, nat: NatImg, factor: number, minSize = 80): CropRect {
+  const { cx, cy } = rectCenter(r);
+  const nw = r.w * factor;
+  const nh = r.h * factor;
+  const next: CropRect = {
+    x: cx - nw / 2,
+    y: cy - nh / 2,
+    w: nw,
+    h: nh,
+  };
+  return clampRectToImage(next, nat, minSize);
+}
+
+function applyAspectFromAnchor(
+  rect: CropRect,
+  nat: NatImg,
+  handle: Handle,
+  aspect: number,
+  minSize = 80
+): CropRect {
+  // Ajusta h = w / aspect manteniendo el lado “dominante” del handle.
+  let r = { ...rect };
+
+  // elegimos controlar por ancho si el handle toca lados E/W, sino por alto
+  const controlsW = handle.includes("e") || handle.includes("w");
+  if (controlsW) {
+    r.h = r.w / aspect;
+  } else {
+    r.w = r.h * aspect;
+  }
+
+  // re-anclar según handle
+  // Si el handle está en el norte, y cambia h, movemos y para que el borde superior quede fijo
+  if (handle.includes("n")) {
+    r.y = r.y + (rect.h - r.h);
+  }
+  if (handle.includes("w")) {
+    r.x = r.x + (rect.w - r.w);
+  }
+
+  return clampRectToImage(r, nat, minSize);
+}
+
 export default function Rooms() {
   const [branches, setBranches] = useState<BranchRow[]>([]);
   const branchesById = useMemo(() => {
@@ -358,7 +434,7 @@ export default function Rooms() {
 
   const [items, setItems] = useState<Room[]>([]);
   const [q, setQ] = useState("");
-  const [branchFilter, setBranchFilter] = useState<string>(""); // name
+  const [branchFilter, setBranchFilter] = useState<string>("");
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Room | null>(null);
@@ -400,6 +476,23 @@ export default function Rooms() {
     ready: false,
   });
 
+  // ✅ Crop popup state
+  const [cropModal, setCropModal] = useState<CropModalState | null>(null);
+  const [natImg, setNatImg] = useState<NatImg | null>(null);
+  const [cropRect, setCropRect] = useState<CropRect | null>(null);
+
+  const cropStageRef = useRef<HTMLDivElement | null>(null);
+
+  const dragModeRef = useRef<DragMode>(null);
+  const dragHandleRef = useRef<Handle | null>(null);
+  const dragStartRef2 = useRef<{
+    px: number;
+    py: number;
+    rect: CropRect;
+  } | null>(null);
+
+  const cursorRef = useRef<string>("default");
+
   const selectedThemes = normalizeThemes(editing?.tags || []);
   const atThemesLimit = selectedThemes.length >= 4;
 
@@ -423,6 +516,7 @@ export default function Rooms() {
       setBombEditing(false);
       setDescModal(null);
       setRecordsModal(null);
+      if (cropModal?.open) closeCropModal();
     };
 
     document.addEventListener("mousedown", onDown);
@@ -431,13 +525,13 @@ export default function Rooms() {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [themesOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themesOpen, cropModal?.open]);
 
   useEffect(() => {
     saveBombCard(bomb);
   }, [bomb]);
 
-  // ✅ cargar branches desde DB (fuente de verdad)
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -456,7 +550,6 @@ export default function Rooms() {
     };
   }, []);
 
-  // ✅ cargar rol/permisos desde admins (UUID)
   useEffect(() => {
     let mounted = true;
 
@@ -496,8 +589,6 @@ export default function Rooms() {
         const isSuper = Boolean(row.is_super);
         const branchId = row.branch_id ? String(row.branch_id) : null;
         const isGM = !isSuper && Boolean(row.gm_code);
-
-        // ✅ si NO es super y tiene branch_id => scoped
         const isBranchScoped = !isSuper && !!branchId;
 
         const permsRaw = (row.permissions || {}) as Partial<StaffPerms>;
@@ -547,7 +638,6 @@ export default function Rooms() {
     setEditing({ ...editing, tags: [] });
   };
 
-  // ✅ cargar salas (filtrado desde query por branch_id UUID)
   useEffect(() => {
     if (!me.ready) return;
 
@@ -597,13 +687,8 @@ export default function Rooms() {
 
     return items.filter((r) => {
       const okSearch = !s ? true : r.name.toLowerCase().includes(s);
-
-      // UI filter: branch por nombre (solo super/no-scoped)
       const okBranch = !branchFilter ? true : r.branch === branchFilter;
-
-      // doble seguridad en memoria: UUID
       const okScoped = me.isBranchScoped && me.branchId ? r.branch_id === me.branchId : true;
-
       return okSearch && okBranch && okScoped;
     });
   }, [items, q, branchFilter, me.isBranchScoped, me.branchId]);
@@ -616,16 +701,14 @@ export default function Rooms() {
     if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
     setTempPreviewUrl(null);
     if (fileRef.current) fileRef.current.value = "";
+    if (cropModal?.open) closeCropModal();
   };
 
   const startCreate = () => {
     if (!canCreateRoom) return alert("No tenés permiso para crear salas.");
 
-    // default branch para crear
-    const defaultBranchName =
-      (me.isBranchScoped ? myBranchName : branches[0]?.name) || "Nuñez";
-    const defaultBranchId =
-      (me.isBranchScoped ? me.branchId : branchesByName.get(defaultBranchName) || null) || null;
+    const defaultBranchName = (me.isBranchScoped ? myBranchName : branches[0]?.name) || "Nuñez";
+    const defaultBranchId = (me.isBranchScoped ? me.branchId : branchesByName.get(defaultBranchName) || null) || null;
 
     if (me.isBranchScoped && !defaultBranchId) {
       return alert("Tenés permisos, pero tu usuario no tiene sucursal asignada.");
@@ -695,13 +778,7 @@ export default function Rooms() {
     try {
       const payload = { record1: r1, record2: r2, updated_at: new Date().toISOString() };
 
-      const { data, error } = await supabase
-        .from("rooms_v2")
-        .update(payload)
-        .eq("id", recordsModal.roomId)
-        .select("*")
-        .single();
-
+      const { data, error } = await supabase.from("rooms_v2").update(payload).eq("id", recordsModal.roomId).select("*").single();
       if (error) throw error;
 
       const saved = fromDb(data);
@@ -739,6 +816,44 @@ export default function Rooms() {
 
   const onPickImage = () => fileRef.current?.click();
 
+  const openCropperForFile = (file: File) => {
+    const url = URL.createObjectURL(file);
+
+    setNatImg(null);
+    setCropRect(null);
+    dragModeRef.current = null;
+    dragHandleRef.current = null;
+    dragStartRef2.current = null;
+
+    setCropModal({ open: true, srcUrl: url, originalFile: file });
+
+    const img = new Image();
+    img.onload = () => {
+      const nat = { w: img.naturalWidth || 1, h: img.naturalHeight || 1 };
+      setNatImg(nat);
+
+      // Arranque: recorte grande y centrado (80% del menor lado)
+      const margin = 0.1;
+      const init: CropRect = {
+        x: nat.w * margin,
+        y: nat.h * margin,
+        w: nat.w * (1 - margin * 2),
+        h: nat.h * (1 - margin * 2),
+      };
+
+      // Si apretás SHIFT mientras redimensionás, mantiene ratio card.
+      setCropRect(clampRectToImage(init, nat, 80));
+    };
+    img.onerror = () => {
+      alert("No pude leer la imagen para recortar.");
+      try {
+        URL.revokeObjectURL(url);
+      } catch {}
+      setCropModal(null);
+    };
+    img.src = url;
+  };
+
   const onFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     if (!canManageRoomFull) {
       e.target.value = "";
@@ -754,13 +869,13 @@ export default function Rooms() {
       return;
     }
 
-    setEditingPhotoFile(file);
-    if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
+    if (!editing) {
+      e.target.value = "";
+      return;
+    }
 
-    const url = URL.createObjectURL(file);
-    setTempPreviewUrl(url);
-
-    setEditing((prev) => (prev ? { ...prev, photo: url, photoPosition: prev.photoPosition ?? 50 } : prev));
+    openCropperForFile(file);
+    e.target.value = "";
   };
 
   const removeImage = () => {
@@ -819,18 +934,318 @@ export default function Rooms() {
     }
   };
 
+  // ===== Crop geometry mapping (contain) =====
+  const getContainBox = () => {
+    if (!natImg) return null;
+    const stage = cropStageRef.current;
+    if (!stage) return null;
+    const r = stage.getBoundingClientRect();
+
+    const sw = Math.max(1, r.width);
+    const sh = Math.max(1, r.height);
+
+    const scale = Math.min(sw / natImg.w, sh / natImg.h);
+    const rw = natImg.w * scale;
+    const rh = natImg.h * scale;
+
+    const ox = (sw - rw) / 2;
+    const oy = (sh - rh) / 2;
+
+    return { sw, sh, rw, rh, ox, oy, scale };
+  };
+
+  const natToScreenRect = (rect: CropRect) => {
+    const box = getContainBox();
+    if (!box) return null;
+    return {
+      left: box.ox + rect.x * box.scale,
+      top: box.oy + rect.y * box.scale,
+      width: rect.w * box.scale,
+      height: rect.h * box.scale,
+    };
+  };
+
+  const screenToNatPoint = (px: number, py: number) => {
+    const box = getContainBox();
+    if (!box || !natImg) return null;
+
+    const xIn = clamp(px - box.ox, 0, box.rw);
+    const yIn = clamp(py - box.oy, 0, box.rh);
+
+    const nx = xIn / box.scale;
+    const ny = yIn / box.scale;
+
+    return { x: clamp(nx, 0, natImg.w), y: clamp(ny, 0, natImg.h) };
+  };
+
+  const hitTestHandle = (mx: number, my: number): { handle: Handle | null; inside: boolean } => {
+    if (!cropRect) return { handle: null, inside: false };
+    const sr = natToScreenRect(cropRect);
+    if (!sr) return { handle: null, inside: false };
+
+    const pad = 10; // px para agarrar borde/esquina
+    const x1 = sr.left;
+    const y1 = sr.top;
+    const x2 = sr.left + sr.width;
+    const y2 = sr.top + sr.height;
+
+    const nearL = Math.abs(mx - x1) <= pad;
+    const nearR = Math.abs(mx - x2) <= pad;
+    const nearT = Math.abs(my - y1) <= pad;
+    const nearB = Math.abs(my - y2) <= pad;
+
+    const inside = mx >= x1 && mx <= x2 && my >= y1 && my <= y2;
+
+    // esquinas primero
+    if (nearL && nearT) return { handle: "nw", inside };
+    if (nearR && nearT) return { handle: "ne", inside };
+    if (nearL && nearB) return { handle: "sw", inside };
+    if (nearR && nearB) return { handle: "se", inside };
+
+    // bordes
+    if (nearT && inside) return { handle: "n", inside };
+    if (nearB && inside) return { handle: "s", inside };
+    if (nearL && inside) return { handle: "w", inside };
+    if (nearR && inside) return { handle: "e", inside };
+
+    return { handle: null, inside };
+  };
+
+  const cursorForHandle = (h: Handle | null, inside: boolean) => {
+    if (h === "nw" || h === "se") return "nwse-resize";
+    if (h === "ne" || h === "sw") return "nesw-resize";
+    if (h === "n" || h === "s") return "ns-resize";
+    if (h === "e" || h === "w") return "ew-resize";
+    if (inside) return "move";
+    return "default";
+  };
+
+  const closeCropModal = () => {
+    if (cropModal?.srcUrl) {
+      try {
+        URL.revokeObjectURL(cropModal.srcUrl);
+      } catch {}
+    }
+    setCropModal(null);
+    setNatImg(null);
+    setCropRect(null);
+    dragModeRef.current = null;
+    dragHandleRef.current = null;
+    dragStartRef2.current = null;
+    cursorRef.current = "default";
+  };
+
+  const applyMaxCrop = () => {
+    if (!natImg) return;
+    const full: CropRect = { x: 0, y: 0, w: natImg.w, h: natImg.h };
+    setCropRect(clampRectToImage(full, natImg, 80));
+  };
+
+  const onCropStageMouseDown: React.MouseEventHandler<HTMLDivElement> = (e) => {
+    if (!natImg || !cropRect) return;
+    const stage = cropStageRef.current;
+    if (!stage) return;
+
+    const r = stage.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const my = e.clientY - r.top;
+
+    const hit = hitTestHandle(mx, my);
+    const cursor = cursorForHandle(hit.handle, hit.inside);
+
+    if (hit.handle) {
+      dragModeRef.current = "resize";
+      dragHandleRef.current = hit.handle;
+    } else if (hit.inside) {
+      dragModeRef.current = "move";
+      dragHandleRef.current = null;
+    } else {
+      // click afuera: recentrar el rect al click (práctico)
+      const p = screenToNatPoint(mx, my);
+      if (p) {
+        const { w, h } = cropRect;
+        const next: CropRect = { x: p.x - w / 2, y: p.y - h / 2, w, h };
+        setCropRect(clampRectToImage(next, natImg, 80));
+      }
+      dragModeRef.current = null;
+      dragHandleRef.current = null;
+      cursorRef.current = cursor;
+      stage.style.cursor = cursor;
+      return;
+    }
+
+    dragStartRef2.current = { px: mx, py: my, rect: cropRect };
+    cursorRef.current = cursor;
+    stage.style.cursor = cursor;
+  };
+
+  const onCropStageMouseMove: React.MouseEventHandler<HTMLDivElement> = (e) => {
+    const stage = cropStageRef.current;
+    if (!stage) return;
+
+    if (!natImg || !cropRect) {
+      stage.style.cursor = "default";
+      return;
+    }
+
+    const r = stage.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const my = e.clientY - r.top;
+
+    // si estamos dragueando
+    if (dragModeRef.current && dragStartRef2.current) {
+      const start = dragStartRef2.current;
+      const dx = mx - start.px;
+      const dy = my - start.py;
+
+      const box = getContainBox();
+      if (!box) return;
+
+      const ndx = dx / box.scale;
+      const ndy = dy / box.scale;
+
+      if (dragModeRef.current === "move") {
+        const next: CropRect = {
+          x: start.rect.x + ndx,
+          y: start.rect.y + ndy,
+          w: start.rect.w,
+          h: start.rect.h,
+        };
+        setCropRect(clampRectToImage(next, natImg, 80));
+        return;
+      }
+
+      // resize
+      const h = dragHandleRef.current;
+      if (!h) return;
+
+      let next = { ...start.rect };
+
+      if (h.includes("e")) next.w = start.rect.w + ndx;
+      if (h.includes("s")) next.h = start.rect.h + ndy;
+
+      if (h.includes("w")) {
+        next.x = start.rect.x + ndx;
+        next.w = start.rect.w - ndx;
+      }
+      if (h.includes("n")) {
+        next.y = start.rect.y + ndy;
+        next.h = start.rect.h - ndy;
+      }
+
+      // clamp preliminar
+      next = clampRectToImage(next, natImg, 80);
+
+      // SHIFT = ratio card (opcional)
+      if (e.shiftKey) {
+        next = applyAspectFromAnchor(next, natImg, h, ROOM_CARD_ASPECT, 80);
+      }
+
+      setCropRect(next);
+      return;
+    }
+
+    // no dragging: solo cambiar cursor
+    const hit = hitTestHandle(mx, my);
+    const cursor = cursorForHandle(hit.handle, hit.inside);
+    if (cursorRef.current !== cursor) {
+      cursorRef.current = cursor;
+      stage.style.cursor = cursor;
+    }
+  };
+
+  const endCropDrag = () => {
+    dragModeRef.current = null;
+    dragHandleRef.current = null;
+    dragStartRef2.current = null;
+
+    const stage = cropStageRef.current;
+    if (stage) stage.style.cursor = cursorRef.current || "default";
+  };
+
+  const onCropWheel: React.WheelEventHandler<HTMLDivElement> = (e) => {
+    if (!natImg || !cropRect) return;
+
+    e.preventDefault();
+
+    // zoom del recorte (no de la imagen)
+    const dir = e.deltaY > 0 ? 1 : -1;
+    const factor = dir > 0 ? 1.06 : 0.94; // suave
+
+    const next = zoomRect(cropRect, natImg, factor, 80);
+    setCropRect(next);
+  };
+
+  const onCropDoubleClick: React.MouseEventHandler<HTMLDivElement> = (e) => {
+    // doble click = máximo (imagen completa)
+    e.preventDefault();
+    applyMaxCrop();
+  };
+
+  const confirmCrop = async () => {
+    if (!cropModal || !natImg || !editing || !cropRect) return;
+
+    try {
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("No pude cargar la imagen para recortar."));
+        img.src = cropModal.srcUrl;
+      });
+
+      const rect = clampRectToImage(cropRect, natImg, 80);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(rect.w);
+      canvas.height = Math.round(rect.h);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("No pude abrir canvas para recortar.");
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+
+      const blob: Blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error("No pude exportar el recorte."))),
+          "image/jpeg",
+          0.9
+        );
+      });
+
+      const croppedFile = new File([blob], toJpegName(cropModal.originalFile.name), { type: "image/jpeg" });
+
+      setEditingPhotoFile(croppedFile);
+
+      if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
+      const prevUrl = URL.createObjectURL(croppedFile);
+      setTempPreviewUrl(prevUrl);
+
+      setEditing((prev) =>
+        prev
+          ? {
+              ...prev,
+              photo: prevUrl,
+              photoPosition: 50,
+            }
+          : prev
+      );
+
+      closeCropModal();
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || "Error recortando imagen.");
+    }
+  };
+
   const save = async () => {
     if (!editing) return;
     const isNew = !items.some((x) => x.id === editing.id);
 
     if (!canManageRoomFull) return alert("No tenés permiso para crear/editar salas completas.");
 
-    // ✅ resolver branch_id desde branch (nombre)
-    const resolvedBranchId =
-      editing.branch_id ||
-      (editing.branch ? branchesByName.get(editing.branch) || null : null);
+    const resolvedBranchId = editing.branch_id || (editing.branch ? branchesByName.get(editing.branch) || null : null);
 
-    // ✅ si es scoped, forzamos a la del usuario
     if (me.isBranchScoped) {
       if (!me.branchId) return alert("Tu usuario no tiene sucursal asignada.");
 
@@ -841,7 +1256,6 @@ export default function Rooms() {
       editing.branch_id = me.branchId;
       editing.branch = myBranchName || editing.branch || "";
     } else {
-      // super/no-scoped: igual exigimos branch_id válido
       if (!resolvedBranchId) return alert("Elegí una sucursal válida.");
       editing.branch_id = resolvedBranchId;
       editing.branch = branchesById.get(resolvedBranchId) || editing.branch || "";
@@ -884,12 +1298,7 @@ export default function Rooms() {
         qrCode: String(editing.qrCode || "").trim(),
       });
 
-      const { data, error } = await supabase
-        .from("rooms_v2")
-        .upsert(payload, { onConflict: "id" })
-        .select("*")
-        .single();
-
+      const { data, error } = await supabase.from("rooms_v2").upsert(payload, { onConflict: "id" }).select("*").single();
       if (error) throw error;
 
       const saved = fromDb(data);
@@ -975,8 +1384,22 @@ export default function Rooms() {
     e.target.value = "";
   };
 
-  // Bomb solo admin/super o manage rooms, pero NO branch-scoped
   const canEditBomb = !me.isBranchScoped && (me.isSuper || me.perms.canManageRooms);
+
+  // overlay style (display)
+  const cropRectStyle = useMemo(() => {
+    if (!natImg || !cropRect || !cropModal?.open) return null;
+    const sr = natToScreenRect(cropRect);
+    if (!sr) return null;
+
+    return {
+      left: sr.left,
+      top: sr.top,
+      width: sr.width,
+      height: sr.height,
+    } as React.CSSProperties;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [natImg, cropRect, cropModal?.open]);
 
   return (
     <div className="page">
@@ -993,21 +1416,10 @@ export default function Rooms() {
       </div>
 
       <div className="toolbarRow" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <input
-          className="input"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre…"
-          style={{ flex: 1 }}
-        />
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre…" style={{ flex: 1 }} />
 
         {!me.isBranchScoped ? (
-          <select
-            className="input"
-            value={branchFilter}
-            onChange={(e) => setBranchFilter(e.target.value)}
-            style={{ width: 220 }}
-          >
+          <select className="input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={{ width: 220 }}>
             <option value="">Todas las sucursales</option>
             {branches.map((b) => (
               <option key={b.id} value={b.name}>
@@ -1028,24 +1440,9 @@ export default function Rooms() {
         </div>
       ) : (
         <div className="roomsScroll">
-          <div
-            className="roomsGrid"
-            // ✅ FIX CARD HEIGHT (evita que el grid estire las cards)
-            style={{
-              alignItems: "start",
-              gridAutoRows: "max-content",
-            }}
-          >
-            {/* ✅ CARD: BOMB TICKET (SIEMPRE) */}
-            <div
-              className="roomCard"
-              // ✅ FIX CARD HEIGHT
-              style={{
-                height: "fit-content",
-                alignSelf: "start",
-                minHeight: 0,
-              }}
-            >
+          <div className="roomsGrid" style={{ alignItems: "start", gridAutoRows: "max-content" }}>
+            {/* BOMB */}
+            <div className="roomCard" style={{ height: "fit-content", alignSelf: "start", minHeight: 0 }}>
               <div className="roomImgWrap" style={{ position: "relative" }}>
                 <img
                   src={bomb.imageUrl || "https://picsum.photos/seed/bombticket/900/520"}
@@ -1058,16 +1455,7 @@ export default function Rooms() {
                 <div className="roomBadge">Beneficio</div>
               </div>
 
-              <div
-                className="roomBody"
-                // ✅ FIX CARD HEIGHT
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  height: "auto",
-                  flex: "0 0 auto",
-                }}
-              >
+              <div className="roomBody" style={{ display: "flex", flexDirection: "column", height: "auto", flex: "0 0 auto" }}>
                 <div className="roomTitle">{bomb.title}</div>
 
                 {bomb.description ? (
@@ -1132,13 +1520,7 @@ export default function Rooms() {
 
                             <label className="field" style={{ gridColumn: "1 / -1" }}>
                               <span className="label">Descripción</span>
-                              <textarea
-                                className="input"
-                                rows={3}
-                                value={bomb.description}
-                                onChange={(e) => setBomb((p) => ({ ...p, description: e.target.value }))}
-                                style={{ resize: "vertical" }}
-                              />
+                              <textarea className="input" rows={3} value={bomb.description} onChange={(e) => setBomb((p) => ({ ...p, description: e.target.value }))} style={{ resize: "vertical" }} />
                             </label>
 
                             <div className="field" style={{ gridColumn: "1 / -1" }}>
@@ -1171,22 +1553,13 @@ export default function Rooms() {
               </div>
             </div>
 
-            {/* ✅ CARDS DE SALAS */}
+            {/* ROOMS */}
             {filtered.map((r) => {
               const canvasId = `qr_canvas_room_${r.id}`;
               const qrValue = String(r.qrCode || "").trim() || makeRoomQr(r.id);
 
               return (
-                <div
-                  key={r.id}
-                  className="roomCard"
-                  // ✅ FIX CARD HEIGHT
-                  style={{
-                    height: "fit-content",
-                    alignSelf: "start",
-                    minHeight: 0,
-                  }}
-                >
+                <div key={r.id} className="roomCard" style={{ height: "fit-content", alignSelf: "start", minHeight: 0 }}>
                   <div className="roomImgWrap">
                     <img
                       src={r.photo || "https://picsum.photos/seed/placeholder/900/520"}
@@ -1200,16 +1573,7 @@ export default function Rooms() {
                     {!r.active && <div className="roomBadge off">INACTIVA</div>}
                   </div>
 
-                  <div
-                    className="roomBody"
-                    // ✅ FIX CARD HEIGHT
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      height: "auto",
-                      flex: "0 0 auto",
-                    }}
-                  >
+                  <div className="roomBody" style={{ display: "flex", flexDirection: "column", height: "auto", flex: "0 0 auto" }}>
                     <div className="roomTitle">{r.name}</div>
 
                     <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
@@ -1227,12 +1591,7 @@ export default function Rooms() {
                     ) : null}
 
                     {r.description ? (
-                      <div
-                        className="descClamp2"
-                        style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}
-                        title="Click para ver completa"
-                        onClick={() => setDescModal({ title: r.name, text: r.description })}
-                      >
+                      <div className="descClamp2" style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }} title="Click para ver completa" onClick={() => setDescModal({ title: r.name, text: r.description })}>
                         {r.description}
                       </div>
                     ) : null}
@@ -1282,25 +1641,13 @@ export default function Rooms() {
                     </div>
 
                     <div className="roomActions">
-                      {!canManageRoomFull && canEditRankings ? (
-                        <button className="ghostBtn" onClick={() => openRecordsEditor(r)}>
-                          Editar récords
-                        </button>
-                      ) : null}
+                      {!canManageRoomFull && canEditRankings ? <button className="ghostBtn" onClick={() => openRecordsEditor(r)}>Editar récords</button> : null}
 
                       {canManageRoomFull ? (
                         <>
-                          <button className="ghostBtn" onClick={() => startEditFull(r)}>
-                            Editar
-                          </button>
-
-                          <button className={r.active ? "dangerBtnInline" : "btnSmall"} onClick={() => toggleActive(r.id)}>
-                            {r.active ? "Desactivar" : "Activar"}
-                          </button>
-
-                          <button className="dangerBtnInline" onClick={() => deleteRoom(r)}>
-                            Borrar
-                          </button>
+                          <button className="ghostBtn" onClick={() => startEditFull(r)}>Editar</button>
+                          <button className={r.active ? "dangerBtnInline" : "btnSmall"} onClick={() => toggleActive(r.id)}>{r.active ? "Desactivar" : "Activar"}</button>
+                          <button className="dangerBtnInline" onClick={() => deleteRoom(r)}>Borrar</button>
                         </>
                       ) : null}
                     </div>
@@ -1320,17 +1667,13 @@ export default function Rooms() {
             <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
               <div className="modalHead">
                 <div className="modalTitle">{descModal.title || "Descripción"}</div>
-                <button className="iconBtn" onClick={() => setDescModal(null)} aria-label="Cerrar">
-                  ✕
-                </button>
+                <button className="iconBtn" onClick={() => setDescModal(null)} aria-label="Cerrar">✕</button>
               </div>
               <div className="modalBody">
                 <div style={{ textAlign: "left", whiteSpace: "pre-wrap", lineHeight: 1.45, fontSize: 14 }}>{descModal.text}</div>
               </div>
               <div className="modalFoot">
-                <button className="ghostBtn" onClick={() => setDescModal(null)}>
-                  Cerrar
-                </button>
+                <button className="ghostBtn" onClick={() => setDescModal(null)}>Cerrar</button>
               </div>
             </div>
           </div>
@@ -1345,33 +1688,19 @@ export default function Rooms() {
             <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
               <div className="modalHead">
                 <div className="modalTitle">Editar récords</div>
-                <button className="iconBtn" onClick={() => setRecordsModal(null)} aria-label="Cerrar">
-                  ✕
-                </button>
+                <button className="iconBtn" onClick={() => setRecordsModal(null)} aria-label="Cerrar">✕</button>
               </div>
 
               <div className="modalBody">
                 <div className="formGrid2">
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Récord 1 (MM:SS)</span>
-                    <input
-                      className="input"
-                      value={recordsModal.record1}
-                      onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))}
-                      placeholder="12:34"
-                      inputMode="numeric"
-                    />
+                    <input className="input" value={recordsModal.record1} onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))} placeholder="12:34" inputMode="numeric" />
                   </label>
 
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Récord 2 (MM:SS)</span>
-                    <input
-                      className="input"
-                      value={recordsModal.record2}
-                      onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))}
-                      placeholder="14:10"
-                      inputMode="numeric"
-                    />
+                    <input className="input" value={recordsModal.record2} onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))} placeholder="14:10" inputMode="numeric" />
                   </label>
 
                   <div style={{ gridColumn: "1 / -1", opacity: 0.75, fontSize: 12 }}>
@@ -1381,12 +1710,8 @@ export default function Rooms() {
               </div>
 
               <div className="modalFoot">
-                <button className="ghostBtn" onClick={() => setRecordsModal(null)} disabled={saving}>
-                  Cancelar
-                </button>
-                <button className="btnSmall" onClick={saveRecords} disabled={saving}>
-                  {saving ? "Guardando…" : "Guardar"}
-                </button>
+                <button className="ghostBtn" onClick={() => setRecordsModal(null)} disabled={saving}>Cancelar</button>
+                <button className="btnSmall" onClick={saveRecords} disabled={saving}>{saving ? "Guardando…" : "Guardar"}</button>
               </div>
             </div>
           </div>
@@ -1401,9 +1726,7 @@ export default function Rooms() {
             <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
               <div className="modalHead">
                 <div className="modalTitle">{items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}</div>
-                <button className="iconBtn" onClick={closeModal} aria-label="Cerrar">
-                  ✕
-                </button>
+                <button className="iconBtn" onClick={closeModal} aria-label="Cerrar">✕</button>
               </div>
 
               <div className="modalBody">
@@ -1434,12 +1757,8 @@ export default function Rooms() {
                         placeholder={`Ej: ${makeRoomQr(editing.id)}`}
                         style={{ flex: 1, minWidth: 260, fontFamily: "monospace" }}
                       />
-                      <button type="button" className="ghostBtn" onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}>
-                        Regenerar
-                      </button>
-                      <button type="button" className="ghostBtn" onClick={() => editing.qrCode && copy(editing.qrCode)} disabled={!editing.qrCode}>
-                        Copiar
-                      </button>
+                      <button type="button" className="ghostBtn" onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}>Regenerar</button>
+                      <button type="button" className="ghostBtn" onClick={() => editing.qrCode && copy(editing.qrCode)} disabled={!editing.qrCode}>Copiar</button>
                     </div>
                   </label>
 
@@ -1455,14 +1774,11 @@ export default function Rooms() {
 
                   <div className="field" ref={themesWrapRef}>
                     <span className="label">Temáticas (hasta 4)</span>
-
                     <button type="button" className="input multiSelectBtn" onClick={() => setThemesOpen((v) => !v)} aria-expanded={themesOpen}>
                       {selectedThemes.length ? (
                         <span className="multiSelectValue">
                           {selectedThemes.map((t) => (
-                            <span key={t} className="tagChip">
-                              {t}
-                            </span>
+                            <span key={t} className="tagChip">{t}</span>
                           ))}
                         </span>
                       ) : (
@@ -1510,7 +1826,7 @@ export default function Rooms() {
                         const bid = branchesByName.get(name) || null;
                         setEditing({ ...editing, branch: name, branch_id: bid });
                       }}
-                      disabled={me.isBranchScoped} // scoped: fija
+                      disabled={me.isBranchScoped}
                     >
                       {branches.map((b) => (
                         <option key={b.id} value={b.name}>
@@ -1529,14 +1845,9 @@ export default function Rooms() {
                     <span className="label">Foto de la sala</span>
 
                     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <button type="button" className="btnSmall" onClick={onPickImage}>
-                        Elegir imagen…
-                      </button>
-
+                      <button type="button" className="btnSmall" onClick={onPickImage}>Elegir imagen…</button>
                       {editing.photo ? (
-                        <button type="button" className="ghostBtn" onClick={removeImage}>
-                          Quitar
-                        </button>
+                        <button type="button" className="ghostBtn" onClick={removeImage}>Quitar</button>
                       ) : (
                         <span style={{ opacity: 0.8, fontSize: 12 }}>No hay imagen seleccionada</span>
                       )}
@@ -1558,6 +1869,7 @@ export default function Rooms() {
                           cursor: "grab",
                           userSelect: "none",
                         }}
+                        title="Ajuste vertical fino (opcional)"
                       >
                         <img
                           src={editing.photo}
@@ -1589,9 +1901,7 @@ export default function Rooms() {
                     <span className="label">Dificultad (1–10)</span>
                     <select className="input" value={String(editing.difficulty ?? 5)} onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}>
                       {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
+                        <option key={n} value={n}>{n}</option>
                       ))}
                     </select>
                   </label>
@@ -1609,9 +1919,7 @@ export default function Rooms() {
                     <span className="label">Factor Sorpresa (1–10)</span>
                     <select className="input" value={String(editing.surprise ?? 5)} onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}>
                       {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
+                        <option key={n} value={n}>{n}</option>
                       ))}
                     </select>
                   </label>
@@ -1630,9 +1938,7 @@ export default function Rooms() {
                     <span className="label">Puntaje (1–3)</span>
                     <select className="input" value={String(editing.points ?? 1)} onChange={(e) => setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })}>
                       {[1, 2, 3].map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
+                        <option key={n} value={n}>{n}</option>
                       ))}
                     </select>
                   </label>
@@ -1640,12 +1946,88 @@ export default function Rooms() {
               </div>
 
               <div className="modalFoot">
-                <button className="ghostBtn" onClick={closeModal} disabled={saving}>
-                  Cancelar
-                </button>
-                <button className="btnSmall" onClick={save} disabled={saving}>
-                  {saving ? "Guardando…" : "Guardar"}
-                </button>
+                <button className="ghostBtn" onClick={closeModal} disabled={saving}>Cancelar</button>
+                <button className="btnSmall" onClick={save} disabled={saving}>{saving ? "Guardando…" : "Guardar"}</button>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {/* ==========================
+          CROP POPUP (CURSOR ONLY) ✅
+      ========================== */}
+      {cropModal?.open ? (
+        <>
+          <div className="backdrop show" onMouseDown={closeCropModal} style={{ zIndex: 9998 }} />
+          <div className="modalCenter" onMouseDown={closeCropModal} style={{ zIndex: 9999 }}>
+            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
+              <div className="modalHead">
+                <div className="modalTitle">Recortar imagen</div>
+                <button className="iconBtn" onClick={closeCropModal} aria-label="Cerrar">✕</button>
+              </div>
+
+              <div className="modalBody">
+                <div style={{ opacity: 0.78, fontSize: 12, marginBottom: 10 }}>
+                  Mouse: <b>mover</b> arrastrando dentro, <b>resize</b> arrastrando bordes/esquinas. Ruedita = zoom del recorte. Doble click = máximo. Mantener <b>Shift</b> = ratio card.
+                </div>
+
+                <div
+                  ref={cropStageRef}
+                  onMouseDown={onCropStageMouseDown}
+                  onMouseMove={onCropStageMouseMove}
+                  onMouseUp={endCropDrag}
+                  onMouseLeave={endCropDrag}
+                  onWheel={onCropWheel}
+                  onDoubleClick={onCropDoubleClick}
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    height: "min(58vh, 560px)",
+                    borderRadius: 14,
+                    overflow: "hidden",
+                    border: "1px solid rgba(255,255,255,.12)",
+                    background: "rgba(0,0,0,.25)",
+                    userSelect: "none",
+                  }}
+                >
+                  <img
+                    src={cropModal.srcUrl}
+                    alt="Crop"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      display: "block",
+                      pointerEvents: "none",
+                    }}
+                  />
+
+                  {natImg && cropRectStyle ? (
+                    <>
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.35)" }} />
+                      <div
+                        style={{
+                          position: "absolute",
+                          ...cropRectStyle,
+                          boxShadow: "0 0 0 9999px rgba(0,0,0,.35)",
+                          border: "2px solid rgba(255,255,255,.9)",
+                          borderRadius: 12,
+                          pointerEvents: "none",
+                        }}
+                      />
+                    </>
+                  ) : (
+                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.8 }}>
+                      Cargando imagen…
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="modalFoot">
+                <button className="ghostBtn" onClick={closeCropModal}>Cancelar</button>
+                <button className="btnSmall" onClick={confirmCrop} disabled={!natImg || !cropRect}>Usar recorte</button>
               </div>
             </div>
           </div>

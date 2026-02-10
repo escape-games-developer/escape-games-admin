@@ -87,7 +87,7 @@ export default function Drawer({ open, onClose, userName }: Props) {
       const uid = data.session?.user?.id;
       if (!uid) return;
 
-      // ✅ 1) leer admins (como antes, SIN joins)
+      // ✅ 1) leer admins (SIN joins)
       const { data: adminRow, error: adminErr } = await supabase
         .from("admins")
         .select("branch_id, mail, gm_code, is_super, permissions")
@@ -128,7 +128,7 @@ export default function Drawer({ open, onClose, userName }: Props) {
       const code = adminRow.gm_code ? String(adminRow.gm_code) : "";
       setGmCode(code);
 
-      // ✅ 2) sucursal: si hay branch_id y NO es super, intentamos traer nombre de branches
+      // ✅ 2) sucursal
       let branchLbl = adminRow.branch_id ? `Sucursal #${adminRow.branch_id}` : "";
       let branchName = "";
 
@@ -155,7 +155,7 @@ export default function Drawer({ open, onClose, userName }: Props) {
       localStorage.setItem("eg_admin_role", computed);
       localStorage.setItem("eg_admin_mail", adminRow.mail ?? "");
       localStorage.setItem("eg_admin_branch_id", String(adminRow.branch_id ?? ""));
-      localStorage.setItem("eg_admin_branch_name", branchName); // si no hay, queda ""
+      localStorage.setItem("eg_admin_branch_name", branchName);
       localStorage.setItem("eg_admin_is_super", adminRow.is_super ? "true" : "false");
       localStorage.setItem("eg_admin_permissions", JSON.stringify(adminRow.permissions || {}));
       localStorage.setItem("eg_admin_gm_code", code);
@@ -250,25 +250,21 @@ export default function Drawer({ open, onClose, userName }: Props) {
           <div className="profileCard">
             <div className="avatarCircle">{(userName?.[0] || "A").toUpperCase()}</div>
             <div className="profileInfo">
-              {/* Mail (siempre) */}
               <div className="profileName">{userName}</div>
-
               <div className="profileRole">{roleLabel}</div>
 
               {/* ✅ STAFF: mostrar código GM (y sucursal solo si corresponde) */}
-{roleToUse !== "CLIENT" ? (
-  <>
-    {/* Sucursal solo si NO es super (igual que en tu lógica) */}
-    {!isSuper ? (
-      <div className="profileBranch">Sucursal: {branchToUse || "sin asignar"}</div>
-    ) : null}
+              {roleToUse !== "CLIENT" ? (
+                <>
+                  {!isSuper ? (
+                    <div className="profileBranch">Sucursal: {branchToUse || "sin asignar"}</div>
+                  ) : null}
 
-    <div className="profileGmCode">
-      <span style={{ opacity: 0.7 }}>Código GM:</span> <b>{gmCodeToUse || "sin código"}</b>
-    </div>
-  </>
-) : null}
-
+                  <div className="profileGmCode">
+                    <span style={{ opacity: 0.7 }}>Código GM:</span> <b>{gmCodeToUse || "sin código"}</b>
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
         </div>
@@ -278,19 +274,31 @@ export default function Drawer({ open, onClose, userName }: Props) {
 
           <nav className="drawerNav">
             {canSeeRooms ? (
-              <NavLink to="/salas" className={({ isActive }) => (isActive ? "navItem active" : "navItem")}>
+              <NavLink
+                to="/salas"
+                onClick={onClose}
+                className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
+              >
                 Salas
               </NavLink>
             ) : null}
 
             {canSeeNews ? (
-              <NavLink to="/novedades" className={({ isActive }) => (isActive ? "navItem active" : "navItem")}>
+              <NavLink
+                to="/novedades"
+                onClick={onClose}
+                className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
+              >
                 Novedades
               </NavLink>
             ) : null}
 
             {canSeeUsers ? (
-              <NavLink to="/usuarios" className={({ isActive }) => (isActive ? "navItem active" : "navItem")}>
+              <NavLink
+                to="/usuarios"
+                onClick={onClose}
+                className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
+              >
                 Usuarios
               </NavLink>
             ) : null}

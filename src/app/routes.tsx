@@ -102,13 +102,15 @@ export default function AppRoutes() {
           }
         />
 
-        {/* ✅ Usuarios: SOLO ADMIN_GENERAL (como lo tenías) */}
+        {/* ✅ Usuarios:
+            - ADMIN_GENERAL siempre
+            - GM/ADMIN solo si canManageUsers */}
         <Route
           path="/usuarios"
           element={
-            <RequireRole allow={["ADMIN_GENERAL"]}>
+            <RequirePerm permKey="canManageUsers">
               <Users />
-            </RequireRole>
+            </RequirePerm>
           }
         />
       </Route>

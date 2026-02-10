@@ -1,10 +1,11 @@
 // News.tsx (ADMIN) — mantener tu UI/UX base
 // ✅ Descripción: formato + emojis (picker sin libs, React 19 OK)
-// ✅ Imagen: popup con imagen completa (contain) + recorte con cursor “tipo Paint”
-// ✅ Confirmar recorte => genera PNG + preview + se sube el recorte
+// ✅ Imagen: popup con imagen completa (contain) + recorte con cursor “tipo Paint” (mover/resize/zoom)
+// ✅ Confirmar recorte => genera JPG + preview + se sube el recorte
 // ✅ Vista previa (cliente) funcionando (modal)
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
 /* =======================
@@ -18,14 +19,13 @@ type NewsItem = {
   id: string;
 
   title: string;
-  // guardamos HTML (con whitelist) para soportar negrita/cursiva/subrayado + emojis
   description: string;
 
   type: NewsType;
   publishedAt: string; // YYYY-MM-DD
 
-  image: string; // public url o objectURL local
-  imagePosition: number; // 0-100 (queda por compat)
+  image: string;
+  imagePosition: number;
 
   ctaMode: CtaMode;
   ctaLink: string;
@@ -59,7 +59,6 @@ const isHttpUrl = (v: string) => {
   }
 };
 
-// abre calendario nativo si el browser lo soporta
 const openDatePicker = (el: HTMLInputElement | null) => {
   if (!el) return;
   const anyEl = el as HTMLInputElement & { showPicker?: () => void };
@@ -67,9 +66,7 @@ const openDatePicker = (el: HTMLInputElement | null) => {
 };
 
 /* =======================
-   SANITIZE HTML (simple + seguro)
-   Permitimos: b/strong, i/em, u, br, p, div, span
-   Sin atributos
+   SANITIZE HTML
 ======================= */
 
 const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "U", "BR", "P", "DIV", "SPAN"]);
@@ -189,7 +186,7 @@ async function uploadNewsImage(file: File, newsId: string): Promise<string> {
 }
 
 /* =======================
-   EMOJI PICKER (sin deps, React 19 OK)
+   EMOJI PICKER
 ======================= */
 
 type EmojiCat = { key: string; label: string; emojis: string[] };
@@ -242,7 +239,7 @@ function writeRecents(list: string[]) {
 }
 
 /* =======================
-   RICH TEXT (toolbar simple)
+   RICH TEXT
 ======================= */
 
 function RichTextEditor({
@@ -358,6 +355,15 @@ function RichTextEditor({
     return source;
   }, [emojiQuery, cat, cats]);
 
+  useEffect(() => {
+    const onDocDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest?.("[data-emoji-pop]")) setEmojiOpen(false);
+    };
+    document.addEventListener("mousedown", onDocDown);
+    return () => document.removeEventListener("mousedown", onDocDown);
+  }, []);
+
   return (
     <div style={{ display: "grid", gap: 8 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -371,7 +377,7 @@ function RichTextEditor({
           <u>U</u>
         </button>
 
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative" }} data-emoji-pop>
           <button
             type="button"
             className="btnSmall"
@@ -459,8 +465,8 @@ function RichTextEditor({
       </div>
 
       <div
-        ref={ref}
         className="input"
+        ref={ref}
         contentEditable
         suppressContentEditableWarning
         tabIndex={0}
@@ -495,261 +501,417 @@ function RichTextEditor({
 }
 
 /* =======================
-   CROPPER “tipo Paint”
+   CROPPER “cursor only” (como Salas) ✅
+   - Drag dentro: move
+   - Drag bordes/esquinas: resize
+   - Ruedita: zoom del recorte
+   - Doble click: recorte full
+   - SHIFT: mantener ratio card
 ======================= */
 
-const CARD_RATIO = 900 / 520;
+const NEWS_CARD_ASPECT = 900 / 520;
+
+type NatImg = { w: number; h: number };
+type CropRect = { x: number; y: number; w: number; h: number };
+type Handle = "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
+type DragMode = "move" | "resize" | null;
+
+const clampRectToImage = (r: CropRect, nat: NatImg, minSize = 80): CropRect => {
+  let w = Math.max(minSize, Math.min(r.w, nat.w));
+  let h = Math.max(minSize, Math.min(r.h, nat.h));
+
+  let x = r.x;
+  let y = r.y;
+
+  x = Math.max(0, Math.min(x, nat.w - w));
+  y = Math.max(0, Math.min(y, nat.h - h));
+
+  return { x, y, w, h };
+};
+
+const rectCenter = (r: CropRect) => ({ cx: r.x + r.w / 2, cy: r.y + r.h / 2 });
+
+const zoomRect = (r: CropRect, nat: NatImg, factor: number, minSize = 80): CropRect => {
+  const { cx, cy } = rectCenter(r);
+  const nw = r.w * factor;
+  const nh = r.h * factor;
+  const next: CropRect = {
+    x: cx - nw / 2,
+    y: cy - nh / 2,
+    w: nw,
+    h: nh,
+  };
+  return clampRectToImage(next, nat, minSize);
+};
+
+const applyAspectFromAnchor = (
+  rect: CropRect,
+  nat: NatImg,
+  handle: Handle,
+  aspect: number,
+  minSize = 80
+): CropRect => {
+  let r = { ...rect };
+
+  const controlsW = handle.includes("e") || handle.includes("w");
+  if (controlsW) r.h = r.w / aspect;
+  else r.w = r.h * aspect;
+
+  if (handle.includes("n")) r.y = r.y + (rect.h - r.h);
+  if (handle.includes("w")) r.x = r.x + (rect.w - r.w);
+
+  return clampRectToImage(r, nat, minSize);
+};
+
+function toJpegName(fileName: string) {
+  const base = (fileName || "image").replace(/\.[a-z0-9]+$/i, "");
+  return `${base}.jpg`;
+}
 
 function CropperModal({
   open,
   sourceUrl,
+  originalFileName,
   onClose,
   onConfirm,
 }: {
   open: boolean;
   sourceUrl: string | null;
+  originalFileName: string;
   onClose: () => void;
   onConfirm: (file: File, previewUrl: string) => void;
 }) {
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [rect, setRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const [dragMode, setDragMode] = useState<null | "draw" | "move">(null);
-  const startRef = useRef<{ x: number; y: number; ox?: number; oy?: number } | null>(null);
+  const [natImg, setNatImg] = useState<NatImg | null>(null);
+  const [cropRect, setCropRect] = useState<CropRect | null>(null);
 
-  const mapRef = useRef<{
-    offX: number;
-    offY: number;
-    drawW: number;
-    drawH: number;
-    scale: number;
-    natW: number;
-    natH: number;
-  } | null>(null);
+  const dragModeRef = useRef<DragMode>(null);
+  const dragHandleRef = useRef<Handle | null>(null);
+  const dragStartRef = useRef<{ px: number; py: number; rect: CropRect } | null>(null);
+  const cursorRef = useRef<string>("default");
 
   useEffect(() => {
     if (!open) {
-      setRect(null);
-      setDragMode(null);
-      startRef.current = null;
-      mapRef.current = null;
-      setLoading(true);
+      setNatImg(null);
+      setCropRect(null);
+      dragModeRef.current = null;
+      dragHandleRef.current = null;
+      dragStartRef.current = null;
+      cursorRef.current = "default";
       return;
     }
 
-    const onResize = () => requestAnimationFrame(() => computeMap());
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    if (!sourceUrl) return;
+
+    setNatImg(null);
+    setCropRect(null);
+
+    const img = new Image();
+    img.onload = () => {
+      const nat = { w: img.naturalWidth || 1, h: img.naturalHeight || 1 };
+      setNatImg(nat);
+
+      const margin = 0.08;
+      const init: CropRect = {
+        x: nat.w * margin,
+        y: nat.h * margin,
+        w: nat.w * (1 - margin * 2),
+        h: nat.h * (1 - margin * 2),
+      };
+      setCropRect(clampRectToImage(init, nat, 80));
+    };
+    img.onerror = () => {
+      alert("No pude leer la imagen para recortar.");
+      onClose();
+    };
+    img.src = sourceUrl;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, sourceUrl]);
 
-  const normalizeRect = (r: { x: number; y: number; w: number; h: number }) => {
-    const x = Math.min(r.x, r.x + r.w);
-    const y = Math.min(r.y, r.y + r.h);
-    const w = Math.abs(r.w);
-    const h = Math.abs(r.h);
-    return { x, y, w, h };
+  const getContainBox = () => {
+    if (!natImg) return null;
+    const stage = stageRef.current;
+    if (!stage) return null;
+
+    const r = stage.getBoundingClientRect();
+    const sw = Math.max(1, r.width);
+    const sh = Math.max(1, r.height);
+
+    const scale = Math.min(sw / natImg.w, sh / natImg.h);
+    const rw = natImg.w * scale;
+    const rh = natImg.h * scale;
+
+    const ox = (sw - rw) / 2;
+    const oy = (sh - rh) / 2;
+
+    return { sw, sh, rw, rh, ox, oy, scale };
   };
 
-  const computeMap = () => {
-    const wrap = wrapRef.current;
-    const img = imgRef.current;
-    if (!wrap || !img) return;
-
-    const natW = img.naturalWidth || 0;
-    const natH = img.naturalHeight || 0;
-
-    const wrapW = wrap.clientWidth;
-    const wrapH = wrap.clientHeight;
-
-    if (!natW || !natH || !wrapW || !wrapH) return;
-
-    const scale = Math.min(wrapW / natW, wrapH / natH);
-    const drawW = natW * scale;
-    const drawH = natH * scale;
-
-    const offX = (wrapW - drawW) / 2;
-    const offY = (wrapH - drawH) / 2;
-
-    mapRef.current = { offX, offY, drawW, drawH, scale, natW, natH };
+  const natToScreenRect = (rect: CropRect) => {
+    const box = getContainBox();
+    if (!box) return null;
+    return {
+      left: box.ox + rect.x * box.scale,
+      top: box.oy + rect.y * box.scale,
+      width: rect.w * box.scale,
+      height: rect.h * box.scale,
+    };
   };
 
-  const isInsideImageArea = (x: number, y: number) => {
-    const map = mapRef.current;
-    if (!map) return false;
-    return x >= map.offX && x <= map.offX + map.drawW && y >= map.offY && y <= map.offY + map.drawH;
+  const screenToNatPoint = (px: number, py: number) => {
+    const box = getContainBox();
+    if (!box || !natImg) return null;
+
+    const xIn = clamp(px - box.ox, 0, box.rw);
+    const yIn = clamp(py - box.oy, 0, box.rh);
+
+    const nx = xIn / box.scale;
+    const ny = yIn / box.scale;
+
+    return { x: clamp(nx, 0, natImg.w), y: clamp(ny, 0, natImg.h) };
   };
 
-  const onMouseDown: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    if (!open) return;
-    const wrap = wrapRef.current;
-    if (!wrap) return;
+  const hitTestHandle = (mx: number, my: number): { handle: Handle | null; inside: boolean } => {
+    if (!cropRect) return { handle: null, inside: false };
+    const sr = natToScreenRect(cropRect);
+    if (!sr) return { handle: null, inside: false };
 
-    const bounds = wrap.getBoundingClientRect();
-    const x = e.clientX - bounds.left;
-    const y = e.clientY - bounds.top;
+    const pad = 10;
+    const x1 = sr.left;
+    const y1 = sr.top;
+    const x2 = sr.left + sr.width;
+    const y2 = sr.top + sr.height;
 
-    if (!mapRef.current || !isInsideImageArea(x, y)) return;
+    const nearL = Math.abs(mx - x1) <= pad;
+    const nearR = Math.abs(mx - x2) <= pad;
+    const nearT = Math.abs(my - y1) <= pad;
+    const nearB = Math.abs(my - y2) <= pad;
 
-    if (rect) {
-      const r = normalizeRect(rect);
-      if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
-        setDragMode("move");
-        startRef.current = { x, y, ox: r.x, oy: r.y };
+    const inside = mx >= x1 && mx <= x2 && my >= y1 && my <= y2;
+
+    if (nearL && nearT) return { handle: "nw", inside };
+    if (nearR && nearT) return { handle: "ne", inside };
+    if (nearL && nearB) return { handle: "sw", inside };
+    if (nearR && nearB) return { handle: "se", inside };
+
+    if (nearT && inside) return { handle: "n", inside };
+    if (nearB && inside) return { handle: "s", inside };
+    if (nearL && inside) return { handle: "w", inside };
+    if (nearR && inside) return { handle: "e", inside };
+
+    return { handle: null, inside };
+  };
+
+  const cursorForHandle = (h: Handle | null, inside: boolean) => {
+    if (h === "nw" || h === "se") return "nwse-resize";
+    if (h === "ne" || h === "sw") return "nesw-resize";
+    if (h === "n" || h === "s") return "ns-resize";
+    if (h === "e" || h === "w") return "ew-resize";
+    if (inside) return "move";
+    return "default";
+  };
+
+  const applyMaxCrop = () => {
+    if (!natImg) return;
+    const full: CropRect = { x: 0, y: 0, w: natImg.w, h: natImg.h };
+    setCropRect(clampRectToImage(full, natImg, 80));
+  };
+
+  const endCropDrag = () => {
+    dragModeRef.current = null;
+    dragHandleRef.current = null;
+    dragStartRef.current = null;
+
+    const stage = stageRef.current;
+    if (stage) stage.style.cursor = cursorRef.current || "default";
+  };
+
+  const onStageMouseDown: React.MouseEventHandler<HTMLDivElement> = (e) => {
+    if (!natImg || !cropRect) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const r = stage.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const my = e.clientY - r.top;
+
+    const hit = hitTestHandle(mx, my);
+    const cursor = cursorForHandle(hit.handle, hit.inside);
+
+    if (hit.handle) {
+      dragModeRef.current = "resize";
+      dragHandleRef.current = hit.handle;
+    } else if (hit.inside) {
+      dragModeRef.current = "move";
+      dragHandleRef.current = null;
+    } else {
+      const p = screenToNatPoint(mx, my);
+      if (p) {
+        const { w, h } = cropRect;
+        const next: CropRect = { x: p.x - w / 2, y: p.y - h / 2, w, h };
+        setCropRect(clampRectToImage(next, natImg, 80));
+      }
+      dragModeRef.current = null;
+      dragHandleRef.current = null;
+      cursorRef.current = cursor;
+      stage.style.cursor = cursor;
+      return;
+    }
+
+    dragStartRef.current = { px: mx, py: my, rect: cropRect };
+    cursorRef.current = cursor;
+    stage.style.cursor = cursor;
+  };
+
+  const onStageMouseMove: React.MouseEventHandler<HTMLDivElement> = (e) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    if (!natImg || !cropRect) {
+      stage.style.cursor = "default";
+      return;
+    }
+
+    const r = stage.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const my = e.clientY - r.top;
+
+    if (dragModeRef.current && dragStartRef.current) {
+      const start = dragStartRef.current;
+      const dx = mx - start.px;
+      const dy = my - start.py;
+
+      const box = getContainBox();
+      if (!box) return;
+
+      const ndx = dx / box.scale;
+      const ndy = dy / box.scale;
+
+      if (dragModeRef.current === "move") {
+        const next: CropRect = {
+          x: start.rect.x + ndx,
+          y: start.rect.y + ndy,
+          w: start.rect.w,
+          h: start.rect.h,
+        };
+        setCropRect(clampRectToImage(next, natImg, 80));
         return;
       }
-    }
 
-    setDragMode("draw");
-    startRef.current = { x, y };
-    setRect({ x, y, w: 0, h: 0 });
-  };
+      const h = dragHandleRef.current;
+      if (!h) return;
 
-  const onMouseMove: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    if (!dragMode) return;
-    const wrap = wrapRef.current;
-    const map = mapRef.current;
-    if (!wrap || !map) return;
+      let next = { ...start.rect };
 
-    const bounds = wrap.getBoundingClientRect();
-    const x = e.clientX - bounds.left;
-    const y = e.clientY - bounds.top;
+      if (h.includes("e")) next.w = start.rect.w + ndx;
+      if (h.includes("s")) next.h = start.rect.h + ndy;
 
-    if (!startRef.current) return;
-
-    const minX = map.offX;
-    const minY = map.offY;
-    const maxX = map.offX + map.drawW;
-    const maxY = map.offY + map.drawH;
-
-    if (dragMode === "draw") {
-      const sx = startRef.current.x;
-      const sy = startRef.current.y;
-
-      const cx = clamp(x, minX, maxX);
-      const cy = clamp(y, minY, maxY);
-
-      let w = cx - sx;
-      let h = cy - sy;
-
-      const signW = w >= 0 ? 1 : -1;
-      const signH = h >= 0 ? 1 : -1;
-
-      const absW = Math.abs(w);
-      const absH = Math.abs(h);
-
-      if (absW / Math.max(1, absH) > CARD_RATIO) {
-        h = signH * (absW / CARD_RATIO);
-      } else {
-        w = signW * (absH * CARD_RATIO);
+      if (h.includes("w")) {
+        next.x = start.rect.x + ndx;
+        next.w = start.rect.w - ndx;
+      }
+      if (h.includes("n")) {
+        next.y = start.rect.y + ndy;
+        next.h = start.rect.h - ndy;
       }
 
-      const nx = clamp(sx, minX, maxX);
-      const ny = clamp(sy, minY, maxY);
-      let ex = clamp(nx + w, minX, maxX);
-      let ey = clamp(ny + h, minY, maxY);
+      next = clampRectToImage(next, natImg, 80);
 
-      const rw = Math.abs(ex - nx);
-      const rh = rw / CARD_RATIO;
+      if (e.shiftKey) {
+        next = applyAspectFromAnchor(next, natImg, h, NEWS_CARD_ASPECT, 80);
+      }
 
-      ey = h >= 0 ? ny + rh : ny - rh;
-      ey = clamp(ey, minY, maxY);
-
-      const finalW = rw;
-      const finalH = Math.abs(ey - ny);
-
-      const fw = signW * finalW;
-      const fh = signH * finalH;
-
-      setRect({ x: nx, y: ny, w: fw, h: fh });
+      setCropRect(next);
+      return;
     }
 
-    if (dragMode === "move" && rect) {
-      const r = normalizeRect(rect);
-      const dx = x - startRef.current.x;
-      const dy = y - startRef.current.y;
-
-      let nx = (startRef.current.ox || 0) + dx;
-      let ny = (startRef.current.oy || 0) + dy;
-
-      nx = clamp(nx, minX, maxX - r.w);
-      ny = clamp(ny, minY, maxY - r.h);
-
-      setRect({ x: nx, y: ny, w: r.w, h: r.h });
+    const hit = hitTestHandle(mx, my);
+    const cursor = cursorForHandle(hit.handle, hit.inside);
+    if (cursorRef.current !== cursor) {
+      cursorRef.current = cursor;
+      stage.style.cursor = cursor;
     }
   };
 
-  const endDrag = () => {
-    setDragMode(null);
-    startRef.current = null;
+  const onStageWheel: React.WheelEventHandler<HTMLDivElement> = (e) => {
+    if (!natImg || !cropRect) return;
+    e.preventDefault();
+
+    const dir = e.deltaY > 0 ? 1 : -1;
+    const factor = dir > 0 ? 1.06 : 0.94;
+    setCropRect(zoomRect(cropRect, natImg, factor, 80));
   };
+
+  const onStageDoubleClick: React.MouseEventHandler<HTMLDivElement> = (e) => {
+    e.preventDefault();
+    applyMaxCrop();
+  };
+
+  const cropRectStyle = useMemo(() => {
+    if (!natImg || !cropRect || !open) return null;
+    const sr = natToScreenRect(cropRect);
+    if (!sr) return null;
+
+    return {
+      left: sr.left,
+      top: sr.top,
+      width: sr.width,
+      height: sr.height,
+    } as React.CSSProperties;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [natImg, cropRect, open]);
 
   const confirmCrop = async () => {
-    const img = imgRef.current;
-    const map = mapRef.current;
-    const wrap = wrapRef.current;
-    if (!img || !map || !wrap || !rect) return;
+    if (!sourceUrl || !natImg || !cropRect) return;
 
-    const r = normalizeRect(rect);
+    try {
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("No pude cargar la imagen para recortar."));
+        img.src = sourceUrl;
+      });
 
-    if (r.w < 20 || r.h < 20) {
-      alert("El recorte es muy chico. Marcá un área más grande.");
-      return;
+      const rect = clampRectToImage(cropRect, natImg, 80);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(rect.w);
+      canvas.height = Math.round(rect.h);
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("No pude abrir canvas para recortar.");
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+
+      // ✅ JPG (liviano, sin drama)
+      const blob: Blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error("No pude exportar el recorte."))),
+          "image/jpeg",
+          0.9
+        );
+      });
+
+      const file = new File([blob], toJpegName(originalFileName), { type: "image/jpeg" });
+      const previewUrl = URL.createObjectURL(blob);
+
+      onConfirm(file, previewUrl);
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.message || "Error recortando imagen.");
     }
-
-    const minX = map.offX;
-    const minY = map.offY;
-    const maxX = map.offX + map.drawW;
-    const maxY = map.offY + map.drawH;
-
-    const cx1 = clamp(r.x, minX, maxX);
-    const cy1 = clamp(r.y, minY, maxY);
-    const cx2 = clamp(r.x + r.w, minX, maxX);
-    const cy2 = clamp(r.y + r.h, minY, maxY);
-
-    const cw = Math.max(2, cx2 - cx1);
-    const ch = Math.max(2, cy2 - cy1);
-
-    if (cw < 20 || ch < 20) {
-      alert("El recorte quedó fuera de la imagen. Arrancá el recorte dentro de la foto.");
-      return;
-    }
-
-    const ix = (cx1 - map.offX) / map.scale;
-    const iy = (cy1 - map.offY) / map.scale;
-    const iw = cw / map.scale;
-    const ih = ch / map.scale;
-
-    const out = document.createElement("canvas");
-    out.width = Math.max(2, Math.round(iw));
-    out.height = Math.max(2, Math.round(ih));
-
-    const ctx = out.getContext("2d");
-    if (!ctx) return;
-
-    ctx.drawImage(img, Math.round(ix), Math.round(iy), Math.round(iw), Math.round(ih), 0, 0, out.width, out.height);
-
-    const blob: Blob | null = await new Promise((resolve) => out.toBlob((b) => resolve(b), "image/png", 0.92));
-
-    if (!blob) {
-      alert("No pude generar el recorte. Si la imagen es remota y bloquea CORS, volvé a subirla desde tu PC.");
-      return;
-    }
-
-    const file = new File([blob], `crop_${Date.now()}.png`, { type: "image/png" });
-    const previewUrl = URL.createObjectURL(blob);
-
-    onConfirm(file, previewUrl);
   };
 
   if (!open) return null;
 
   return (
-    <div className="backdrop show" style={{ zIndex: 9999 }} onMouseDown={onClose}>
-      <div className="modalCenter" onMouseDown={onClose}>
-        <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 860 }}>
+    <>
+      <div className="backdrop show" style={{ zIndex: 9999 }} onMouseDown={onClose} />
+      <div className="modalCenter" style={{ zIndex: 9999 }} onMouseDown={onClose}>
+        <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
           <div className="modalHead">
             <div className="modalTitle">Recortar imagen</div>
             <button className="iconBtn" onClick={onClose} aria-label="Cerrar">
@@ -758,87 +920,63 @@ function CropperModal({
           </div>
 
           <div className="modalBody">
-            <div style={{ opacity: 0.8, fontSize: 12, marginBottom: 10 }}>
-              Arrastrá para marcar el recorte (ratio igual a la card). Podés mover el recorte agarrándolo.
+            <div style={{ opacity: 0.78, fontSize: 12, marginBottom: 10 }}>
+              Mouse: <b>mover</b> arrastrando dentro, <b>resize</b> arrastrando bordes/esquinas. Ruedita = zoom del recorte. Doble click = máximo. Mantener <b>Shift</b> = ratio card.
             </div>
 
             <div
-              ref={wrapRef}
-              onMouseDown={onMouseDown}
-              onMouseMove={onMouseMove}
-              onMouseUp={endDrag}
-              onMouseLeave={endDrag}
+              ref={stageRef}
+              onMouseDown={onStageMouseDown}
+              onMouseMove={onStageMouseMove}
+              onMouseUp={endCropDrag}
+              onMouseLeave={endCropDrag}
+              onWheel={onStageWheel}
+              onDoubleClick={onStageDoubleClick}
               style={{
+                position: "relative",
                 width: "100%",
-                height: 420,
+                height: "min(58vh, 560px)",
                 borderRadius: 14,
                 overflow: "hidden",
                 border: "1px solid rgba(255,255,255,.12)",
                 background: "rgba(0,0,0,.25)",
-                position: "relative",
                 userSelect: "none",
-                cursor: dragMode ? "grabbing" : rect ? "grab" : "crosshair",
               }}
             >
               {sourceUrl ? (
                 <img
-                  ref={imgRef}
                   src={sourceUrl}
-                  alt="Crop source"
-                  onLoad={() => {
-                    setLoading(false);
-                    requestAnimationFrame(() => {
-                      computeMap();
-
-                      const wrap = wrapRef.current;
-                      const map = mapRef.current;
-
-                      if (wrap && map && !rect) {
-                        const rw = Math.min(map.drawW * 0.9, wrap.clientWidth * 0.78);
-                        const rh = rw / CARD_RATIO;
-                        const x = map.offX + (map.drawW - rw) / 2;
-                        const y = map.offY + (map.drawH - rh) / 2;
-                        setRect({ x, y, w: rw, h: rh });
-                      }
-                    });
-                  }}
+                  alt="Crop"
                   style={{
                     width: "100%",
                     height: "100%",
                     objectFit: "contain",
-                    background: "rgba(0,0,0,.55)",
                     display: "block",
                     pointerEvents: "none",
+                    background: "rgba(0,0,0,.55)",
                   }}
                 />
               ) : null}
 
-              {loading ? (
-                <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>
-                  <div style={{ opacity: 0.8 }}>Cargando imagen…</div>
+              {natImg && cropRectStyle ? (
+                <>
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.35)" }} />
+                  <div
+                    style={{
+                      position: "absolute",
+                      ...cropRectStyle,
+                      boxShadow: "0 0 0 9999px rgba(0,0,0,.35)",
+                      border: "2px solid rgba(255,255,255,.9)",
+                      borderRadius: 12,
+                      pointerEvents: "none",
+                    }}
+                  />
+                </>
+              ) : (
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.8 }}>
+                  Cargando imagen…
                 </div>
-              ) : null}
-
-              {rect ? (
-                (() => {
-                  const r = normalizeRect(rect);
-                  return (
-                    <div
-                      style={{
-                        position: "absolute",
-                        left: r.x,
-                        top: r.y,
-                        width: r.w,
-                        height: r.h,
-                        border: "2px solid rgba(0,255,242,0.9)",
-                        background: "rgba(0,255,242,0.10)",
-                        boxSizing: "border-box",
-                        pointerEvents: "none",
-                      }}
-                    />
-                  );
-                })()
-              ) : null}
+              )}
             </div>
           </div>
 
@@ -846,13 +984,13 @@ function CropperModal({
             <button className="ghostBtn" onClick={onClose}>
               Cancelar
             </button>
-            <button className="btnSmall" onClick={confirmCrop}>
-              Confirmar recorte
+            <button className="btnSmall" onClick={confirmCrop} disabled={!natImg || !cropRect}>
+              Usar recorte
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -980,6 +1118,28 @@ function ClientCardPreview({
 ======================= */
 
 export default function News() {
+  const nav = useNavigate();
+
+  // ✅ PERMISO: ADMIN_GENERAL siempre, GM/ADMIN solo si canManageNews
+  const canManageNews = useMemo(() => {
+    const isSuper =
+      localStorage.getItem("eg_admin_is_super") === "true" ||
+      localStorage.getItem("eg_admin_role") === "ADMIN_GENERAL";
+    if (isSuper) return true;
+
+    try {
+      const raw = localStorage.getItem("eg_admin_permissions");
+      const parsed = raw ? JSON.parse(raw) : {};
+      return !!parsed?.canManageNews;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!canManageNews) nav("/salas", { replace: true });
+  }, [canManageNews, nav]);
+
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1003,9 +1163,11 @@ export default function News() {
   const [editingImageFile, setEditingImageFile] = useState<File | null>(null);
   const [tempPreviewUrl, setTempPreviewUrl] = useState<string | null>(null);
 
+  // Crop popup state
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
   const cropTempObjectUrlRef = useRef<string | null>(null);
+  const cropOriginalNameRef = useRef<string>("image.jpg");
 
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -1034,7 +1196,9 @@ export default function News() {
 
     return () => {
       mounted = false;
+
       if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
+
       if (cropTempObjectUrlRef.current) {
         URL.revokeObjectURL(cropTempObjectUrlRef.current);
         cropTempObjectUrlRef.current = null;
@@ -1085,6 +1249,16 @@ export default function News() {
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [filtered]);
 
+  const closeCrop = () => {
+    setCropOpen(false);
+    setCropSourceUrl(null);
+
+    if (cropTempObjectUrlRef.current) {
+      URL.revokeObjectURL(cropTempObjectUrlRef.current);
+      cropTempObjectUrlRef.current = null;
+    }
+  };
+
   const closeModal = () => {
     setOpen(false);
     setEditing(null);
@@ -1095,17 +1269,13 @@ export default function News() {
 
     if (fileRef.current) fileRef.current.value = "";
 
-    if (cropTempObjectUrlRef.current) {
-      URL.revokeObjectURL(cropTempObjectUrlRef.current);
-      cropTempObjectUrlRef.current = null;
-    }
-
-    setCropOpen(false);
-    setCropSourceUrl(null);
+    closeCrop();
     setPreviewOpen(false);
   };
 
   const startCreate = () => {
+    if (!canManageNews) return;
+
     const id = crypto.randomUUID();
     const today = new Date().toISOString().slice(0, 10);
 
@@ -1135,6 +1305,8 @@ export default function News() {
   };
 
   const startEdit = (n: NewsItem) => {
+    if (!canManageNews) return;
+
     setEditing({
       ...n,
       imagePosition: n.imagePosition ?? 50,
@@ -1159,23 +1331,29 @@ export default function News() {
     setEditing((prev) => (prev ? { ...prev, image: url } : prev));
   };
 
-  const openCropperWithUrl = async (url: string) => {
+  const openCropperWithUrl = async (url: string, originalName = "image.jpg") => {
     try {
       if (!url) return;
 
+      cropOriginalNameRef.current = originalName;
+
+      // Limpio el objectURL anterior si existía
       if (cropTempObjectUrlRef.current) {
         URL.revokeObjectURL(cropTempObjectUrlRef.current);
         cropTempObjectUrlRef.current = null;
       }
 
+      // Si ya es un object url (o data), lo uso directo
       if (!/^https?:\/\//i.test(url)) {
         setCropSourceUrl(url);
         setCropOpen(true);
         return;
       }
 
+      // Si es remoto, lo bajo a blob para evitar canvas taint
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error("No pude descargar la imagen para recortarla.");
+
       const blob = await res.blob();
       const objUrl = URL.createObjectURL(blob);
       cropTempObjectUrlRef.current = objUrl;
@@ -1198,12 +1376,18 @@ export default function News() {
       return;
     }
 
-    setEditingImageFile(file);
+    // guardo nombre original para el JPG final
+    cropOriginalNameRef.current = file.name;
 
     const url = URL.createObjectURL(file);
+
+    // ⚠️ no guardo el file original, porque vamos a guardar el recorte
+    // setEditingImageFile(file);  <-- NO: queremos subir el recorte, no el original
     setLocalPreview(url);
 
-    openCropperWithUrl(url);
+    openCropperWithUrl(url, file.name);
+
+    e.target.value = "";
   };
 
   const removeImage = () => {
@@ -1217,20 +1401,20 @@ export default function News() {
   };
 
   const onCropConfirm = (file: File, previewUrl: string) => {
+    // ✅ el recorte es lo que se sube
     setEditingImageFile(file);
+
+    // preview del recorte
     setLocalPreview(previewUrl);
+
+    // reseteo posición (ya viene recortada)
     setEditing((prev) => (prev ? { ...prev, imagePosition: 50 } : prev));
 
-    setCropOpen(false);
-    setCropSourceUrl(null);
-
-    if (cropTempObjectUrlRef.current) {
-      URL.revokeObjectURL(cropTempObjectUrlRef.current);
-      cropTempObjectUrlRef.current = null;
-    }
+    closeCrop();
   };
 
   const save = async () => {
+    if (!canManageNews) return;
     if (!editing) return;
 
     if (!editing.title.trim()) return alert("Poné un título.");
@@ -1251,9 +1435,11 @@ export default function News() {
     try {
       let finalImageUrl = editing.image;
 
+      // ✅ si hay recorte nuevo, subimos recorte
       if (editingImageFile) {
         finalImageUrl = await uploadNewsImage(editingImageFile, editing.id);
       } else {
+        // si no hay file, tiene que ser URL http(s) o vacío
         if (finalImageUrl && !/^https?:\/\//i.test(finalImageUrl)) finalImageUrl = "";
       }
 
@@ -1293,6 +1479,8 @@ export default function News() {
   };
 
   const toggleActive = async (id: string) => {
+    if (!canManageNews) return;
+
     const current = items.find((x) => x.id === id);
     if (!current) return;
 
@@ -1308,6 +1496,8 @@ export default function News() {
   };
 
   const remove = async (id: string) => {
+    if (!canManageNews) return;
+
     const current = items.find((x) => x.id === id);
     if (!current) return;
 
@@ -1343,12 +1533,13 @@ export default function News() {
       <div className="pageHeadRow">
         <div>
           <div className="pageTitle">Novedades</div>
-          {/* ✅ Leyenda eliminada */}
         </div>
 
-        <button className="btnSmall" onClick={startCreate}>
-          + Nueva novedad
-        </button>
+        {canManageNews ? (
+          <button className="btnSmall" onClick={startCreate}>
+            + Nueva novedad
+          </button>
+        ) : null}
       </div>
 
       <div className="toolbarRow" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -1413,22 +1604,12 @@ export default function News() {
                   <b>Historial:</b> {month}
                 </div>
 
-                <div
-                  className="roomsGrid"
-                  style={{
-                    alignItems: "start",
-                    gridAutoRows: "max-content",
-                  }}
-                >
+                <div className="roomsGrid" style={{ alignItems: "start", gridAutoRows: "max-content" }}>
                   {list.map((n) => (
                     <div
                       key={n.id}
                       className="roomCard"
-                      style={{
-                        height: "fit-content",
-                        alignSelf: "start",
-                        minHeight: 0,
-                      }}
+                      style={{ height: "fit-content", alignSelf: "start", minHeight: 0 }}
                     >
                       <div className="roomImgWrap">
                         <img
@@ -1443,15 +1624,7 @@ export default function News() {
                         {!n.active && <div className="roomBadge off">INACTIVA</div>}
                       </div>
 
-                      <div
-                        className="roomBody"
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          height: "auto",
-                          flex: "0 0 auto",
-                        }}
-                      >
+                      <div className="roomBody" style={{ display: "flex", flexDirection: "column", height: "auto", flex: "0 0 auto" }}>
                         <div className="roomTitle" style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                           <span>{n.title || TYPE_LABEL[n.type]}</span>
                           <span style={{ fontSize: 12, opacity: 0.8 }}>{n.publishedAt}</span>
@@ -1461,17 +1634,11 @@ export default function News() {
 
                         {n.description ? (
                           <div
-                            style={{
-                              opacity: 0.82,
-                              fontSize: 12,
-                              marginBottom: 6,
-                              lineHeight: 1.3,
-                            }}
+                            style={{ opacity: 0.82, fontSize: 12, marginBottom: 6, lineHeight: 1.3 }}
                             dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.description) }}
                           />
                         ) : null}
 
-                        {/* ✅ CTA + LINK ahora adentro, arriba de los botones */}
                         <div style={{ opacity: 0.7, fontSize: 11, marginTop: 2, marginBottom: 8 }}>
                           Botón: <b>{CTA_LABEL[n.ctaMode]}</b>
                           {n.ctaLink ? (
@@ -1485,19 +1652,21 @@ export default function News() {
                           ) : null}
                         </div>
 
-                        <div className="roomActions" style={{ marginTop: 0 }}>
-                          <button className="ghostBtn" onClick={() => startEdit(n)}>
-                            Editar
-                          </button>
+                        {canManageNews ? (
+                          <div className="roomActions" style={{ marginTop: 0 }}>
+                            <button className="ghostBtn" onClick={() => startEdit(n)}>
+                              Editar
+                            </button>
 
-                          <button className={n.active ? "dangerBtnInline" : "btnSmall"} onClick={() => toggleActive(n.id)}>
-                            {n.active ? "Desactivar" : "Activar"}
-                          </button>
+                            <button className={n.active ? "dangerBtnInline" : "btnSmall"} onClick={() => toggleActive(n.id)}>
+                              {n.active ? "Desactivar" : "Activar"}
+                            </button>
 
-                          <button className="dangerBtnInline" onClick={() => remove(n.id)}>
-                            Borrar
-                          </button>
-                        </div>
+                            <button className="dangerBtnInline" onClick={() => remove(n.id)}>
+                              Borrar
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ))}
@@ -1580,7 +1749,11 @@ export default function News() {
 
                   <label className="field">
                     <span className="label">Botón (CTA) en cliente</span>
-                    <select className="input" value={editing.ctaMode} onChange={(e) => setEditing({ ...editing, ctaMode: e.target.value as CtaMode })}>
+                    <select
+                      className="input"
+                      value={editing.ctaMode}
+                      onChange={(e) => setEditing({ ...editing, ctaMode: e.target.value as CtaMode })}
+                    >
                       <option value="CONSULTAR">Consultar</option>
                       <option value="VER_DETALLE">Ver detalle</option>
                     </select>
@@ -1627,7 +1800,7 @@ export default function News() {
                         <img
                           src={editing.image}
                           alt="Preview"
-                          onClick={() => openCropperWithUrl(editing.image)}
+                          onClick={() => openCropperWithUrl(editing.image, cropOriginalNameRef.current)}
                           title="Click para recortar"
                           style={{
                             width: "100%",
@@ -1678,21 +1851,16 @@ export default function News() {
             </div>
           </div>
 
+          {/* Cropper */}
           <CropperModal
             open={cropOpen}
             sourceUrl={cropSourceUrl}
-            onClose={() => {
-              setCropOpen(false);
-              setCropSourceUrl(null);
-
-              if (cropTempObjectUrlRef.current) {
-                URL.revokeObjectURL(cropTempObjectUrlRef.current);
-                cropTempObjectUrlRef.current = null;
-              }
-            }}
+            originalFileName={cropOriginalNameRef.current}
+            onClose={closeCrop}
             onConfirm={onCropConfirm}
           />
 
+          {/* Preview cliente */}
           {previewOpen && currentPreviewData ? (
             <ClientCardPreview item={currentPreviewData as any} onClose={() => setPreviewOpen(false)} />
           ) : null}

@@ -107,6 +107,35 @@ function newUserTemplate(): User {
   };
 }
 
+/* ===== ICONOS SVG (igual al Login) ===== */
+
+function EyeOpenIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M1.5 12s4-7.5 10.5-7.5S22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <circle cx="12" cy="12" r="3.5" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function EyeClosedIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path
+        d="M2 12s4-7.5 10-7.5c2.2 0 4.1.7 5.7 1.7M22 12s-1.5 2.8-4.2 4.9C15.9 18.6 14 19.5 12 19.5c-6.5 0-10-7.5-10-7.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** ======= UI helpers (modal) ======= */
 function ModalShell({
   open,
@@ -338,7 +367,22 @@ export default function Users() {
   const ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
 
   const [myRole, setMyRole] = useState<UserRole | "">("");
-  const canManageUsers = myRole === "ADMIN_GENERAL";
+
+  // ✅ CAMBIO: permiso real (ADMIN_GENERAL siempre / GM+ADMIN por canManageUsers)
+  const canManageUsers = useMemo(() => {
+    const superFlag =
+      localStorage.getItem("eg_admin_is_super") === "true" || localStorage.getItem("eg_admin_role") === "ADMIN_GENERAL";
+
+    if (superFlag) return true;
+
+    try {
+      const raw = localStorage.getItem("eg_admin_permissions");
+      const parsed = raw ? JSON.parse(raw) : {};
+      return !!parsed?.canManageUsers;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const [items, setItems] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -358,6 +402,9 @@ export default function Users() {
 
   const [resetPass1, setResetPass1] = useState("");
   const [resetPass2, setResetPass2] = useState("");
+  const [showResetPass1, setShowResetPass1] = useState(false);
+  const [showResetPass2, setShowResetPass2] = useState(false);
+
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -624,6 +671,8 @@ export default function Users() {
     setMenuOpenId(null);
     setResetPass1("");
     setResetPass2("");
+    setShowResetPass1(false);
+    setShowResetPass2(false);
     setResetModal({ open: true, user: { ...u } });
   };
 
@@ -757,10 +806,7 @@ export default function Users() {
 
   return (
     <div className="page">
-      <div
-        className="pageHeadRow"
-        style={{ gap: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}
-      >
+      <div className="pageHeadRow" style={{ gap: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div className="pageTitle">Usuarios</div>
           {/* ✅ Leyenda eliminada */}
@@ -791,12 +837,7 @@ export default function Users() {
           <option value="ADMIN_GENERAL">Admin General</option>
         </select>
 
-        <select
-          className="input"
-          value={branchFilter}
-          onChange={(e) => setBranchFilter(e.target.value as any)}
-          style={{ width: 220 }}
-        >
+        <select className="input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value as any)} style={{ width: 220 }}>
           <option value="">Todas las sucursales</option>
           {BRANCHES.map((b) => (
             <option key={b} value={b}>
@@ -826,14 +867,8 @@ export default function Users() {
             {filtered.map((u) => {
               const canShowGmCode = u._isStaff && (u.role === "GM" || u.role === "ADMIN_GENERAL");
 
-
               return (
-                <div
-                  className={`usersRow ${!u.active ? "isOff" : ""}`}
-                  role="row"
-                  key={u.id}
-                  style={{ position: "relative" }}
-                >
+                <div className={`usersRow ${!u.active ? "isOff" : ""}`} role="row" key={u.id} style={{ position: "relative" }}>
                   <div className="usersCell colName" role="cell">
                     <input className="sheetInput" value={u.firstName} disabled />
                   </div>
@@ -885,9 +920,7 @@ export default function Users() {
 
                         <button
                           className="sheetMenuItem"
-                          onClick={() =>
-                            setPermModal({ open: true, user: { ...u, permissions: { ...u.permissions } } })
-                          }
+                          onClick={() => setPermModal({ open: true, user: { ...u, permissions: { ...u.permissions } } })}
                           disabled={busy}
                         >
                           Permisos
@@ -954,11 +987,7 @@ export default function Users() {
                   ] as const
                 ).map(([k, label]) => (
                   <label key={k} style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={!!permModal.user?.permissions?.[k]}
-                      onChange={(e) => patchPerm(k, e.target.checked)}
-                    />
+                    <input type="checkbox" checked={!!permModal.user?.permissions?.[k]} onChange={(e) => patchPerm(k, e.target.checked)} />
                     <span>{label}</span>
                   </label>
                 ))}
@@ -978,7 +1007,15 @@ export default function Users() {
       </ModalShell>
 
       {/* ===== RESET PASS ===== */}
-      <ModalShell open={resetModal.open} title="Resetear contraseña" onClose={() => setResetModal({ open: false, user: null })}>
+      <ModalShell
+        open={resetModal.open}
+        title="Resetear contraseña"
+        onClose={() => {
+          setShowResetPass1(false);
+          setShowResetPass2(false);
+          setResetModal({ open: false, user: null });
+        }}
+      >
         {resetModal.user ? (
           <>
             <div style={{ marginBottom: 12, opacity: 0.8, fontSize: 13 }}>
@@ -986,27 +1023,81 @@ export default function Users() {
             </div>
 
             <FieldRow label="Nueva contraseña">
-              <input
-                className="input"
-                style={{ width: "100%", minWidth: 0 }}
-                type="password"
-                value={resetPass1}
-                onChange={(e) => setResetPass1(e.target.value)}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  className="input"
+                  style={{ width: "100%", minWidth: 0, paddingRight: 42 }}
+                  type={showResetPass1 ? "text" : "password"}
+                  value={resetPass1}
+                  onChange={(e) => setResetPass1(e.target.value)}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowResetPass1((v) => !v)}
+                  aria-label={showResetPass1 ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  style={{
+                    position: "absolute",
+                    right: 10,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    color: "#9ca3af",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#e5e7eb")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#9ca3af")}
+                >
+                  {showResetPass1 ? <EyeOpenIcon /> : <EyeClosedIcon />}
+                </button>
+              </div>
             </FieldRow>
 
             <FieldRow label="Repetir contraseña">
-              <input
-                className="input"
-                style={{ width: "100%", minWidth: 0 }}
-                type="password"
-                value={resetPass2}
-                onChange={(e) => setResetPass2(e.target.value)}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  className="input"
+                  style={{ width: "100%", minWidth: 0, paddingRight: 42 }}
+                  type={showResetPass2 ? "text" : "password"}
+                  value={resetPass2}
+                  onChange={(e) => setResetPass2(e.target.value)}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowResetPass2((v) => !v)}
+                  aria-label={showResetPass2 ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  style={{
+                    position: "absolute",
+                    right: 10,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                    color: "#9ca3af",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "#e5e7eb")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "#9ca3af")}
+                >
+                  {showResetPass2 ? <EyeOpenIcon /> : <EyeClosedIcon />}
+                </button>
+              </div>
             </FieldRow>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-              <button className="ghostBtn" onClick={() => setResetModal({ open: false, user: null })} disabled={busy}>
+              <button
+                className="ghostBtn"
+                onClick={() => {
+                  setShowResetPass1(false);
+                  setShowResetPass2(false);
+                  setResetModal({ open: false, user: null });
+                }}
+                disabled={busy}
+              >
                 Cancelar
               </button>
               <button className="btnSmall" onClick={resetPassword} disabled={busy}>
