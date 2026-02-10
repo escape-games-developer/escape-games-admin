@@ -4,16 +4,52 @@ import { supabase } from "../lib/supabase";
 
 type AdminRole = "ADMIN_GENERAL" | "ADMIN" | "GM";
 
+/* ===== ICONOS SVG ===== */
+
+function EyeOpenIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M1.5 12s4-7.5 10.5-7.5S22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <circle cx="12" cy="12" r="3.5" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function EyeClosedIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <path
+        d="M3 3l18 18"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M2 12s4-7.5 10-7.5c2.2 0 4.1.7 5.7 1.7M22 12s-1.5 2.8-4.2 4.9C15.9 18.6 14 19.5 12 19.5c-6.5 0-10-7.5-10-7.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/* ===== COMPONENTE ===== */
+
 export default function Login() {
   const nav = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    // Si ya hay sesión, ir directo
     (async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) nav("/salas", { replace: true });
@@ -34,8 +70,6 @@ export default function Login() {
       if (error) throw error;
       if (!data.session) throw new Error("No se pudo iniciar sesión.");
 
-      // ✅ Chequeo de admin: debe existir en public.admins
-      // ✅ Traemos campos para decidir rol correctamente
       const { data: adminRow, error: adminErr } = await supabase
         .from("admins")
         .select("user_id, mail, branch_id, gm_code, is_super")
@@ -49,20 +83,16 @@ export default function Login() {
         throw new Error("No autorizado: este usuario no está habilitado como admin.");
       }
 
-      // ✅ Rol final (manda is_super)
       let role: AdminRole;
       if (adminRow.is_super) role = "ADMIN_GENERAL";
       else if (adminRow.gm_code) role = "GM";
       else role = "ADMIN";
 
-      // ✅ Validación extra: admins NO super deben tener sucursal asignada
-      if (!adminRow.is_super && (adminRow.branch_id == null || adminRow.branch_id === undefined)) {
+      if (!adminRow.is_super && (adminRow.branch_id == null)) {
         await supabase.auth.signOut();
         throw new Error("No autorizado: admin sin sucursal asignada.");
       }
 
-      // ✅ Persistimos para que el resto del panel lo use
-      // (si ya tenías otro sistema de estado global, esto no molesta)
       localStorage.setItem("eg_admin_role", role);
       localStorage.setItem("eg_admin_mail", adminRow.mail ?? email.trim());
       localStorage.setItem("eg_admin_branch_id", String(adminRow.branch_id ?? ""));
@@ -80,17 +110,18 @@ export default function Login() {
     <div className="authWrap">
       <div className="authCard">
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
-          {/* Logo centrado grande */}
           <img
             src={new URL("../assets/escape-logo.png", import.meta.url).toString()}
             alt="Escape Games"
-            style={{ height: 64, width: "auto", objectFit: "contain" }}
+            style={{ height: 64 }}
           />
         </div>
 
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           <div style={{ fontWeight: 900, fontSize: 18 }}>Acceso Administrador</div>
-          <div style={{ opacity: 0.8, fontSize: 12 }}>Ingresá con tu usuario de Supabase</div>
+          <div style={{ opacity: 0.8, fontSize: 12 }}>
+            Ingresá con tu usuario de Supabase
+          </div>
         </div>
 
         {err && (
@@ -101,6 +132,7 @@ export default function Login() {
               padding: 10,
               borderRadius: 12,
               fontSize: 13,
+              marginBottom: 10,
             }}
           >
             {err}
@@ -122,14 +154,39 @@ export default function Login() {
 
           <label className="field">
             <span className="label">Contraseña</span>
-            <input
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              type="password"
-              autoComplete="current-password"
-              placeholder="••••••••"
-            />
+
+            <div style={{ position: "relative" }}>
+              <input
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                type={showPass ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder="••••••••"
+                style={{ paddingRight: 42 }}
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowPass((v) => !v)}
+                aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+                style={{
+                  position: "absolute",
+                  right: 10,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  color: "#9ca3af",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#e5e7eb")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "#9ca3af")}
+              >
+                {showPass ? <EyeOpenIcon /> : <EyeClosedIcon />}
+              </button>
+            </div>
           </label>
 
           <button className="btnSmall" type="submit" disabled={busy}>

@@ -44,6 +44,7 @@ export default function Drawer({ open, onClose, userName }: Props) {
   const [role, setRole] = useState<UserRole>("ADMIN");
   const [branchLabel, setBranchLabel] = useState<string>("");
   const [perms, setPerms] = useState<UserPermissions>(defaultPerms);
+  const [gmCode, setGmCode] = useState<string>("");
 
   // ✅ fallback (por si venís de una versión vieja con demo_session)
   const demoSession = useMemo(() => {
@@ -59,7 +60,10 @@ export default function Drawer({ open, onClose, userName }: Props) {
     return r || null;
   }, []);
 
+  // ✅ branch: prioriza nombre si existe, si no cae al id
   const lsBranch = useMemo(() => {
+    const name = localStorage.getItem("eg_admin_branch_name");
+    if (name && name.trim() !== "") return name;
     const b = localStorage.getItem("eg_admin_branch_id");
     return b && b.trim() !== "" ? `Sucursal #${b}` : "";
   }, []);
@@ -70,6 +74,11 @@ export default function Drawer({ open, onClose, userName }: Props) {
     return parsed ? ({ ...defaultPerms, ...parsed } as UserPermissions) : null;
   }, []);
 
+  const lsGmCode = useMemo(() => {
+    const c = localStorage.getItem("eg_admin_gm_code");
+    return c && c.trim() !== "" ? c : "";
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -78,7 +87,7 @@ export default function Drawer({ open, onClose, userName }: Props) {
       const uid = data.session?.user?.id;
       if (!uid) return;
 
-      // 1) leer admins (acá está la verdad)
+      // ✅ 1) leer admins (como antes, SIN joins)
       const { data: adminRow, error: adminErr } = await supabase
         .from("admins")
         .select("branch_id, mail, gm_code, is_super, permissions")
@@ -93,17 +102,17 @@ export default function Drawer({ open, onClose, userName }: Props) {
       if (!mounted) return;
 
       if (!adminRow) {
-        // no está en admins => CLIENT (para este panel, básicamente no debería pasar)
         setRole("CLIENT");
         setBranchLabel("");
         setPerms(defaultPerms);
+        setGmCode("");
         return;
       }
 
       // ✅ regla final:
       // is_super -> ADMIN_GENERAL
       // gm_code -> GM
-      // else -> ADMIN (sucursal)
+      // else -> ADMIN
       let computed: UserRole;
       if (adminRow.is_super) computed = "ADMIN_GENERAL";
       else if (adminRow.gm_code) computed = "GM";
@@ -111,19 +120,45 @@ export default function Drawer({ open, onClose, userName }: Props) {
 
       setRole(computed);
 
-      // label sucursal solo si tiene branch_id (super puede ser null)
-      setBranchLabel(adminRow.branch_id ? `Sucursal #${adminRow.branch_id}` : "");
-
-      // ✅ permisos (por defecto todos false)
+      // ✅ permisos
       const mergedPerms: UserPermissions = { ...defaultPerms, ...(adminRow.permissions || {}) };
       setPerms(mergedPerms);
 
-      // ✅ persistimos (por si el usuario refresca)
+      // ✅ gm_code
+      const code = adminRow.gm_code ? String(adminRow.gm_code) : "";
+      setGmCode(code);
+
+      // ✅ 2) sucursal: si hay branch_id y NO es super, intentamos traer nombre de branches
+      let branchLbl = adminRow.branch_id ? `Sucursal #${adminRow.branch_id}` : "";
+      let branchName = "";
+
+      if (adminRow.branch_id && !adminRow.is_super) {
+        const { data: br, error: brErr } = await supabase
+          .from("branches")
+          .select("name")
+          .eq("id", adminRow.branch_id)
+          .maybeSingle();
+
+        if (!brErr && br?.name) {
+          branchName = String(br.name);
+          branchLbl = branchName;
+        } else if (brErr) {
+          console.warn("No pude leer branches.name, dejo fallback:", brErr);
+        }
+      }
+
+      if (!mounted) return;
+
+      setBranchLabel(branchLbl);
+
+      // ✅ persistimos
       localStorage.setItem("eg_admin_role", computed);
       localStorage.setItem("eg_admin_mail", adminRow.mail ?? "");
       localStorage.setItem("eg_admin_branch_id", String(adminRow.branch_id ?? ""));
+      localStorage.setItem("eg_admin_branch_name", branchName); // si no hay, queda ""
       localStorage.setItem("eg_admin_is_super", adminRow.is_super ? "true" : "false");
       localStorage.setItem("eg_admin_permissions", JSON.stringify(adminRow.permissions || {}));
+      localStorage.setItem("eg_admin_gm_code", code);
     };
 
     loadRole();
@@ -142,8 +177,8 @@ export default function Drawer({ open, onClose, userName }: Props) {
   const roleToUse: UserRole = role || lsRole || demoSession.role;
   const branchToUse = branchLabel || lsBranch || demoSession.branch;
 
-  // permisos: DB -> localStorage -> default
   const permsToUse: UserPermissions = perms || lsPerms || defaultPerms;
+  const gmCodeToUse = gmCode || lsGmCode;
 
   const roleLabel =
     roleToUse === "ADMIN_GENERAL"
@@ -175,15 +210,14 @@ export default function Drawer({ open, onClose, userName }: Props) {
 
   const logout = async () => {
     try {
-      // por si quedó basura de versiones anteriores
       localStorage.removeItem("admin_demo_session");
-
-      // limpiamos también lo nuevo
       localStorage.removeItem("eg_admin_role");
       localStorage.removeItem("eg_admin_mail");
       localStorage.removeItem("eg_admin_branch_id");
+      localStorage.removeItem("eg_admin_branch_name");
       localStorage.removeItem("eg_admin_is_super");
       localStorage.removeItem("eg_admin_permissions");
+      localStorage.removeItem("eg_admin_gm_code");
 
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
@@ -216,12 +250,25 @@ export default function Drawer({ open, onClose, userName }: Props) {
           <div className="profileCard">
             <div className="avatarCircle">{(userName?.[0] || "A").toUpperCase()}</div>
             <div className="profileInfo">
+              {/* Mail (siempre) */}
               <div className="profileName">{userName}</div>
-              <div className="profileRole">
-                {roleLabel}
-                {/* si es GM o admin de sucursal, mostramos sucursal si existe */}
-                {(roleToUse === "GM" || roleToUse === "ADMIN") && branchToUse ? ` • ${branchToUse}` : ""}
-              </div>
+
+              <div className="profileRole">{roleLabel}</div>
+
+              {/* ✅ STAFF: mostrar código GM (y sucursal solo si corresponde) */}
+{roleToUse !== "CLIENT" ? (
+  <>
+    {/* Sucursal solo si NO es super (igual que en tu lógica) */}
+    {!isSuper ? (
+      <div className="profileBranch">Sucursal: {branchToUse || "sin asignar"}</div>
+    ) : null}
+
+    <div className="profileGmCode">
+      <span style={{ opacity: 0.7 }}>Código GM:</span> <b>{gmCodeToUse || "sin código"}</b>
+    </div>
+  </>
+) : null}
+
             </div>
           </div>
         </div>

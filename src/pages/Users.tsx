@@ -365,11 +365,6 @@ export default function Users() {
     return () => document.body.classList.remove("users-fullwidth");
   }, []);
 
-  // Debug env una sola vez
-  useEffect(() => {
-    console.log("ENV VITE_SUPABASE_URL =", import.meta.env.VITE_SUPABASE_URL);
-  }, []);
-
   useEffect(() => {
     let mounted = true;
 
@@ -718,7 +713,7 @@ export default function Users() {
 
   const ensureAndCopyGmCode = async (u: User) => {
     if (!canManageUsers) return;
-    if (!u._isStaff || u.role !== "GM") return;
+    if (u.role !== "GM" && u.role !== "ADMIN_GENERAL") return;
 
     setMenuOpenId(null);
     setBusy(true);
@@ -762,36 +757,16 @@ export default function Users() {
 
   return (
     <div className="page">
-      <div className="pageHeadRow" style={{ gap: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div
+        className="pageHeadRow"
+        style={{ gap: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}
+      >
         <div>
           <div className="pageTitle">Usuarios</div>
-          <div className="pageSub">
-            Staff + clientes. Acciones por fila (⋯). <span style={{ opacity: 0.7 }}>(Tu rol: {myRole || "sin detectar"})</span>
-          </div>
+          {/* ✅ Leyenda eliminada */}
         </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <button
-            className="ghostBtn"
-            onClick={async () => {
-              try {
-                const { data } = await supabase.auth.getSession();
-                console.log("DEBUG session:", data.session);
-                console.log("DEBUG access_token head:", data.session?.access_token?.slice(0, 20));
-                console.log("DEBUG refresh_token head:", data.session?.refresh_token?.slice(0, 20));
-                console.log("ENV VITE_SUPABASE_URL =", import.meta.env.VITE_SUPABASE_URL);
-
-                await supabase.auth.signOut();
-                alert("Listo: cerré sesión. Ahora recargá con Ctrl+Shift+R y volvé a loguearte.");
-              } catch (e: any) {
-                console.error(e);
-                alert(e?.message || "Error cerrando sesión");
-              }
-            }}
-          >
-            Debug / Logout
-          </button>
-
           {canManageUsers ? (
             <button className="btnSmall" onClick={startCreate}>
               + Nuevo usuario
@@ -816,7 +791,12 @@ export default function Users() {
           <option value="ADMIN_GENERAL">Admin General</option>
         </select>
 
-        <select className="input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value as any)} style={{ width: 220 }}>
+        <select
+          className="input"
+          value={branchFilter}
+          onChange={(e) => setBranchFilter(e.target.value as any)}
+          style={{ width: 220 }}
+        >
           <option value="">Todas las sucursales</option>
           {BRANCHES.map((b) => (
             <option key={b} value={b}>
@@ -844,10 +824,16 @@ export default function Users() {
             </div>
 
             {filtered.map((u) => {
-              const canShowGmCode = u._isStaff && u.role === "GM";
+              const canShowGmCode = u._isStaff && (u.role === "GM" || u.role === "ADMIN_GENERAL");
+
 
               return (
-                <div className={`usersRow ${!u.active ? "isOff" : ""}`} role="row" key={u.id} style={{ position: "relative" }}>
+                <div
+                  className={`usersRow ${!u.active ? "isOff" : ""}`}
+                  role="row"
+                  key={u.id}
+                  style={{ position: "relative" }}
+                >
                   <div className="usersCell colName" role="cell">
                     <input className="sheetInput" value={u.firstName} disabled />
                   </div>
@@ -897,7 +883,13 @@ export default function Users() {
                           </button>
                         ) : null}
 
-                        <button className="sheetMenuItem" onClick={() => setPermModal({ open: true, user: { ...u, permissions: { ...u.permissions } } })} disabled={busy}>
+                        <button
+                          className="sheetMenuItem"
+                          onClick={() =>
+                            setPermModal({ open: true, user: { ...u, permissions: { ...u.permissions } } })
+                          }
+                          disabled={busy}
+                        >
                           Permisos
                         </button>
 
@@ -962,7 +954,11 @@ export default function Users() {
                   ] as const
                 ).map(([k, label]) => (
                   <label key={k} style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <input type="checkbox" checked={!!permModal.user?.permissions?.[k]} onChange={(e) => patchPerm(k, e.target.checked)} />
+                    <input
+                      type="checkbox"
+                      checked={!!permModal.user?.permissions?.[k]}
+                      onChange={(e) => patchPerm(k, e.target.checked)}
+                    />
                     <span>{label}</span>
                   </label>
                 ))}
@@ -990,11 +986,23 @@ export default function Users() {
             </div>
 
             <FieldRow label="Nueva contraseña">
-              <input className="input" style={{ width: "100%", minWidth: 0 }} type="password" value={resetPass1} onChange={(e) => setResetPass1(e.target.value)} />
+              <input
+                className="input"
+                style={{ width: "100%", minWidth: 0 }}
+                type="password"
+                value={resetPass1}
+                onChange={(e) => setResetPass1(e.target.value)}
+              />
             </FieldRow>
 
             <FieldRow label="Repetir contraseña">
-              <input className="input" style={{ width: "100%", minWidth: 0 }} type="password" value={resetPass2} onChange={(e) => setResetPass2(e.target.value)} />
+              <input
+                className="input"
+                style={{ width: "100%", minWidth: 0 }}
+                type="password"
+                value={resetPass2}
+                onChange={(e) => setResetPass2(e.target.value)}
+              />
             </FieldRow>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
@@ -1015,7 +1023,9 @@ export default function Users() {
           <>
             <div className="panel" style={{ padding: 12 }}>
               Vas a borrar a: <b>{deleteModal.user.email}</b>
-              <div style={{ marginTop: 8, opacity: 0.85 }}>Ojo: esto es irreversible si tu Edge Function elimina auth + filas relacionadas.</div>
+              <div style={{ marginTop: 8, opacity: 0.85 }}>
+                Ojo: esto es irreversible si tu Edge Function elimina auth + filas relacionadas.
+              </div>
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>

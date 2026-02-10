@@ -56,3 +56,41 @@ svg.logo {
   width: auto !important;
   max-height: none !important;
 }
+.profileGmCode {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+/* ===== News cards: compactas ===== */
+
+/* Evita alturas forzadas */
+.roomCard,
+.roomBody {
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+/* Si el layout usa flex y estira, esto lo corrige */
+.roomBody {
+  display: block !important;
+}
+
+/* La descripción HTML suele traer <p> con margen grande */
+.roomBody [data-news-desc] p,
+.roomBody [data-news-desc] ul,
+.roomBody [data-news-desc] ol,
+.roomBody [data-news-desc] blockquote {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Separación mínima entre texto y acciones */
+.roomActions {
+  margin-top: 8px !important;
+  padding-top: 0 !important;
+}
+
+/* Si tenés gap grande en roomBody, lo bajamos */
+.roomBody {
+  gap: 0 !important;
+}

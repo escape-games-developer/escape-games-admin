@@ -10,12 +10,35 @@ import Users from ".././pages/Users";
 
 type UserRole = "CLIENT" | "GM" | "ADMIN" | "ADMIN_GENERAL";
 
+type UserPermissions = {
+  canManageRooms: boolean;
+  canManageNews: boolean;
+  canManageUsers: boolean;
+  canEditRankings: boolean;
+  canAwardKeys: boolean;
+  canResetClientPassword: boolean;
+};
+
 /** ✅ Fuente de verdad: lo que ya persistís desde DB en Drawer/Login */
 function getRole(): UserRole {
   const r = localStorage.getItem("eg_admin_role") as UserRole | null;
   return r || "CLIENT";
 }
 
+function getPerms(): Partial<UserPermissions> {
+  try {
+    const raw = localStorage.getItem("eg_admin_permissions");
+    return raw ? (JSON.parse(raw) as Partial<UserPermissions>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function isSuper(): boolean {
+  return localStorage.getItem("eg_admin_is_super") === "true" || getRole() === "ADMIN_GENERAL";
+}
+
+/** ✅ Guard por rol */
 function RequireRole({
   allow,
   children,
@@ -28,6 +51,27 @@ function RequireRole({
   return <>{children}</>;
 }
 
+/** ✅ Guard por permiso (ADMIN_GENERAL siempre pasa) */
+function RequirePerm({
+  permKey,
+  children,
+}: {
+  permKey: keyof UserPermissions;
+  children: React.ReactNode;
+}) {
+  if (isSuper()) return <>{children}</>;
+
+  const role = getRole();
+  // solo staff puede tener permisos (GM/ADMIN). CLIENT no.
+  if (role !== "GM" && role !== "ADMIN") return <Navigate to="/salas" replace />;
+
+  const perms = getPerms();
+  const ok = !!perms?.[permKey];
+  if (!ok) return <Navigate to="/salas" replace />;
+
+  return <>{children}</>;
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -36,7 +80,7 @@ export default function AppRoutes() {
       <Route element={<AdminLayout />}>
         <Route path="/" element={<Navigate to="/salas" replace />} />
 
-        {/* ✅ GM puede ver salas (pero después filtramos por sucursal en Rooms) */}
+        {/* ✅ GM puede ver salas (pero después filtrás por sucursal en Rooms) */}
         <Route
           path="/salas"
           element={
@@ -46,17 +90,19 @@ export default function AppRoutes() {
           }
         />
 
-        {/* ✅ SOLO ADMIN_GENERAL */}
+        {/* ✅ Novedades:
+            - ADMIN_GENERAL siempre
+            - GM/ADMIN solo si canManageNews */}
         <Route
           path="/novedades"
           element={
-            <RequireRole allow={["ADMIN_GENERAL"]}>
+            <RequirePerm permKey="canManageNews">
               <News />
-            </RequireRole>
+            </RequirePerm>
           }
         />
 
-        {/* ✅ SOLO ADMIN_GENERAL */}
+        {/* ✅ Usuarios: SOLO ADMIN_GENERAL (como lo tenías) */}
         <Route
           path="/usuarios"
           element={

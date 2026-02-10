@@ -983,7 +983,6 @@ export default function Rooms() {
       <div className="pageHeadRow" style={{ gap: 12 }}>
         <div>
           <div className="pageTitle">Salas</div>
-          <div className="pageSub">Panel conectado a Supabase (DB + Storage).</div>
         </div>
 
         {canCreateRoom ? (
@@ -1029,9 +1028,24 @@ export default function Rooms() {
         </div>
       ) : (
         <div className="roomsScroll">
-          <div className="roomsGrid">
+          <div
+            className="roomsGrid"
+            // ✅ FIX CARD HEIGHT (evita que el grid estire las cards)
+            style={{
+              alignItems: "start",
+              gridAutoRows: "max-content",
+            }}
+          >
             {/* ✅ CARD: BOMB TICKET (SIEMPRE) */}
-            <div className="roomCard">
+            <div
+              className="roomCard"
+              // ✅ FIX CARD HEIGHT
+              style={{
+                height: "fit-content",
+                alignSelf: "start",
+                minHeight: 0,
+              }}
+            >
               <div className="roomImgWrap" style={{ position: "relative" }}>
                 <img
                   src={bomb.imageUrl || "https://picsum.photos/seed/bombticket/900/520"}
@@ -1044,7 +1058,16 @@ export default function Rooms() {
                 <div className="roomBadge">Beneficio</div>
               </div>
 
-              <div className="roomBody">
+              <div
+                className="roomBody"
+                // ✅ FIX CARD HEIGHT
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  height: "auto",
+                  flex: "0 0 auto",
+                }}
+              >
                 <div className="roomTitle">{bomb.title}</div>
 
                 {bomb.description ? (
@@ -1154,7 +1177,16 @@ export default function Rooms() {
               const qrValue = String(r.qrCode || "").trim() || makeRoomQr(r.id);
 
               return (
-                <div key={r.id} className="roomCard">
+                <div
+                  key={r.id}
+                  className="roomCard"
+                  // ✅ FIX CARD HEIGHT
+                  style={{
+                    height: "fit-content",
+                    alignSelf: "start",
+                    minHeight: 0,
+                  }}
+                >
                   <div className="roomImgWrap">
                     <img
                       src={r.photo || "https://picsum.photos/seed/placeholder/900/520"}
@@ -1168,7 +1200,16 @@ export default function Rooms() {
                     {!r.active && <div className="roomBadge off">INACTIVA</div>}
                   </div>
 
-                  <div className="roomBody">
+                  <div
+                    className="roomBody"
+                    // ✅ FIX CARD HEIGHT
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      height: "auto",
+                      flex: "0 0 auto",
+                    }}
+                  >
                     <div className="roomTitle">{r.name}</div>
 
                     <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
@@ -1303,7 +1344,7 @@ export default function Rooms() {
           <div className="modalCenter" onMouseDown={() => setRecordsModal(null)}>
             <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
               <div className="modalHead">
-                <div className="modalTitle">Editar récords — {recordsModal.roomName}</div>
+                <div className="modalTitle">Editar récords</div>
                 <button className="iconBtn" onClick={() => setRecordsModal(null)} aria-label="Cerrar">
                   ✕
                 </button>
@@ -1313,12 +1354,24 @@ export default function Rooms() {
                 <div className="formGrid2">
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Récord 1 (MM:SS)</span>
-                    <input className="input" value={recordsModal.record1} onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))} placeholder="12:34" inputMode="numeric" />
+                    <input
+                      className="input"
+                      value={recordsModal.record1}
+                      onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))}
+                      placeholder="12:34"
+                      inputMode="numeric"
+                    />
                   </label>
 
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Récord 2 (MM:SS)</span>
-                    <input className="input" value={recordsModal.record2} onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))} placeholder="14:10" inputMode="numeric" />
+                    <input
+                      className="input"
+                      value={recordsModal.record2}
+                      onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))}
+                      placeholder="14:10"
+                      inputMode="numeric"
+                    />
                   </label>
 
                   <div style={{ gridColumn: "1 / -1", opacity: 0.75, fontSize: 12 }}>
