@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase";
 
 /** ✅ mismas sucursales que Rooms */
@@ -132,6 +133,104 @@ function EyeClosedIcon() {
         strokeWidth="1.5"
         strokeLinecap="round"
       />
+    </svg>
+  );
+}
+
+/* =========================
+   SVG ICONS (sin emojis)
+========================= */
+
+function Icon({
+  name,
+  size = 16,
+  style,
+}: {
+  name: "dots" | "key" | "shield" | "refresh" | "trash";
+  size?: number;
+  style?: React.CSSProperties;
+}) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+    style,
+  } as any;
+
+  if (name === "dots") {
+    return (
+      <svg {...common}>
+        <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+        <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+        <circle cx="19" cy="12" r="1.8" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (name === "key") {
+    return (
+      <svg {...common}>
+        <path
+          d="M7.5 14.5a4.5 4.5 0 1 1 3.9-2.3L22 12v3h-2v2h-2v2h-3.5l-2.1-2.1"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        <circle cx="6.5" cy="14.5" r="1" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (name === "shield") {
+    return (
+      <svg {...common}>
+        <path
+          d="M12 2 20 6v6c0 5-3.4 9.4-8 10-4.6-.6-8-5-8-10V6l8-4Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9.5 12.5 11.2 14.2 14.8 10.6"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "refresh") {
+    return (
+      <svg {...common}>
+        <path
+          d="M20 12a8 8 0 1 1-2.3-5.6"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+        <path
+          d="M20 4v6h-6"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  // trash
+  return (
+    <svg {...common}>
+      <path d="M4 7h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M6 7l1 14h10l1-14" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M9 7V4h6v3" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -391,8 +490,6 @@ export default function Users() {
   const [roleFilter, setRoleFilter] = useState<UserRole | "">("");
   const [branchFilter, setBranchFilter] = useState<Branch | "">("");
 
-  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createInitial, setCreateInitial] = useState<User | null>(null);
 
@@ -406,6 +503,11 @@ export default function Users() {
   const [showResetPass2, setShowResetPass2] = useState(false);
 
   const [busy, setBusy] = useState(false);
+
+  // ✅ menú ⋯ (anclado al botón, portal a body) — igual a Notificaciones
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const menuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     document.body.classList.add("users-fullwidth");
@@ -522,18 +624,62 @@ export default function Users() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ✅ menú: calcular posición igual a Notificaciones
+  const computeMenuPosFromAnchor = () => {
+    const btn = menuAnchorRef.current;
+    if (!btn) return null;
+
+    const r = btn.getBoundingClientRect();
+    const top = r.top + window.scrollY;
+    const left = r.right + window.scrollX;
+
+    const MENU_W = 260;
+    const gap = 10;
+
+    let x = left + gap;
+    const maxX = window.scrollX + window.innerWidth - 12 - MENU_W;
+    if (x > maxX) x = r.left + window.scrollX - gap - MENU_W;
+
+    let y = top - 6;
+    const maxY = window.scrollY + window.innerHeight - 12 - 260;
+    if (y > maxY) y = maxY;
+
+    const minY = window.scrollY + 12;
+    if (y < minY) y = minY;
+
+    return { top: y, left: x };
+  };
+
+  const openMenuFor = (id: string, btn: HTMLButtonElement) => {
+    menuAnchorRef.current = btn;
+    setMenuOpenId(id);
+    const pos = computeMenuPosFromAnchor();
+    setMenuPos(pos);
+  };
+
+  const closeMenu = () => {
+    setMenuOpenId(null);
+    setMenuPos(null);
+    menuAnchorRef.current = null;
+  };
+
+  // ✅ cerrar menú click afuera / ESC + recalcular pos en scroll/resize
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (!menuOpenId) return;
       const t = e.target as HTMLElement | null;
       if (!t) return;
-      if (t.closest(".sheetActions")) return;
-      setMenuOpenId(null);
+
+      const insideBtn = t.closest?.('[data-menu-btn="1"]');
+      const insidePopup = t.closest?.('[data-menu-popup="1"]');
+      if (insideBtn || insidePopup) return;
+
+      closeMenu();
     };
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setMenuOpenId(null);
+        closeMenu();
         setCreateModalOpen(false);
         setPermModal({ open: false, user: null });
         setResetModal({ open: false, user: null });
@@ -541,12 +687,25 @@ export default function Users() {
       }
     };
 
+    const onScrollResize = () => {
+      if (!menuOpenId) return;
+      const pos = computeMenuPosFromAnchor();
+      if (pos) setMenuPos(pos);
+      else closeMenu();
+    };
+
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScrollResize, true);
+    window.addEventListener("resize", onScrollResize);
+
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScrollResize, true);
+      window.removeEventListener("resize", onScrollResize);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuOpenId]);
 
   const filtered = useMemo(() => {
@@ -620,7 +779,7 @@ export default function Users() {
   // ===== acciones =====
 
   const startCreate = () => {
-    setMenuOpenId(null);
+    closeMenu();
     setCreateInitial(newUserTemplate());
     setCreateModalOpen(true);
   };
@@ -668,7 +827,7 @@ export default function Users() {
   };
 
   const openReset = (u: User) => {
-    setMenuOpenId(null);
+    closeMenu();
     setResetPass1("");
     setResetPass2("");
     setShowResetPass1(false);
@@ -677,7 +836,7 @@ export default function Users() {
   };
 
   const openDelete = (u: User) => {
-    setMenuOpenId(null);
+    closeMenu();
     setDeleteModal({ open: true, user: { ...u } });
   };
 
@@ -764,7 +923,7 @@ export default function Users() {
     if (!canManageUsers) return;
     if (u.role !== "GM" && u.role !== "ADMIN_GENERAL") return;
 
-    setMenuOpenId(null);
+    closeMenu();
     setBusy(true);
     try {
       const { data: row, error: e1 } = await supabase.from("admins").select("gm_code").eq("user_id", u.id).maybeSingle();
@@ -804,6 +963,46 @@ export default function Users() {
 
   const roleLabelOf = (r: UserRole) => (r === "CLIENT" ? "Cliente" : r === "GM" ? "Game Master" : "Admin General");
 
+  // ✅ tabla estilo Notificaciones
+  const GRID_COLS = "140px 140px 160px 260px 170px 170px 140px 64px";
+  const ROW_MIN_H = 42;
+
+  const headerCellBase: React.CSSProperties = {
+    padding: "10px 12px",
+    fontSize: 12,
+    letterSpacing: 0.2,
+    textTransform: "uppercase",
+    fontWeight: 800,
+    opacity: 0.85,
+    borderRight: "1px solid rgba(255,255,255,.08)",
+    userSelect: "none",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+    whiteSpace: "nowrap",
+  };
+
+  const cellBase: React.CSSProperties = {
+    padding: "8px 12px",
+    fontSize: 13,
+    borderRight: "1px solid rgba(255,255,255,.06)",
+    display: "flex",
+    alignItems: "center",
+    minHeight: ROW_MIN_H,
+    minWidth: 0,
+    overflow: "hidden",
+  };
+
+  const rowBase: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: GRID_COLS,
+    gap: 0,
+    alignItems: "stretch",
+    borderBottom: "1px solid rgba(255,255,255,.08)",
+    minHeight: ROW_MIN_H,
+  };
+
   return (
     <div className="page">
       <div className="pageHeadRow" style={{ gap: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -814,7 +1013,7 @@ export default function Users() {
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           {canManageUsers ? (
-            <button className="btnSmall" onClick={startCreate}>
+            <button className="btnSmall" onClick={startCreate} disabled={busy}>
               + Nuevo usuario
             </button>
           ) : null}
@@ -852,100 +1051,268 @@ export default function Users() {
           Cargando usuarios…
         </div>
       ) : (
-        <div className="usersGridScroll">
-          <div className="usersSheet" role="table" aria-label="Usuarios">
-            <div className="usersRow usersHeader" role="row">
-              <div className="usersCell colName" role="columnheader">Nombre</div>
-              <div className="usersCell colLast" role="columnheader">Apellido</div>
-              <div className="usersCell colAlias" role="columnheader">Alias (cliente)</div>
-              <div className="usersCell colMail" role="columnheader">Mail</div>
-              <div className="usersCell colRole" role="columnheader">Rol</div>
-              <div className="usersCell colBranch" role="columnheader">Sucursal (GM)</div>
-              <div className="usersCell colStatus" role="columnheader">Estado</div>
-            </div>
-
-            {filtered.map((u) => {
-              const canShowGmCode = u._isStaff && (u.role === "GM" || u.role === "ADMIN_GENERAL");
-
-              return (
-                <div className={`usersRow ${!u.active ? "isOff" : ""}`} role="row" key={u.id} style={{ position: "relative" }}>
-                  <div className="usersCell colName" role="cell">
-                    <input className="sheetInput" value={u.firstName} disabled />
-                  </div>
-
-                  <div className="usersCell colLast" role="cell">
-                    <input className="sheetInput" value={u.lastName} disabled />
-                  </div>
-
-                  <div className="usersCell colAlias" role="cell">
-                    <input className="sheetInput" value={u.role === "CLIENT" ? u.alias : ""} disabled />
-                  </div>
-
-                  <div className="usersCell colMail" role="cell">
-                    <input className="sheetInput" value={u.email} disabled />
-                  </div>
-
-                  <div className="usersCell colRole" role="cell">
-                    <input className="sheetInput" value={roleLabelOf(u.role)} disabled />
-                  </div>
-
-                  <div className="usersCell colBranch" role="cell">
-                    <input className="sheetInput" value={u.role === "GM" ? u.branch || "" : ""} disabled />
-                  </div>
-
-                  <div className="usersCell colStatus" role="cell">
-                    <button className={u.active ? "ghostBtn sheetBtn" : "btnSmall sheetBtn"} disabled>
-                      {u.active ? "Activo" : "Inactivo"}
-                    </button>
-                  </div>
-
-                  <div className="sheetActions">
-                    <button
-                      className="sheetDots"
-                      onClick={() => setMenuOpenId((cur) => (cur === u.id ? null : u.id))}
-                      aria-label="Opciones"
-                      title="Opciones"
-                      disabled={!canManageUsers}
-                    >
-                      ⋯
-                    </button>
-
-                    {menuOpenId === u.id ? (
-                      <div className="sheetMenu" onMouseDown={(e) => e.stopPropagation()}>
-                        {canShowGmCode ? (
-                          <button className="sheetMenuItem" onClick={() => ensureAndCopyGmCode(u)} disabled={busy}>
-                            Código GM
-                          </button>
-                        ) : null}
-
-                        <button
-                          className="sheetMenuItem"
-                          onClick={() => setPermModal({ open: true, user: { ...u, permissions: { ...u.permissions } } })}
-                          disabled={busy}
-                        >
-                          Permisos
-                        </button>
-
-                        <button className="sheetMenuItem" onClick={() => openReset(u)} disabled={busy}>
-                          Resetear contraseña
-                        </button>
-
-                        <button className="sheetMenuItem danger" onClick={() => openDelete(u)} disabled={busy}>
-                          Eliminar usuario
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
-
-            {!filtered.length ? (
-              <div className="panel" style={{ padding: 16, marginTop: 12 }}>
-                No hay usuarios con ese filtro.
+        <div
+          className="panel"
+          style={{
+            padding: 0,
+            width: "100%",
+            height: "calc(100vh - 260px)",
+            overflow: "auto",
+          }}
+        >
+          {filtered.length === 0 ? (
+            <div style={{ padding: 16, opacity: 0.8 }}>No hay usuarios con ese filtro.</div>
+          ) : (
+            <div style={{ width: "100%" }}>
+              {/* ✅ Header sticky (igual a Notificaciones) */}
+              <div
+                style={{
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 5,
+                  display: "grid",
+                  gridTemplateColumns: GRID_COLS,
+                  gap: 0,
+                  alignItems: "stretch",
+                  background: "rgba(0,0,0,.70)",
+                  backdropFilter: "blur(6px)",
+                  borderBottom: "1px solid rgba(255,255,255,.12)",
+                  borderTop: "1px solid rgba(255,255,255,.08)",
+                }}
+              >
+                <div style={headerCellBase}>Nombre</div>
+                <div style={headerCellBase}>Apellido</div>
+                <div style={headerCellBase}>Alias (cliente)</div>
+                <div style={headerCellBase}>Mail</div>
+                <div style={headerCellBase}>Rol</div>
+                <div style={headerCellBase}>Sucursal (GM)</div>
+                <div style={{ ...headerCellBase, borderRight: "1px solid rgba(255,255,255,.08)" }}>Estado</div>
+                {/* ✅ sin ⋯ en header */}
+                <div style={{ ...headerCellBase, borderRight: "none" }} />
               </div>
-            ) : null}
-          </div>
+
+              {/* ✅ Rows */}
+              {filtered.map((u, idx) => {
+                const isEven = idx % 2 === 0;
+                const canShowGmCode = u._isStaff && (u.role === "GM" || u.role === "ADMIN_GENERAL");
+
+                return (
+                  <div
+                    key={u.id}
+                    style={{
+                      ...rowBase,
+                      background: isEven ? "rgba(255,255,255,.02)" : "rgba(255,255,255,.00)",
+                      opacity: u.active ? 1 : 0.62,
+                      transition: "background .12s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.05)";
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.background = isEven
+                        ? "rgba(255,255,255,.02)"
+                        : "rgba(255,255,255,.00)";
+                    }}
+                  >
+                    <div style={{ ...cellBase, justifyContent: "center", textAlign: "center" }}>
+                      <div
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          fontWeight: 650,
+                        }}
+                        title={u.firstName}
+                      >
+                        {u.firstName}
+                      </div>
+                    </div>
+
+                    <div style={{ ...cellBase, justifyContent: "center" }}>
+                      <div
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                        title={u.lastName}
+                      >
+                        {u.lastName}
+                      </div>
+                    </div>
+
+                    <div style={{ ...cellBase, justifyContent: "center" }}>
+                      <div
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          opacity: u.role === "CLIENT" ? 1 : 0.55,
+                        }}
+                        title={u.role === "CLIENT" ? u.alias : ""}
+                      >
+                        {u.role === "CLIENT" ? u.alias : ""}
+                      </div>
+                    </div>
+
+                    <div style={{ ...cellBase, justifyContent: "center" }}>
+                      <div
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                          fontSize: 12.5,
+                          opacity: 0.95,
+                        }}
+                        title={u.email}
+                      >
+                        {u.email}
+                      </div>
+                    </div>
+
+                    <div style={{ ...cellBase, justifyContent: "center" }}>
+                      <div style={{ width: "100%", textAlign: "center", fontWeight: 700 }}>{roleLabelOf(u.role)}</div>
+                    </div>
+
+                    <div style={{ ...cellBase, justifyContent: "center" }}>
+                      <div style={{ width: "100%", textAlign: "center", opacity: u.role === "GM" ? 1 : 0.55 }}>
+                        {u.role === "GM" ? u.branch || "" : ""}
+                      </div>
+                    </div>
+
+                    <div style={{ ...cellBase, justifyContent: "center", borderRight: "1px solid rgba(255,255,255,.06)" }}>
+                      <button className={u.active ? "ghostBtn" : "btnSmall"} disabled style={{ padding: "6px 10px" }}>
+                        {u.active ? "Activo" : "Inactivo"}
+                      </button>
+                    </div>
+
+                    {/* ✅ ⋯ solo filas, con SVG */}
+                    <div style={{ ...cellBase, borderRight: "none", justifyContent: "flex-end" }}>
+                      <button
+                        type="button"
+                        className="ghostBtn"
+                        data-menu-btn="1"
+                        onClick={(e) => {
+                          if (!canManageUsers || busy) return;
+                          const btn = e.currentTarget as HTMLButtonElement;
+                          if (menuOpenId === u.id) {
+                            closeMenu();
+                            return;
+                          }
+                          openMenuFor(u.id, btn);
+                        }}
+                        disabled={!canManageUsers || busy}
+                        style={{
+                          padding: "6px 10px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          opacity: canManageUsers ? 1 : 0.45,
+                        }}
+                        aria-label="Opciones"
+                        title={canManageUsers ? "Opciones" : "No autorizado"}
+                      >
+                        <Icon name="dots" size={16} />
+                      </button>
+                    </div>
+
+                    {/* ✅ Menú (PORTAL a body) — aparece al lado SIEMPRE */}
+                    {menuOpenId === u.id && menuPos
+                      ? createPortal(
+                          <div
+                            data-menu-popup="1"
+                            style={{
+                              position: "absolute",
+                              left: menuPos.left,
+                              top: menuPos.top,
+                              zIndex: 99999,
+                              width: 260,
+                              borderRadius: 12,
+                              overflow: "hidden",
+                              border: "1px solid rgba(255,255,255,.14)",
+                              background: "rgba(0,0,0,.94)",
+                              boxShadow: "0 12px 34px rgba(0,0,0,.45)",
+                            }}
+                            onMouseDown={(ev) => ev.stopPropagation()}
+                          >
+                            {(() => {
+                              const itemStyle: React.CSSProperties = {
+                                width: "100%",
+                                justifyContent: "flex-start" as any,
+                                borderRadius: 0,
+                                padding: "10px 12px",
+                                display: "flex",
+                                gap: 10,
+                                alignItems: "center",
+                              };
+
+                              const iconStyle: React.CSSProperties = { opacity: 0.92 };
+
+                              return (
+                                <>
+                                  {canShowGmCode ? (
+                                    <button
+                                      className="ghostBtn"
+                                      style={itemStyle}
+                                      onClick={() => ensureAndCopyGmCode(u)}
+                                      disabled={busy}
+                                      title="Copiar Código GM"
+                                    >
+                                      <Icon name="key" size={16} style={iconStyle} />
+                                      Código GM
+                                    </button>
+                                  ) : null}
+
+                                  <button
+                                    className="ghostBtn"
+                                    style={itemStyle}
+                                    onClick={() => {
+                                      closeMenu();
+                                      setPermModal({ open: true, user: { ...u, permissions: { ...u.permissions } } });
+                                    }}
+                                    disabled={busy}
+                                  >
+                                    <Icon name="shield" size={16} style={iconStyle} />
+                                    Permisos
+                                  </button>
+
+                                  <button className="ghostBtn" style={itemStyle} onClick={() => openReset(u)} disabled={busy}>
+                                    <Icon name="refresh" size={16} style={iconStyle} />
+                                    Resetear contraseña
+                                  </button>
+
+                                  <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
+
+                                  <button
+                                    className="dangerBtnInline"
+                                    style={{ ...itemStyle, textAlign: "left" }}
+                                    onClick={() => openDelete(u)}
+                                    disabled={busy}
+                                  >
+                                    <Icon name="trash" size={16} style={{ opacity: 0.95 }} />
+                                    Eliminar usuario
+                                  </button>
+                                </>
+                              );
+                            })()}
+                          </div>,
+                          document.body
+                        )
+                      : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

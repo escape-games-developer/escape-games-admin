@@ -7,6 +7,7 @@ import Login from ".././pages/Login";
 import Rooms from ".././pages/Rooms";
 import News from ".././pages/News";
 import Users from ".././pages/Users";
+import Notifications from ".././pages/Notifications"; // ✅ NUEVO
 
 type UserRole = "CLIENT" | "GM" | "ADMIN" | "ADMIN_GENERAL";
 
@@ -35,7 +36,10 @@ function getPerms(): Partial<UserPermissions> {
 }
 
 function isSuper(): boolean {
-  return localStorage.getItem("eg_admin_is_super") === "true" || getRole() === "ADMIN_GENERAL";
+  return (
+    localStorage.getItem("eg_admin_is_super") === "true" ||
+    getRole() === "ADMIN_GENERAL"
+  );
 }
 
 /** ✅ Guard por rol */
@@ -111,6 +115,16 @@ export default function AppRoutes() {
             <RequirePerm permKey="canManageUsers">
               <Users />
             </RequirePerm>
+          }
+        />
+
+        {/* ✅ NUEVO: Notificaciones (SOLO ADMIN_GENERAL) */}
+        <Route
+          path="/notificaciones"
+          element={
+            <RequireRole allow={["ADMIN_GENERAL"]}>
+              <Notifications />
+            </RequireRole>
           }
         />
       </Route>

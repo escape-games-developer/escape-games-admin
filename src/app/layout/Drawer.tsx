@@ -208,6 +208,9 @@ export default function Drawer({ open, onClose, userName }: Props) {
   const canSeeNews = effectivePerms.canManageNews;
   const canSeeUsers = effectivePerms.canManageUsers;
 
+  // ✅ NUEVO: Notificaciones SOLO ADMIN_GENERAL
+  const canSeeNotifications = isSuper;
+
   const logout = async () => {
     try {
       localStorage.removeItem("admin_demo_session");
@@ -300,6 +303,17 @@ export default function Drawer({ open, onClose, userName }: Props) {
                 className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
               >
                 Usuarios
+              </NavLink>
+            ) : null}
+
+            {/* ✅ NUEVO: SOLO ADMIN_GENERAL */}
+            {canSeeNotifications ? (
+              <NavLink
+                to="/notificaciones"
+                onClick={onClose}
+                className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
+              >
+                Notificaciones
               </NavLink>
             ) : null}
           </nav>

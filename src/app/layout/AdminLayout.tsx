@@ -66,7 +66,8 @@ export default function AdminLayout() {
 
   // ✅ FULL WIDTH solo en ciertas páginas
   useEffect(() => {
-    const widePaths = ["/salas", "/novedades", "/usuarios"];
+    // ✅ agregado /notificaciones
+    const widePaths = ["/salas", "/novedades", "/usuarios", "/notificaciones"];
     const isWide = widePaths.includes(loc.pathname);
 
     const cls = "adminWide";
@@ -83,7 +84,11 @@ export default function AdminLayout() {
   return (
     <div className="shell">
       <Header onOpenMenu={() => setDrawerOpen(true)} />
-      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} userName={admin.userName} />
+      <Drawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        userName={admin.userName}
+      />
       <main className="main">
         <div className="content">
           <Outlet />
