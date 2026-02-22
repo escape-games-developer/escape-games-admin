@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase";
 import { QRCodeCanvas } from "qrcode.react";
 
@@ -118,17 +119,6 @@ const LEVEL_LABEL: Record<RoomLevel, string> = {
   INTERMEDIO: "Intermedio",
   AVANZADO: "Avanzado",
 };
-
-function Dots({ total, value }: { total: number; value: number }) {
-  const v = clamp(value, 0, total);
-  return (
-    <div className="dots">
-      {Array.from({ length: total }).map((_, i) => (
-        <span key={i} className={i < v ? "dot on" : "dot"} />
-      ))}
-    </div>
-  );
-}
 
 function fromDb(row: any): Room {
   const qr = String(row.qr_code || "").trim();
@@ -332,13 +322,6 @@ function saveBombCard(next: BombCardState) {
 
 /* =========================
    CROP POPUP (SALAS) - CURSOR ONLY ✅
-   - 2do popup al elegir imagen
-   - Ajuste con mouse:
-     * Arrastrar dentro = mover
-     * Arrastrar esquinas/bordes = resize
-     * Ruedita = zoom del recorte
-     * Doble click = máximo (imagen completa)
-     * SHIFT = mantener ratio de card (opcional)
 ========================= */
 
 const ROOM_CARD_ASPECT = 900 / 520;
@@ -389,34 +372,124 @@ function zoomRect(r: CropRect, nat: NatImg, factor: number, minSize = 80): CropR
   return clampRectToImage(next, nat, minSize);
 }
 
-function applyAspectFromAnchor(
-  rect: CropRect,
-  nat: NatImg,
-  handle: Handle,
-  aspect: number,
-  minSize = 80
-): CropRect {
-  // Ajusta h = w / aspect manteniendo el lado “dominante” del handle.
+function applyAspectFromAnchor(rect: CropRect, nat: NatImg, handle: Handle, aspect: number, minSize = 80): CropRect {
   let r = { ...rect };
-
-  // elegimos controlar por ancho si el handle toca lados E/W, sino por alto
   const controlsW = handle.includes("e") || handle.includes("w");
-  if (controlsW) {
-    r.h = r.w / aspect;
-  } else {
-    r.w = r.h * aspect;
-  }
+  if (controlsW) r.h = r.w / aspect;
+  else r.w = r.h * aspect;
 
-  // re-anclar según handle
-  // Si el handle está en el norte, y cambia h, movemos y para que el borde superior quede fijo
-  if (handle.includes("n")) {
-    r.y = r.y + (rect.h - r.h);
-  }
-  if (handle.includes("w")) {
-    r.x = r.x + (rect.w - r.w);
-  }
+  if (handle.includes("n")) r.y = r.y + (rect.h - r.h);
+  if (handle.includes("w")) r.x = r.x + (rect.w - r.w);
 
   return clampRectToImage(r, nat, minSize);
+}
+
+/* =======================
+   ICONOS SVG (tabla / menú)
+======================= */
+
+function Icon({
+  name,
+  size = 16,
+  style,
+}: {
+  name: "dots" | "edit" | "eye" | "toggle" | "trash" | "qr" | "records" | "link";
+  size?: number;
+  style?: React.CSSProperties;
+}) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+    style,
+  } as any;
+
+  if (name === "dots") {
+    return (
+      <svg {...common}>
+        <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+        <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+        <circle cx="19" cy="12" r="1.8" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (name === "edit") {
+    return (
+      <svg {...common}>
+        <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path
+          d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "eye") {
+    return (
+      <svg {...common}>
+        <path d="M1.5 12s4-7.5 10.5-7.5S22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12Z" stroke="currentColor" strokeWidth="2" />
+        <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    );
+  }
+
+  if (name === "toggle") {
+    return (
+      <svg {...common}>
+        <path d="M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        <circle cx="10" cy="12" r="3" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (name === "qr") {
+    return (
+      <svg {...common}>
+        <path d="M4 4h6v6H4V4Z" stroke="currentColor" strokeWidth="2" />
+        <path d="M14 4h6v6h-6V4Z" stroke="currentColor" strokeWidth="2" />
+        <path d="M4 14h6v6H4v-6Z" stroke="currentColor" strokeWidth="2" />
+        <path d="M14 14h2v2h-2v-2Z" fill="currentColor" />
+        <path d="M18 14h2v2h-2v-2Z" fill="currentColor" />
+        <path d="M14 18h2v2h-2v-2Z" fill="currentColor" />
+        <path d="M18 18h2v2h-2v-2Z" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (name === "records") {
+    return (
+      <svg {...common}>
+        <path d="M6 20V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M12 20V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M18 20v-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (name === "link") {
+    return (
+      <svg {...common}>
+        <path d="M10.5 13.5 13.5 10.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M8 14a4 4 0 0 1 0-6l1.5-1.5a4 4 0 0 1 6 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M16 10a4 4 0 0 1 0 6L14.5 17.5a4 4 0 0 1-6 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...common}>
+      <path d="M4 7h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M6 7l1 14h10l1-14" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M9 7V4h6v3" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 export default function Rooms() {
@@ -466,6 +539,12 @@ export default function Rooms() {
     record2: string;
   } | null>(null);
 
+  const [qrModal, setQrModal] = useState<{
+    title: string;
+    value: string;
+    canvasId: string;
+  } | null>(null);
+
   const [me, setMe] = useState<MyAuth>({
     isAuthed: false,
     isSuper: false,
@@ -485,13 +564,14 @@ export default function Rooms() {
 
   const dragModeRef = useRef<DragMode>(null);
   const dragHandleRef = useRef<Handle | null>(null);
-  const dragStartRef2 = useRef<{
-    px: number;
-    py: number;
-    rect: CropRect;
-  } | null>(null);
+  const dragStartRef2 = useRef<{ px: number; py: number; rect: CropRect } | null>(null);
 
   const cursorRef = useRef<string>("default");
+
+  // ✅ menú ⋯ por fila (portal a body)
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const menuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
 
   const selectedThemes = normalizeThemes(editing?.tags || []);
   const atThemesLimit = selectedThemes.length >= 4;
@@ -501,6 +581,80 @@ export default function Rooms() {
   const canEditRankings = me.isSuper || me.perms.canEditRankings;
 
   const myBranchName = me.branchId ? branchesById.get(me.branchId) || "" : "";
+
+  const badge = (txt: string, kind: "type" | "on" | "off" | "hot" = "type") => {
+    const bg =
+      kind === "hot"
+        ? "rgba(255,165,0,0.18)"
+        : kind === "on"
+        ? "rgba(0,255,242,0.12)"
+        : kind === "off"
+        ? "rgba(255,0,0,0.16)"
+        : "rgba(255,255,255,0.10)";
+    const br =
+      kind === "on"
+        ? "1px solid rgba(0,255,242,0.28)"
+        : kind === "off"
+        ? "1px solid rgba(255,0,0,0.22)"
+        : "1px solid rgba(255,255,255,0.10)";
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "6px 10px",
+          borderRadius: 999,
+          background: bg,
+          border: br,
+          fontSize: 11,
+          fontWeight: 900,
+          color: "#fff",
+          lineHeight: 1,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {txt}
+      </span>
+    );
+  };
+
+  const computeMenuPosFromAnchor = () => {
+    const btn = menuAnchorRef.current;
+    if (!btn) return null;
+
+    const r = btn.getBoundingClientRect();
+    const top = r.top + window.scrollY;
+    const left = r.right + window.scrollX;
+
+    const MENU_W = 270;
+    const gap = 10;
+
+    let x = left + gap;
+    const maxX = window.scrollX + window.innerWidth - 12 - MENU_W;
+    if (x > maxX) x = r.left + window.scrollX - gap - MENU_W;
+
+    let y = top - 6;
+    const maxY = window.scrollY + window.innerHeight - 12 - 300;
+    if (y > maxY) y = maxY;
+
+    const minY = window.scrollY + 12;
+    if (y < minY) y = minY;
+
+    return { top: y, left: x };
+  };
+
+  const openMenuFor = (id: string, btn: HTMLButtonElement) => {
+    menuAnchorRef.current = btn;
+    setMenuOpenId(id);
+    setMenuPos(computeMenuPosFromAnchor());
+  };
+
+  const closeMenu = () => {
+    setMenuOpenId(null);
+    setMenuPos(null);
+    menuAnchorRef.current = null;
+  };
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -516,6 +670,8 @@ export default function Rooms() {
       setBombEditing(false);
       setDescModal(null);
       setRecordsModal(null);
+      setQrModal(null);
+      closeMenu();
       if (cropModal?.open) closeCropModal();
     };
 
@@ -619,25 +775,6 @@ export default function Rooms() {
     };
   }, []);
 
-  const toggleTheme = (t: string) => {
-    if (!editing) return;
-    const current = normalizeThemes(editing.tags || []);
-    const has = current.includes(t);
-
-    let next = current;
-    if (has) next = current.filter((x) => x !== t);
-    else {
-      if (current.length >= 4) return;
-      next = [...current, t];
-    }
-    setEditing({ ...editing, tags: next });
-  };
-
-  const clearThemes = () => {
-    if (!editing) return;
-    setEditing({ ...editing, tags: [] });
-  };
-
   useEffect(() => {
     if (!me.ready) return;
 
@@ -682,22 +819,77 @@ export default function Rooms() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me.ready, me.isBranchScoped, me.branchId]);
 
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!menuOpenId) return;
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+
+      const insideBtn = t.closest?.('[data-menu-btn="1"]');
+      const insidePopup = t.closest?.('[data-menu-popup="1"]');
+      if (insideBtn || insidePopup) return;
+
+      closeMenu();
+    };
+
+    const onScrollResize = () => {
+      if (!menuOpenId) return;
+      const pos = computeMenuPosFromAnchor();
+      if (pos) setMenuPos(pos);
+      else closeMenu();
+    };
+
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("scroll", onScrollResize, true);
+    window.addEventListener("resize", onScrollResize);
+
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("scroll", onScrollResize, true);
+      window.removeEventListener("resize", onScrollResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuOpenId]);
+
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
 
     return items.filter((r) => {
-      const okSearch = !s ? true : r.name.toLowerCase().includes(s);
-      const okBranch = !branchFilter ? true : r.branch === branchFilter;
+      const name = String(r.name || "").toLowerCase();
+      const branchName = String(r.branch || (r.branch_id ? branchesById.get(r.branch_id) || "" : "")).toLowerCase();
+
+      const okSearch = !s ? true : name.includes(s) || branchName.includes(s);
+      const okBranch = !branchFilter ? true : (r.branch || "") === branchFilter;
       const okScoped = me.isBranchScoped && me.branchId ? r.branch_id === me.branchId : true;
       return okSearch && okBranch && okScoped;
     });
-  }, [items, q, branchFilter, me.isBranchScoped, me.branchId]);
+  }, [items, q, branchFilter, me.isBranchScoped, me.branchId, branchesById]);
+
+  const toggleTheme = (t: string) => {
+    if (!editing) return;
+    const current = normalizeThemes(editing.tags || []);
+    const has = current.includes(t);
+
+    let next = current;
+    if (has) next = current.filter((x) => x !== t);
+    else {
+      if (current.length >= 4) return;
+      next = [...current, t];
+    }
+    setEditing({ ...editing, tags: next });
+  };
+
+  const clearThemes = () => {
+    if (!editing) return;
+    setEditing({ ...editing, tags: [] });
+  };
 
   const closeModal = () => {
     setOpen(false);
     setEditing(null);
     setEditingPhotoFile(null);
     setThemesOpen(false);
+    closeMenu();
     if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
     setTempPreviewUrl(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -778,7 +970,12 @@ export default function Rooms() {
     try {
       const payload = { record1: r1, record2: r2, updated_at: new Date().toISOString() };
 
-      const { data, error } = await supabase.from("rooms_v2").update(payload).eq("id", recordsModal.roomId).select("*").single();
+      const { data, error } = await supabase
+        .from("rooms_v2")
+        .update(payload)
+        .eq("id", recordsModal.roomId)
+        .select("*")
+        .single();
       if (error) throw error;
 
       const saved = fromDb(data);
@@ -832,7 +1029,6 @@ export default function Rooms() {
       const nat = { w: img.naturalWidth || 1, h: img.naturalHeight || 1 };
       setNatImg(nat);
 
-      // Arranque: recorte grande y centrado (80% del menor lado)
       const margin = 0.1;
       const init: CropRect = {
         x: nat.w * margin,
@@ -841,7 +1037,6 @@ export default function Rooms() {
         h: nat.h * (1 - margin * 2),
       };
 
-      // Si apretás SHIFT mientras redimensionás, mantiene ratio card.
       setCropRect(clampRectToImage(init, nat, 80));
     };
     img.onerror = () => {
@@ -983,7 +1178,7 @@ export default function Rooms() {
     const sr = natToScreenRect(cropRect);
     if (!sr) return { handle: null, inside: false };
 
-    const pad = 10; // px para agarrar borde/esquina
+    const pad = 10;
     const x1 = sr.left;
     const y1 = sr.top;
     const x2 = sr.left + sr.width;
@@ -996,13 +1191,11 @@ export default function Rooms() {
 
     const inside = mx >= x1 && mx <= x2 && my >= y1 && my <= y2;
 
-    // esquinas primero
     if (nearL && nearT) return { handle: "nw", inside };
     if (nearR && nearT) return { handle: "ne", inside };
     if (nearL && nearB) return { handle: "sw", inside };
     if (nearR && nearB) return { handle: "se", inside };
 
-    // bordes
     if (nearT && inside) return { handle: "n", inside };
     if (nearB && inside) return { handle: "s", inside };
     if (nearL && inside) return { handle: "w", inside };
@@ -1060,7 +1253,6 @@ export default function Rooms() {
       dragModeRef.current = "move";
       dragHandleRef.current = null;
     } else {
-      // click afuera: recentrar el rect al click (práctico)
       const p = screenToNatPoint(mx, my);
       if (p) {
         const { w, h } = cropRect;
@@ -1092,7 +1284,6 @@ export default function Rooms() {
     const mx = e.clientX - r.left;
     const my = e.clientY - r.top;
 
-    // si estamos dragueando
     if (dragModeRef.current && dragStartRef2.current) {
       const start = dragStartRef2.current;
       const dx = mx - start.px;
@@ -1115,7 +1306,6 @@ export default function Rooms() {
         return;
       }
 
-      // resize
       const h = dragHandleRef.current;
       if (!h) return;
 
@@ -1133,19 +1323,14 @@ export default function Rooms() {
         next.h = start.rect.h - ndy;
       }
 
-      // clamp preliminar
       next = clampRectToImage(next, natImg, 80);
 
-      // SHIFT = ratio card (opcional)
-      if (e.shiftKey) {
-        next = applyAspectFromAnchor(next, natImg, h, ROOM_CARD_ASPECT, 80);
-      }
+      if (e.shiftKey) next = applyAspectFromAnchor(next, natImg, h, ROOM_CARD_ASPECT, 80);
 
       setCropRect(next);
       return;
     }
 
-    // no dragging: solo cambiar cursor
     const hit = hitTestHandle(mx, my);
     const cursor = cursorForHandle(hit.handle, hit.inside);
     if (cursorRef.current !== cursor) {
@@ -1165,19 +1350,14 @@ export default function Rooms() {
 
   const onCropWheel: React.WheelEventHandler<HTMLDivElement> = (e) => {
     if (!natImg || !cropRect) return;
-
     e.preventDefault();
-
-    // zoom del recorte (no de la imagen)
     const dir = e.deltaY > 0 ? 1 : -1;
-    const factor = dir > 0 ? 1.06 : 0.94; // suave
-
+    const factor = dir > 0 ? 1.06 : 0.94;
     const next = zoomRect(cropRect, natImg, factor, 80);
     setCropRect(next);
   };
 
   const onCropDoubleClick: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    // doble click = máximo (imagen completa)
     e.preventDefault();
     applyMaxCrop();
   };
@@ -1206,11 +1386,7 @@ export default function Rooms() {
       ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
 
       const blob: Blob = await new Promise((resolve, reject) => {
-        canvas.toBlob(
-          (b) => (b ? resolve(b) : reject(new Error("No pude exportar el recorte."))),
-          "image/jpeg",
-          0.9
-        );
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("No pude exportar el recorte."))), "image/jpeg", 0.9);
       });
 
       const croppedFile = new File([blob], toJpegName(cropModal.originalFile.name), { type: "image/jpeg" });
@@ -1392,17 +1568,91 @@ export default function Rooms() {
     const sr = natToScreenRect(cropRect);
     if (!sr) return null;
 
-    return {
-      left: sr.left,
-      top: sr.top,
-      width: sr.width,
-      height: sr.height,
-    } as React.CSSProperties;
+    return { left: sr.left, top: sr.top, width: sr.width, height: sr.height } as React.CSSProperties;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [natImg, cropRect, cropModal?.open]);
 
-  return (
-    <div className="page">
+  // ✅ estilos tabla tipo Excel (igual línea visual que Novedades)
+  const tableWrapStyle: React.CSSProperties = {
+  borderRadius: 16,
+  overflow: "hidden",
+  border: "1px solid rgba(255,255,255,.12)",
+  background: "rgba(0,0,0,.25)",
+  flex: 1,
+  minHeight: 0, // CLAVE para que el scroller estire bien
+  display: "flex",
+  flexDirection: "column",
+};  
+
+  // ✅ FULL SCREEN: el scroller ocupa TODO el espacio disponible (sin dejar “hueco abajo”)
+  const scrollerStyle: React.CSSProperties = {
+    width: "100%",
+    overflow: "auto",
+    flex: 1,
+    minHeight: 0,
+    maxHeight: "none",
+  };
+
+  const tableStyle: React.CSSProperties = {
+    width: "100%",
+    borderCollapse: "separate",
+    borderSpacing: 0,
+    tableLayout: "fixed",
+    minWidth: 1120,
+  };
+
+  const thStyle: React.CSSProperties = {
+    position: "sticky" as any,
+    top: 0,
+    zIndex: 5,
+    background: "rgba(10,10,10,.92)",
+    backdropFilter: "blur(6px)",
+    borderBottom: "1px solid rgba(255,255,255,.12)",
+    padding: "12px 10px",
+    fontSize: 13,
+    fontWeight: 900,
+    textAlign: "left" as any,
+    letterSpacing: 0.3,
+    color: "rgba(255,255,255,.92)",
+  };
+
+  const tdBase: React.CSSProperties = {
+    borderBottom: "1px solid rgba(255,255,255,.08)",
+    padding: "10px 10px",
+    verticalAlign: "top",
+    fontSize: 12,
+    color: "rgba(255,255,255,.85)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
+
+  // ✅ BOMB dentro del “excel” y fijo como primera fila
+  const bombRowWrapStyle: React.CSSProperties = {
+    position: "sticky",
+    top: 46, // debajo del header sticky (aprox)
+    zIndex: 4,
+    background: "rgba(0,0,0,.92)",
+    backdropFilter: "blur(8px)",
+    boxShadow: "0 10px 28px rgba(0,0,0,.35)",
+    borderBottom: "1px solid rgba(255,255,255,.10)",
+  };
+
+  const openQr = (title: string, value: string) => {
+    const canvasId = `qr_modal_canvas_${crypto.randomUUID()}`;
+    setQrModal({ title, value, canvasId });
+  };
+
+ return (
+  <div
+    className="page"
+    style={{
+      height: "100vh",
+      minHeight: "100vh",
+      display: "flex",
+      flexDirection: "column",
+    }}
+  >
       <div className="pageHeadRow" style={{ gap: 12 }}>
         <div>
           <div className="pageTitle">Salas</div>
@@ -1415,11 +1665,11 @@ export default function Rooms() {
         ) : null}
       </div>
 
-      <div className="toolbarRow" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre…" style={{ flex: 1 }} />
+      <div className="toolbarRow" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por nombre o sucursal…" style={{ flex: 1, minWidth: 240 }} />
 
         {!me.isBranchScoped ? (
-          <select className="input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={{ width: 220 }}>
+          <select className="input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)} style={{ width: 240 }}>
             <option value="">Todas las sucursales</option>
             {branches.map((b) => (
               <option key={b.id} value={b.name}>
@@ -1428,236 +1678,388 @@ export default function Rooms() {
             ))}
           </select>
         ) : (
-          <div className="input" style={{ width: 220, opacity: 0.85, display: "flex", alignItems: "center" }}>
+          <div className="input" style={{ width: 240, opacity: 0.85, display: "flex", alignItems: "center" }}>
             {myBranchName ? `Sucursal: ${myBranchName}` : "Sucursal: sin asignar"}
           </div>
         )}
       </div>
 
-      {loading ? (
-        <div className="panel" style={{ padding: 16 }}>
-          Cargando salas…
-        </div>
-      ) : (
-        <div className="roomsScroll">
-          <div className="roomsGrid" style={{ alignItems: "start", gridAutoRows: "max-content" }}>
-            {/* BOMB */}
-            <div className="roomCard" style={{ height: "fit-content", alignSelf: "start", minHeight: 0 }}>
-              <div className="roomImgWrap" style={{ position: "relative" }}>
-                <img
-                  src={bomb.imageUrl || "https://picsum.photos/seed/bombticket/900/520"}
-                  alt={bomb.title}
-                  style={{ objectFit: "cover", width: "100%", height: "100%" }}
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/bombticket/900/520";
-                  }}
-                />
-                <div className="roomBadge">Beneficio</div>
-              </div>
+      {/* ✅ “Excel” full screen */}
+      <div style={{ ...tableWrapStyle, marginTop: 12 }}>
+        <div style={scrollerStyle}>
+          <table style={tableStyle}>
+            <thead>
+              <tr>
+                <th style={{ ...thStyle, width: 74 }}>Imagen</th>
+                <th style={{ ...thStyle, width: 270 }}>Nombre</th>
+                <th style={{ ...thStyle, width: 170 }}>Sucursal</th>
+                <th style={{ ...thStyle, width: 160 }}>Categoría</th>
+                <th style={{ ...thStyle, width: 140 }}>Nivel</th>
+                <th style={{ ...thStyle, width: 130 }}>Jugadores</th>
+                <th style={{ ...thStyle, width: 120 }}>Dificultad</th>
+                <th style={{ ...thStyle, width: 120 }}>Récords</th>
+                <th style={{ ...thStyle, width: 120 }}>Puntos</th>
+                <th style={{ ...thStyle, width: 110 }}>Estado</th>
+                <th style={{ ...thStyle, width: 70, textAlign: "center" }}>⋯</th>
+              </tr>
+            </thead>
 
-              <div className="roomBody" style={{ display: "flex", flexDirection: "column", height: "auto", flex: "0 0 auto" }}>
-                <div className="roomTitle">{bomb.title}</div>
-
-                {bomb.description ? (
-                  <div
-                    className="descClamp2"
-                    style={{ opacity: 0.82, fontSize: 12, marginBottom: 10, lineHeight: 1.3 }}
-                    title="Click para ver completa"
-                    onClick={() => setDescModal({ title: bomb.title, text: bomb.description })}
-                  >
-                    {bomb.description}
-                  </div>
-                ) : null}
-
-                <div className="qrBlock">
-                  <div className="qrBox">
-                    <QRCodeCanvas id={BOMB_CANVAS_ID} value={BOMB_TICKET_QR} size={130} includeMargin bgColor="#ffffff" fgColor="#000000" />
-                  </div>
-
-                  <div className="qrActions">
-                    <button className="ghostBtn" onClick={() => copy(BOMB_TICKET_QR)}>
-                      Copiar
-                    </button>
-
-                    <button className="ghostBtn" onClick={() => downloadPngFromCanvas(BOMB_CANVAS_ID, `bomb-ticket-${Date.now()}.png`)} title="Descargar PNG">
-                      PNG
-                    </button>
-
-                    <button className="ghostBtn" onClick={() => printPngFromCanvas(BOMB_CANVAS_ID, bomb.title)} title="Imprimir">
-                      Imprimir
-                    </button>
-                  </div>
-                </div>
-
-                <div className="roomActions">
-                  {canEditBomb ? (
-                    <button className="ghostBtn" onClick={() => setBombEditing(true)}>
-                      Editar
-                    </button>
-                  ) : null}
-                </div>
-
-                {bombEditing && canEditBomb ? (
-                  <>
-                    <div className="backdrop show" onMouseDown={() => setBombEditing(false)} />
-                    <div className="modalCenter" onMouseDown={() => setBombEditing(false)}>
-                      <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
-                        <div className="modalHead">
-                          <div className="modalTitle">Editar Bomb Ticket</div>
-                          <button className="iconBtn" onClick={() => setBombEditing(false)} aria-label="Cerrar">
-                            ✕
-                          </button>
-                        </div>
-
-                        <div className="modalBody">
-                          <input ref={bombFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onBombFileChange} />
-
-                          <div className="formGrid2">
-                            <label className="field" style={{ gridColumn: "1 / -1" }}>
-                              <span className="label">Título</span>
-                              <input className="input" value={bomb.title} onChange={(e) => setBomb((p) => ({ ...p, title: e.target.value }))} />
-                            </label>
-
-                            <label className="field" style={{ gridColumn: "1 / -1" }}>
-                              <span className="label">Descripción</span>
-                              <textarea className="input" rows={3} value={bomb.description} onChange={(e) => setBomb((p) => ({ ...p, description: e.target.value }))} style={{ resize: "vertical" }} />
-                            </label>
-
-                            <div className="field" style={{ gridColumn: "1 / -1" }}>
-                              <span className="label">Imagen</span>
-                              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                                <button type="button" className="btnSmall" onClick={onBombPickImage}>
-                                  Elegir imagen…
-                                </button>
-                                {bomb.imageUrl ? (
-                                  <button type="button" className="ghostBtn" onClick={() => setBomb((p) => ({ ...p, imageUrl: "" }))}>
-                                    Quitar
-                                  </button>
-                                ) : (
-                                  <span style={{ opacity: 0.8, fontSize: 12 }}>Sin imagen (placeholder)</span>
-                                )}
-                              </div>
+            <tbody>
+              {/* ✅ BOMB: primera fila, fija, dentro del “excel” */}
+              <tr>
+                <td colSpan={11} style={{ ...tdBase, padding: 0, whiteSpace: "normal", overflow: "visible" }}>
+                  <div style={bombRowWrapStyle}>
+                    <div style={{ padding: 14, display: "flex", gap: 14, alignItems: "stretch", flexWrap: "wrap" }}>
+                      <div
+                        style={{
+                          width: 220,
+                          borderRadius: 14,
+                          overflow: "hidden",
+                          border: "1px solid rgba(255,255,255,.12)",
+                          background: "rgba(0,0,0,.25)",
+                        }}
+                      >
+                        <img
+                          src={bomb.imageUrl || "https://picsum.photos/seed/bombticket/900/520"}
+                          alt={bomb.title}
+                          style={{ width: "100%", height: 128, objectFit: "cover", display: "block" }}
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/bombticket/900/520";
+                          }}
+                        />
+                        <div style={{ padding: 10 }}>
+                          <div style={{ fontWeight: 900, fontSize: 13, color: "rgba(255,255,255,.92)" }}>{bomb.title}</div>
+                          {bomb.description ? (
+                            <div
+                              style={{ opacity: 0.8, fontSize: 12, marginTop: 6, lineHeight: 1.35, cursor: "pointer" }}
+                              title="Click para ver completa"
+                              onClick={() => setDescModal({ title: bomb.title, text: bomb.description })}
+                            >
+                              {bomb.description}
                             </div>
-                          </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 320, display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+                        <div
+                          style={{
+                            borderRadius: 14,
+                            overflow: "hidden",
+                            border: "1px solid rgba(255,255,255,.12)",
+                            background: "rgba(255,255,255,.96)",
+                            padding: 10,
+                          }}
+                        >
+                          <QRCodeCanvas id={BOMB_CANVAS_ID} value={BOMB_TICKET_QR} size={130} includeMargin bgColor="#ffffff" fgColor="#000000" />
                         </div>
 
-                        <div className="modalFoot">
-                          <button className="ghostBtn" onClick={() => setBombEditing(false)}>
-                            Listo
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                          <button className="ghostBtn" onClick={() => copy(BOMB_TICKET_QR)}>
+                            Copiar QR
                           </button>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            </div>
-
-            {/* ROOMS */}
-            {filtered.map((r) => {
-              const canvasId = `qr_canvas_room_${r.id}`;
-              const qrValue = String(r.qrCode || "").trim() || makeRoomQr(r.id);
-
-              return (
-                <div key={r.id} className="roomCard" style={{ height: "fit-content", alignSelf: "start", minHeight: 0 }}>
-                  <div className="roomImgWrap">
-                    <img
-                      src={r.photo || "https://picsum.photos/seed/placeholder/900/520"}
-                      alt={r.name}
-                      style={{ objectFit: "cover", objectPosition: `50% ${r.photoPosition}%` }}
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/placeholder/900/520";
-                      }}
-                    />
-                    <div className="roomBadge">{CAT_LABEL[r.category]}</div>
-                    {!r.active && <div className="roomBadge off">INACTIVA</div>}
-                  </div>
-
-                  <div className="roomBody" style={{ display: "flex", flexDirection: "column", height: "auto", flex: "0 0 auto" }}>
-                    <div className="roomTitle">{r.name}</div>
-
-                    <div style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }}>
-                      <b>Sucursal:</b> {r.branch || (r.branch_id ? branchesById.get(r.branch_id) : "")}
-                    </div>
-
-                    {Array.isArray(r.tags) && r.tags.length ? (
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                        {r.tags.slice(0, 4).map((t) => (
-                          <span key={t} className="tagChip">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {r.description ? (
-                      <div className="descClamp2" style={{ opacity: 0.82, fontSize: 12, marginBottom: 8, lineHeight: 1.3 }} title="Click para ver completa" onClick={() => setDescModal({ title: r.name, text: r.description })}>
-                        {r.description}
-                      </div>
-                    ) : null}
-
-                    <div className="roomMeta">
-                      <div className="metaRow">
-                        <span className="metaLabel">Jugadores</span>
-                        <Dots total={6} value={r.playersMax} />
-                        <span className="metaValue">
-                          {r.playersMin}–{r.playersMax}
-                        </span>
-                      </div>
-
-                      <div className="metaRow">
-                        <span className="metaLabel">Dificultad</span>
-                        <Dots total={10} value={r.difficulty} />
-                        <span className="metaValue">{r.difficulty}/10</span>
-                      </div>
-
-                      <div className="metaMini">
-                        <span>✨ Sorpresa {r.surprise}/10</span>
-                        <span>🏆 {r.record1}</span>
-                        <span>🥈 {r.record2}</span>
-                        <span>🎖️ {r.points}/3</span>
-                        <span>📌 {LEVEL_LABEL[r.level]}</span>
-                      </div>
-
-                      <div className="qrBlock">
-                        <div className="qrBox">
-                          <QRCodeCanvas id={canvasId} value={qrValue} size={120} includeMargin bgColor="#ffffff" fgColor="#000000" />
-                        </div>
-
-                        <div className="qrActions">
-                          <button className="ghostBtn" onClick={() => copy(qrValue)} title="Copiar">
-                            Copiar
-                          </button>
-
-                          <button className="ghostBtn" onClick={() => downloadPngFromCanvas(canvasId, `qr-${r.id}.png`)} title="Descargar PNG">
+                          <button className="ghostBtn" onClick={() => downloadPngFromCanvas(BOMB_CANVAS_ID, `bomb-ticket-${Date.now()}.png`)}>
                             PNG
                           </button>
-
-                          <button className="ghostBtn" onClick={() => printPngFromCanvas(canvasId, r.name || "QR Sala")} title="Imprimir">
+                          <button className="ghostBtn" onClick={() => printPngFromCanvas(BOMB_CANVAS_ID, bomb.title)}>
                             Imprimir
                           </button>
+
+                          {canEditBomb ? (
+                            <button className="btnSmall" onClick={() => setBombEditing(true)}>
+                              Editar Bomb Ticket
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     </div>
-
-                    <div className="roomActions">
-                      {!canManageRoomFull && canEditRankings ? <button className="ghostBtn" onClick={() => openRecordsEditor(r)}>Editar récords</button> : null}
-
-                      {canManageRoomFull ? (
-                        <>
-                          <button className="ghostBtn" onClick={() => startEditFull(r)}>Editar</button>
-                          <button className={r.active ? "dangerBtnInline" : "btnSmall"} onClick={() => toggleActive(r.id)}>{r.active ? "Desactivar" : "Activar"}</button>
-                          <button className="dangerBtnInline" onClick={() => deleteRoom(r)}>Borrar</button>
-                        </>
-                      ) : null}
-                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                </td>
+              </tr>
+
+              {loading ? (
+                <tr>
+                  <td style={{ ...tdBase, padding: 16 }} colSpan={11}>
+                    Cargando salas…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td style={{ ...tdBase, padding: 16 }} colSpan={11}>
+                    No hay salas con estos filtros.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((r, idx) => {
+                  const rowBg = idx % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.00)";
+                  const branchName = r.branch || (r.branch_id ? branchesById.get(r.branch_id) || "" : "");
+                  const qrValue = String(r.qrCode || "").trim() || makeRoomQr(r.id);
+
+                  return (
+                    <tr
+                      key={r.id}
+                      style={{ background: rowBg }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLTableRowElement).style.background = "rgba(255,255,255,0.04)";
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLTableRowElement).style.background = rowBg;
+                      }}
+                    >
+                      <td style={{ ...tdBase, padding: 8 }}>
+                        <div style={{ width: 56, height: 38, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,.12)", background: "rgba(0,0,0,.35)" }}>
+                          <img
+                            src={r.photo || "https://picsum.photos/seed/placeholder/900/520"}
+                            alt={r.name}
+                            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `50% ${r.photoPosition}%`, display: "block" }}
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/placeholder/900/520";
+                            }}
+                          />
+                        </div>
+                      </td>
+
+                      <td style={{ ...tdBase }} title={r.name || ""}>
+                        <div style={{ fontWeight: 900, fontSize: 13, color: "rgba(255,255,255,.92)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {r.name || "—"}
+                        </div>
+                        {Array.isArray(r.tags) && r.tags.length ? (
+                          <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            {r.tags.slice(0, 4).map((t) => (
+                              <span
+                                key={t}
+                                style={{
+                                  padding: "4px 8px",
+                                  borderRadius: 999,
+                                  border: "1px solid rgba(255,255,255,.12)",
+                                  background: "rgba(255,255,255,.06)",
+                                  fontSize: 11,
+                                  opacity: 0.92,
+                                }}
+                              >
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                      </td>
+
+                      <td style={{ ...tdBase }} title={branchName}>
+                        {branchName || "—"}
+                      </td>
+
+                      <td style={{ ...tdBase }}>{badge(String(CAT_LABEL[r.category] || r.category).toUpperCase(), r.category === "WOW" ? "hot" : "type")}</td>
+
+                      <td style={{ ...tdBase }}>{badge(String(LEVEL_LABEL[r.level] || r.level).toUpperCase(), "type")}</td>
+
+                      <td style={{ ...tdBase }}>
+                        <span style={{ fontWeight: 900 }}>
+                          {r.playersMin}–{r.playersMax}
+                        </span>
+                      </td>
+
+                      <td style={{ ...tdBase }}>
+                        <span style={{ fontWeight: 900 }}>{r.difficulty}/10</span>
+                        <span style={{ opacity: 0.75 }}> · ✨ {r.surprise}/10</span>
+                      </td>
+
+                      <td style={{ ...tdBase }}>
+                        <span title={`Récord 1: ${r.record1}\nRécord 2: ${r.record2}`}>
+                          🏆 {r.record1} · 🥈 {r.record2}
+                        </span>
+                      </td>
+
+                      <td style={{ ...tdBase }}>
+                        <span style={{ fontWeight: 900 }}>{r.points}/3</span>
+                      </td>
+
+                      <td style={{ ...tdBase }}>{r.active ? badge("ACTIVA", "on") : badge("INACTIVA", "off")}</td>
+
+                      <td style={{ ...tdBase, textAlign: "center", padding: 8 }}>
+                        <button
+                          type="button"
+                          className="ghostBtn"
+                          data-menu-btn="1"
+                          onClick={(e) => {
+                            if (saving) return;
+                            const btn = e.currentTarget as HTMLButtonElement;
+                            if (menuOpenId === r.id) {
+                              closeMenu();
+                              return;
+                            }
+                            openMenuFor(r.id, btn);
+                          }}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: 12,
+                            background: "rgba(0,0,0,0.55)",
+                            border: "1px solid rgba(255,255,255,0.14)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          title="Opciones"
+                          aria-label="Opciones"
+                        >
+                          <Icon name="dots" size={16} />
+                        </button>
+
+                        {menuOpenId === r.id && menuPos
+                          ? createPortal(
+                              <div
+                                data-menu-popup="1"
+                                style={{
+                                  position: "fixed",
+                                  left: menuPos.left,
+                                  top: menuPos.top,
+                                  zIndex: 99999,
+                                  width: 270,
+                                  borderRadius: 12,
+                                  overflow: "hidden",
+                                  border: "1px solid rgba(255,255,255,.14)",
+                                  background: "rgba(0,0,0,.94)",
+                                  boxShadow: "0 12px 34px rgba(0,0,0,.45)",
+                                }}
+                                onMouseDown={(ev) => ev.stopPropagation()}
+                              >
+                                {(() => {
+                                  const itemStyle: React.CSSProperties = {
+                                    width: "100%",
+                                    justifyContent: "flex-start" as any,
+                                    borderRadius: 0,
+                                    padding: "10px 12px",
+                                    display: "flex",
+                                    gap: 10,
+                                    alignItems: "center",
+                                  };
+                                  const iconStyle: React.CSSProperties = { opacity: 0.92 };
+
+                                  const canTouchRoom = !me.isBranchScoped || !me.branchId || r.branch_id === me.branchId;
+
+                                  return (
+                                    <>
+                                      <button
+                                        className="ghostBtn"
+                                        style={itemStyle}
+                                        onClick={() => {
+                                          closeMenu();
+                                          if (!canManageRoomFull) return;
+                                          if (!canTouchRoom) return alert("No podés editar salas de otra sucursal.");
+                                          startEditFull(r);
+                                        }}
+                                        disabled={saving || !canManageRoomFull}
+                                        title={!canManageRoomFull ? "Sin permiso" : undefined}
+                                      >
+                                        <Icon name="edit" size={16} style={iconStyle} />
+                                        Editar
+                                      </button>
+
+                                      <button
+                                        className="ghostBtn"
+                                        style={itemStyle}
+                                        onClick={() => {
+                                          closeMenu();
+                                          if (!r.description) return;
+                                          setDescModal({ title: r.name || "Descripción", text: r.description });
+                                        }}
+                                        disabled={!r.description}
+                                      >
+                                        <Icon name="eye" size={16} style={iconStyle} />
+                                        Ver descripción
+                                      </button>
+
+                                      <button
+                                        className="ghostBtn"
+                                        style={itemStyle}
+                                        onClick={() => {
+                                          closeMenu();
+                                          openQr(r.name || "QR Sala", qrValue);
+                                        }}
+                                      >
+                                        <Icon name="qr" size={16} style={iconStyle} />
+                                        Ver QR (copiar / imprimir)
+                                      </button>
+
+                                      <button
+                                        className="ghostBtn"
+                                        style={itemStyle}
+                                        onClick={() => {
+                                          closeMenu();
+                                          if (!r.reserveUrl) return;
+                                          window.open(r.reserveUrl, "_blank", "noopener,noreferrer");
+                                        }}
+                                        disabled={!r.reserveUrl}
+                                      >
+                                        <Icon name="link" size={16} style={iconStyle} />
+                                        Abrir link reserva
+                                      </button>
+
+                                      <button
+                                        className="ghostBtn"
+                                        style={itemStyle}
+                                        onClick={() => {
+                                          closeMenu();
+                                          if (!canEditRankings) return alert("No tenés permiso para editar récords.");
+                                          if (!canTouchRoom) return alert("No podés editar salas de otra sucursal.");
+                                          openRecordsEditor(r);
+                                        }}
+                                        disabled={!canEditRankings}
+                                        title={!canEditRankings ? "Sin permiso" : undefined}
+                                      >
+                                        <Icon name="records" size={16} style={iconStyle} />
+                                        Editar récords
+                                      </button>
+
+                                      <button
+                                        className="ghostBtn"
+                                        style={itemStyle}
+                                        onClick={() => {
+                                          closeMenu();
+                                          if (!canManageRoomFull) return alert("No tenés permiso.");
+                                          if (!canTouchRoom) return alert("No podés cambiar estado de otra sucursal.");
+                                          toggleActive(r.id);
+                                        }}
+                                        disabled={saving || !canManageRoomFull}
+                                        title={!canManageRoomFull ? "Sin permiso" : undefined}
+                                      >
+                                        <Icon name="toggle" size={16} style={iconStyle} />
+                                        {r.active ? "Desactivar" : "Activar"}
+                                      </button>
+
+                                      <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
+
+                                      <button
+                                        className="dangerBtnInline"
+                                        style={{ ...itemStyle, textAlign: "left" }}
+                                        onClick={() => {
+                                          closeMenu();
+                                          if (!canManageRoomFull) return alert("No tenés permiso.");
+                                          if (me.isBranchScoped && me.branchId && r.branch_id !== me.branchId) {
+                                            return alert("No podés borrar salas de otra sucursal.");
+                                          }
+                                          deleteRoom(r);
+                                        }}
+                                        disabled={saving || !canManageRoomFull}
+                                      >
+                                        <Icon name="trash" size={16} style={{ opacity: 0.95 }} />
+                                        Borrar
+                                      </button>
+                                    </>
+                                  );
+                                })()}
+                              </div>,
+                              document.body
+                            )
+                          : null}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
 
       {/* Modal descripción */}
       {descModal ? (
@@ -1667,13 +2069,73 @@ export default function Rooms() {
             <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
               <div className="modalHead">
                 <div className="modalTitle">{descModal.title || "Descripción"}</div>
-                <button className="iconBtn" onClick={() => setDescModal(null)} aria-label="Cerrar">✕</button>
+                <button className="iconBtn" onClick={() => setDescModal(null)} aria-label="Cerrar">
+                  ✕
+                </button>
               </div>
               <div className="modalBody">
                 <div style={{ textAlign: "left", whiteSpace: "pre-wrap", lineHeight: 1.45, fontSize: 14 }}>{descModal.text}</div>
               </div>
               <div className="modalFoot">
-                <button className="ghostBtn" onClick={() => setDescModal(null)}>Cerrar</button>
+                <button className="ghostBtn" onClick={() => setDescModal(null)}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {/* Modal QR (tabla) */}
+      {qrModal ? (
+        <>
+          <div className="backdrop show" onMouseDown={() => setQrModal(null)} />
+          <div className="modalCenter" onMouseDown={() => setQrModal(null)}>
+            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+              <div className="modalHead">
+                <div className="modalTitle">QR</div>
+                <button className="iconBtn" onClick={() => setQrModal(null)} aria-label="Cerrar">
+                  ✕
+                </button>
+              </div>
+              <div className="modalBody">
+                <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 10 }}>{qrModal.title}</div>
+
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      borderRadius: 14,
+                      overflow: "hidden",
+                      border: "1px solid rgba(255,255,255,.12)",
+                      background: "rgba(255,255,255,.96)",
+                      padding: 10,
+                    }}
+                  >
+                    <QRCodeCanvas id={qrModal.canvasId} value={qrModal.value} size={160} includeMargin bgColor="#ffffff" fgColor="#000000" />
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <button className="ghostBtn" onClick={() => copy(qrModal.value)}>
+                      Copiar valor QR
+                    </button>
+                    <button className="ghostBtn" onClick={() => downloadPngFromCanvas(qrModal.canvasId, `qr-${Date.now()}.png`)}>
+                      Descargar PNG
+                    </button>
+                    <button className="ghostBtn" onClick={() => printPngFromCanvas(qrModal.canvasId, qrModal.title)}>
+                      Imprimir
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 12, opacity: 0.75, fontSize: 12 }}>
+                  Valor: <span style={{ fontFamily: "monospace" }}>{qrModal.value}</span>
+                </div>
+              </div>
+
+              <div className="modalFoot">
+                <button className="ghostBtn" onClick={() => setQrModal(null)}>
+                  Cerrar
+                </button>
               </div>
             </div>
           </div>
@@ -1688,19 +2150,33 @@ export default function Rooms() {
             <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
               <div className="modalHead">
                 <div className="modalTitle">Editar récords</div>
-                <button className="iconBtn" onClick={() => setRecordsModal(null)} aria-label="Cerrar">✕</button>
+                <button className="iconBtn" onClick={() => setRecordsModal(null)} aria-label="Cerrar">
+                  ✕
+                </button>
               </div>
 
               <div className="modalBody">
                 <div className="formGrid2">
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Récord 1 (MM:SS)</span>
-                    <input className="input" value={recordsModal.record1} onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))} placeholder="12:34" inputMode="numeric" />
+                    <input
+                      className="input"
+                      value={recordsModal.record1}
+                      onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))}
+                      placeholder="12:34"
+                      inputMode="numeric"
+                    />
                   </label>
 
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Récord 2 (MM:SS)</span>
-                    <input className="input" value={recordsModal.record2} onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))} placeholder="14:10" inputMode="numeric" />
+                    <input
+                      className="input"
+                      value={recordsModal.record2}
+                      onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))}
+                      placeholder="14:10"
+                      inputMode="numeric"
+                    />
                   </label>
 
                   <div style={{ gridColumn: "1 / -1", opacity: 0.75, fontSize: 12 }}>
@@ -1710,15 +2186,74 @@ export default function Rooms() {
               </div>
 
               <div className="modalFoot">
-                <button className="ghostBtn" onClick={() => setRecordsModal(null)} disabled={saving}>Cancelar</button>
-                <button className="btnSmall" onClick={saveRecords} disabled={saving}>{saving ? "Guardando…" : "Guardar"}</button>
+                <button className="ghostBtn" onClick={() => setRecordsModal(null)} disabled={saving}>
+                  Cancelar
+                </button>
+                <button className="btnSmall" onClick={saveRecords} disabled={saving}>
+                  {saving ? "Guardando…" : "Guardar"}
+                </button>
               </div>
             </div>
           </div>
         </>
       ) : null}
 
-      {/* Modal crear/editar */}
+      {/* Modal editar Bomb Ticket */}
+      {bombEditing && canEditBomb ? (
+        <>
+          <div className="backdrop show" onMouseDown={() => setBombEditing(false)} />
+          <div className="modalCenter" onMouseDown={() => setBombEditing(false)}>
+            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
+              <div className="modalHead">
+                <div className="modalTitle">Editar Bomb Ticket</div>
+                <button className="iconBtn" onClick={() => setBombEditing(false)} aria-label="Cerrar">
+                  ✕
+                </button>
+              </div>
+
+              <div className="modalBody">
+                <input ref={bombFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onBombFileChange} />
+
+                <div className="formGrid2">
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span className="label">Título</span>
+                    <input className="input" value={bomb.title} onChange={(e) => setBomb((p) => ({ ...p, title: e.target.value }))} />
+                  </label>
+
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span className="label">Descripción</span>
+                    <textarea className="input" rows={3} value={bomb.description} onChange={(e) => setBomb((p) => ({ ...p, description: e.target.value }))} style={{ resize: "vertical" }} />
+                  </label>
+
+                  <div className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span className="label">Imagen</span>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <button type="button" className="btnSmall" onClick={onBombPickImage}>
+                        Elegir imagen…
+                      </button>
+                      {bomb.imageUrl ? (
+                        <button type="button" className="ghostBtn" onClick={() => setBomb((p) => ({ ...p, imageUrl: "" }))}>
+                          Quitar
+                        </button>
+                      ) : (
+                        <span style={{ opacity: 0.8, fontSize: 12 }}>Sin imagen (placeholder)</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modalFoot">
+                <button className="ghostBtn" onClick={() => setBombEditing(false)}>
+                  Listo
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {/* Modal crear/editar sala (formulario igual, sin tocar lógica) */}
       {open && editing ? (
         <>
           <div className="backdrop show" onMouseDown={closeModal} />
@@ -1726,7 +2261,9 @@ export default function Rooms() {
             <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
               <div className="modalHead">
                 <div className="modalTitle">{items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}</div>
-                <button className="iconBtn" onClick={closeModal} aria-label="Cerrar">✕</button>
+                <button className="iconBtn" onClick={closeModal} aria-label="Cerrar">
+                  ✕
+                </button>
               </div>
 
               <div className="modalBody">
@@ -1757,8 +2294,12 @@ export default function Rooms() {
                         placeholder={`Ej: ${makeRoomQr(editing.id)}`}
                         style={{ flex: 1, minWidth: 260, fontFamily: "monospace" }}
                       />
-                      <button type="button" className="ghostBtn" onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}>Regenerar</button>
-                      <button type="button" className="ghostBtn" onClick={() => editing.qrCode && copy(editing.qrCode)} disabled={!editing.qrCode}>Copiar</button>
+                      <button type="button" className="ghostBtn" onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}>
+                        Regenerar
+                      </button>
+                      <button type="button" className="ghostBtn" onClick={() => editing.qrCode && copy(editing.qrCode)} disabled={!editing.qrCode}>
+                        Copiar
+                      </button>
                     </div>
                   </label>
 
@@ -1778,7 +2319,9 @@ export default function Rooms() {
                       {selectedThemes.length ? (
                         <span className="multiSelectValue">
                           {selectedThemes.map((t) => (
-                            <span key={t} className="tagChip">{t}</span>
+                            <span key={t} className="tagChip">
+                              {t}
+                            </span>
                           ))}
                         </span>
                       ) : (
@@ -1845,9 +2388,13 @@ export default function Rooms() {
                     <span className="label">Foto de la sala</span>
 
                     <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <button type="button" className="btnSmall" onClick={onPickImage}>Elegir imagen…</button>
+                      <button type="button" className="btnSmall" onClick={onPickImage}>
+                        Elegir imagen…
+                      </button>
                       {editing.photo ? (
-                        <button type="button" className="ghostBtn" onClick={removeImage}>Quitar</button>
+                        <button type="button" className="ghostBtn" onClick={removeImage}>
+                          Quitar
+                        </button>
                       ) : (
                         <span style={{ opacity: 0.8, fontSize: 12 }}>No hay imagen seleccionada</span>
                       )}
@@ -1901,7 +2448,9 @@ export default function Rooms() {
                     <span className="label">Dificultad (1–10)</span>
                     <select className="input" value={String(editing.difficulty ?? 5)} onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}>
                       {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                        <option key={n} value={n}>{n}</option>
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
                       ))}
                     </select>
                   </label>
@@ -1919,7 +2468,9 @@ export default function Rooms() {
                     <span className="label">Factor Sorpresa (1–10)</span>
                     <select className="input" value={String(editing.surprise ?? 5)} onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}>
                       {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                        <option key={n} value={n}>{n}</option>
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
                       ))}
                     </select>
                   </label>
@@ -1938,16 +2489,30 @@ export default function Rooms() {
                     <span className="label">Puntaje (1–3)</span>
                     <select className="input" value={String(editing.points ?? 1)} onChange={(e) => setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })}>
                       {[1, 2, 3].map((n) => (
-                        <option key={n} value={n}>{n}</option>
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
                       ))}
+                    </select>
+                  </label>
+
+                  <label className="field">
+                    <span className="label">Estado</span>
+                    <select className="input" value={editing.active ? "1" : "0"} onChange={(e) => setEditing({ ...editing, active: e.target.value === "1" })}>
+                      <option value="1">Activa</option>
+                      <option value="0">Inactiva</option>
                     </select>
                   </label>
                 </div>
               </div>
 
               <div className="modalFoot">
-                <button className="ghostBtn" onClick={closeModal} disabled={saving}>Cancelar</button>
-                <button className="btnSmall" onClick={save} disabled={saving}>{saving ? "Guardando…" : "Guardar"}</button>
+                <button className="ghostBtn" onClick={closeModal} disabled={saving}>
+                  Cancelar
+                </button>
+                <button className="btnSmall" onClick={save} disabled={saving}>
+                  {saving ? "Guardando…" : "Guardar"}
+                </button>
               </div>
             </div>
           </div>
@@ -1964,7 +2529,9 @@ export default function Rooms() {
             <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
               <div className="modalHead">
                 <div className="modalTitle">Recortar imagen</div>
-                <button className="iconBtn" onClick={closeCropModal} aria-label="Cerrar">✕</button>
+                <button className="iconBtn" onClick={closeCropModal} aria-label="Cerrar">
+                  ✕
+                </button>
               </div>
 
               <div className="modalBody">
@@ -2026,8 +2593,12 @@ export default function Rooms() {
               </div>
 
               <div className="modalFoot">
-                <button className="ghostBtn" onClick={closeCropModal}>Cancelar</button>
-                <button className="btnSmall" onClick={confirmCrop} disabled={!natImg || !cropRect}>Usar recorte</button>
+                <button className="ghostBtn" onClick={closeCropModal}>
+                  Cancelar
+                </button>
+                <button className="btnSmall" onClick={confirmCrop} disabled={!natImg || !cropRect}>
+                  Usar recorte
+                </button>
               </div>
             </div>
           </div>

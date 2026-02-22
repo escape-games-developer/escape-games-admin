@@ -963,24 +963,22 @@ export default function Users() {
 
   const roleLabelOf = (r: UserRole) => (r === "CLIENT" ? "Cliente" : r === "GM" ? "Game Master" : "Admin General");
 
-  // ✅ tabla estilo Notificaciones
-  const GRID_COLS = "140px 140px 160px 260px 170px 170px 140px 64px";
+   // ✅ tabla estilo Notificaciones
+  const GRID_COLS = "160px 160px 170px 1fr 170px 180px 140px 56px";
   const ROW_MIN_H = 42;
 
   const headerCellBase: React.CSSProperties = {
     padding: "10px 12px",
-    fontSize: 12,
-    letterSpacing: 0.2,
-    textTransform: "uppercase",
+    fontSize: 14,
     fontWeight: 800,
-    opacity: 0.85,
     borderRight: "1px solid rgba(255,255,255,.08)",
-    userSelect: "none",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    minHeight: ROW_MIN_H,
+    minWidth: 0,
+    overflow: "hidden",
     textAlign: "center",
-    whiteSpace: "nowrap",
   };
 
   const cellBase: React.CSSProperties = {
@@ -989,9 +987,11 @@ export default function Users() {
     borderRight: "1px solid rgba(255,255,255,.06)",
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
     minHeight: ROW_MIN_H,
     minWidth: 0,
     overflow: "hidden",
+    textAlign: "center",
   };
 
   const rowBase: React.CSSProperties = {
@@ -1002,7 +1002,7 @@ export default function Users() {
     borderBottom: "1px solid rgba(255,255,255,.08)",
     minHeight: ROW_MIN_H,
   };
-
+  
   return (
     <div className="page">
       <div className="pageHeadRow" style={{ gap: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -1051,269 +1051,271 @@ export default function Users() {
           Cargando usuarios…
         </div>
       ) : (
-        <div
-          className="panel"
-          style={{
-            padding: 0,
-            width: "100%",
-            height: "calc(100vh - 260px)",
-            overflow: "auto",
-          }}
-        >
-          {filtered.length === 0 ? (
-            <div style={{ padding: 16, opacity: 0.8 }}>No hay usuarios con ese filtro.</div>
-          ) : (
-            <div style={{ width: "100%" }}>
-              {/* ✅ Header sticky (igual a Notificaciones) */}
-              <div
-                style={{
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 5,
-                  display: "grid",
-                  gridTemplateColumns: GRID_COLS,
-                  gap: 0,
-                  alignItems: "stretch",
-                  background: "rgba(0,0,0,.70)",
-                  backdropFilter: "blur(6px)",
-                  borderBottom: "1px solid rgba(255,255,255,.12)",
-                  borderTop: "1px solid rgba(255,255,255,.08)",
-                }}
-              >
-                <div style={headerCellBase}>Nombre</div>
-                <div style={headerCellBase}>Apellido</div>
-                <div style={headerCellBase}>Alias (cliente)</div>
-                <div style={headerCellBase}>Mail</div>
-                <div style={headerCellBase}>Rol</div>
-                <div style={headerCellBase}>Sucursal (GM)</div>
-                <div style={{ ...headerCellBase, borderRight: "1px solid rgba(255,255,255,.08)" }}>Estado</div>
-                {/* ✅ sin ⋯ en header */}
-                <div style={{ ...headerCellBase, borderRight: "none" }} />
+       <div
+  className="panel"
+  style={{
+    padding: 0,
+    width: "100%",
+    height: "calc(100vh - 260px)",
+    overflow: "auto",
+  }}
+>
+  <div style={{ width: "100%" }}>
+    {/* ✅ Header sticky SIEMPRE (igual Notificaciones) */}
+    <div
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 5,
+        display: "grid",
+        gridTemplateColumns: GRID_COLS,
+        gap: 0,
+        alignItems: "stretch",
+        background: "rgba(0,0,0,.70)",
+        backdropFilter: "blur(6px)",
+        borderBottom: "1px solid rgba(255,255,255,.12)",
+        borderTop: "1px solid rgba(255,255,255,.08)",
+      }}
+    >
+      <div style={headerCellBase}>Nombre</div>
+      <div style={headerCellBase}>Apellido</div>
+      <div style={headerCellBase}>Alias (cliente)</div>
+      <div style={headerCellBase}>Mail</div>
+      <div style={headerCellBase}>Rol</div>
+      <div style={headerCellBase}>Sucursal (GM)</div>
+      <div style={{ ...headerCellBase, borderRight: "1px solid rgba(255,255,255,.08)" }}>Estado</div>
+      <div style={{ ...headerCellBase, borderRight: "none" }} />
+    </div>
+
+    {/* ✅ Body: filas o vacío */}
+    {filtered.length === 0 ? (
+      <div style={{ padding: 16, opacity: 0.8 }}>No hay usuarios con ese filtro.</div>
+    ) : (
+      <>
+        {filtered.map((u, idx) => {
+          const isEven = idx % 2 === 0;
+          const canShowGmCode = u._isStaff && (u.role === "GM" || u.role === "ADMIN_GENERAL");
+
+          return (
+            <div
+              key={u.id}
+              style={{
+                ...rowBase,
+                background: isEven ? "rgba(255,255,255,.02)" : "rgba(255,255,255,.00)",
+                opacity: u.active ? 1 : 0.62,
+                transition: "background .12s ease",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.05)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLDivElement).style.background = isEven
+                  ? "rgba(255,255,255,.02)"
+                  : "rgba(255,255,255,.00)";
+              }}
+            >
+              {/* Nombre */}
+<div style={{ ...cellBase, justifyContent: "center", textAlign: "center" }}>
+  <div
+    style={{
+      width: "100%",
+      textAlign: "center",   // 👈 ESTE es el problema
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      fontWeight: 650,
+    }}
+    title={u.firstName}
+  >
+    {u.firstName}
+  </div>
+</div>
+
+              {/* Apellido */}
+<div style={{ ...cellBase, justifyContent: "center" }}>
+  <div
+    style={{
+      width: "100%",
+      textAlign: "center",   // 👈 también acá
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+    }}
+    title={u.lastName}
+  >
+    {u.lastName}
+  </div>
+</div>
+
+              <div style={{ ...cellBase, justifyContent: "center" }}>
+                <div
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    opacity: u.role === "CLIENT" ? 1 : 0.55,
+                  }}
+                  title={u.role === "CLIENT" ? u.alias : ""}
+                >
+                  {u.role === "CLIENT" ? u.alias : ""}
+                </div>
               </div>
 
-              {/* ✅ Rows */}
-              {filtered.map((u, idx) => {
-                const isEven = idx % 2 === 0;
-                const canShowGmCode = u._isStaff && (u.role === "GM" || u.role === "ADMIN_GENERAL");
+              <div style={{ ...cellBase, justifyContent: "center" }}>
+                <div
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    fontFamily:
+                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                    fontSize: 12.5,
+                    opacity: 0.95,
+                  }}
+                  title={u.email}
+                >
+                  {u.email}
+                </div>
+              </div>
 
-                return (
-                  <div
-                    key={u.id}
-                    style={{
-                      ...rowBase,
-                      background: isEven ? "rgba(255,255,255,.02)" : "rgba(255,255,255,.00)",
-                      opacity: u.active ? 1 : 0.62,
-                      transition: "background .12s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.05)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLDivElement).style.background = isEven
-                        ? "rgba(255,255,255,.02)"
-                        : "rgba(255,255,255,.00)";
-                    }}
-                  >
-                    <div style={{ ...cellBase, justifyContent: "center", textAlign: "center" }}>
-                      <div
-                        style={{
+              <div style={{ ...cellBase, justifyContent: "center" }}>
+                <div style={{ width: "100%", textAlign: "center", fontWeight: 700 }}>{roleLabelOf(u.role)}</div>
+              </div>
+
+              <div style={{ ...cellBase, justifyContent: "center" }}>
+                <div style={{ width: "100%", textAlign: "center", opacity: u.role === "GM" ? 1 : 0.55 }}>
+                  {u.role === "GM" ? u.branch || "" : ""}
+                </div>
+              </div>
+
+              <div style={{ ...cellBase, justifyContent: "center", borderRight: "1px solid rgba(255,255,255,.06)" }}>
+                <button className={u.active ? "ghostBtn" : "btnSmall"} disabled style={{ padding: "6px 10px" }}>
+                  {u.active ? "Activo" : "Inactivo"}
+                </button>
+              </div>
+
+              <div style={{ ...cellBase, borderRight: "none", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="ghostBtn"
+                  data-menu-btn="1"
+                  onClick={(e) => {
+                    if (!canManageUsers || busy) return;
+                    const btn = e.currentTarget as HTMLButtonElement;
+                    if (menuOpenId === u.id) {
+                      closeMenu();
+                      return;
+                    }
+                    openMenuFor(u.id, btn);
+                  }}
+                  disabled={!canManageUsers || busy}
+                  style={{
+                    padding: "6px 10px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    opacity: canManageUsers ? 1 : 0.45,
+                  }}
+                  aria-label="Opciones"
+                  title={canManageUsers ? "Opciones" : "No autorizado"}
+                >
+                  <Icon name="dots" size={16} />
+                </button>
+              </div>
+
+              {menuOpenId === u.id && menuPos
+                ? createPortal(
+                    <div
+                      data-menu-popup="1"
+                      style={{
+                        position: "fixed", // ✅ CLAVE: fixed (como Notificaciones)
+                        left: menuPos.left,
+                        top: menuPos.top,
+                        zIndex: 99999,
+                        width: 260,
+                        borderRadius: 12,
+                        overflow: "hidden",
+                        border: "1px solid rgba(255,255,255,.14)",
+                        background: "rgba(0,0,0,.94)",
+                        boxShadow: "0 12px 34px rgba(0,0,0,.45)",
+                      }}
+                      onMouseDown={(ev) => ev.stopPropagation()}
+                    >
+                      {(() => {
+                        const itemStyle: React.CSSProperties = {
                           width: "100%",
-                          textAlign: "left",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          fontWeight: 650,
-                        }}
-                        title={u.firstName}
-                      >
-                        {u.firstName}
-                      </div>
-                    </div>
-
-                    <div style={{ ...cellBase, justifyContent: "center" }}>
-                      <div
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                        title={u.lastName}
-                      >
-                        {u.lastName}
-                      </div>
-                    </div>
-
-                    <div style={{ ...cellBase, justifyContent: "center" }}>
-                      <div
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          opacity: u.role === "CLIENT" ? 1 : 0.55,
-                        }}
-                        title={u.role === "CLIENT" ? u.alias : ""}
-                      >
-                        {u.role === "CLIENT" ? u.alias : ""}
-                      </div>
-                    </div>
-
-                    <div style={{ ...cellBase, justifyContent: "center" }}>
-                      <div
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-                          fontSize: 12.5,
-                          opacity: 0.95,
-                        }}
-                        title={u.email}
-                      >
-                        {u.email}
-                      </div>
-                    </div>
-
-                    <div style={{ ...cellBase, justifyContent: "center" }}>
-                      <div style={{ width: "100%", textAlign: "center", fontWeight: 700 }}>{roleLabelOf(u.role)}</div>
-                    </div>
-
-                    <div style={{ ...cellBase, justifyContent: "center" }}>
-                      <div style={{ width: "100%", textAlign: "center", opacity: u.role === "GM" ? 1 : 0.55 }}>
-                        {u.role === "GM" ? u.branch || "" : ""}
-                      </div>
-                    </div>
-
-                    <div style={{ ...cellBase, justifyContent: "center", borderRight: "1px solid rgba(255,255,255,.06)" }}>
-                      <button className={u.active ? "ghostBtn" : "btnSmall"} disabled style={{ padding: "6px 10px" }}>
-                        {u.active ? "Activo" : "Inactivo"}
-                      </button>
-                    </div>
-
-                    {/* ✅ ⋯ solo filas, con SVG */}
-                    <div style={{ ...cellBase, borderRight: "none", justifyContent: "flex-end" }}>
-                      <button
-                        type="button"
-                        className="ghostBtn"
-                        data-menu-btn="1"
-                        onClick={(e) => {
-                          if (!canManageUsers || busy) return;
-                          const btn = e.currentTarget as HTMLButtonElement;
-                          if (menuOpenId === u.id) {
-                            closeMenu();
-                            return;
-                          }
-                          openMenuFor(u.id, btn);
-                        }}
-                        disabled={!canManageUsers || busy}
-                        style={{
-                          padding: "6px 10px",
-                          display: "inline-flex",
+                          justifyContent: "flex-start" as any,
+                          borderRadius: 0,
+                          padding: "10px 12px",
+                          display: "flex",
+                          gap: 10,
                           alignItems: "center",
-                          gap: 6,
-                          opacity: canManageUsers ? 1 : 0.45,
-                        }}
-                        aria-label="Opciones"
-                        title={canManageUsers ? "Opciones" : "No autorizado"}
-                      >
-                        <Icon name="dots" size={16} />
-                      </button>
-                    </div>
+                        };
 
-                    {/* ✅ Menú (PORTAL a body) — aparece al lado SIEMPRE */}
-                    {menuOpenId === u.id && menuPos
-                      ? createPortal(
-                          <div
-                            data-menu-popup="1"
-                            style={{
-                              position: "absolute",
-                              left: menuPos.left,
-                              top: menuPos.top,
-                              zIndex: 99999,
-                              width: 260,
-                              borderRadius: 12,
-                              overflow: "hidden",
-                              border: "1px solid rgba(255,255,255,.14)",
-                              background: "rgba(0,0,0,.94)",
-                              boxShadow: "0 12px 34px rgba(0,0,0,.45)",
-                            }}
-                            onMouseDown={(ev) => ev.stopPropagation()}
-                          >
-                            {(() => {
-                              const itemStyle: React.CSSProperties = {
-                                width: "100%",
-                                justifyContent: "flex-start" as any,
-                                borderRadius: 0,
-                                padding: "10px 12px",
-                                display: "flex",
-                                gap: 10,
-                                alignItems: "center",
-                              };
+                        const iconStyle: React.CSSProperties = { opacity: 0.92 };
 
-                              const iconStyle: React.CSSProperties = { opacity: 0.92 };
+                        return (
+                          <>
+                            {canShowGmCode ? (
+                              <button
+                                className="ghostBtn"
+                                style={itemStyle}
+                                onClick={() => ensureAndCopyGmCode(u)}
+                                disabled={busy}
+                                title="Copiar Código GM"
+                              >
+                                <Icon name="key" size={16} style={iconStyle} />
+                                Código GM
+                              </button>
+                            ) : null}
 
-                              return (
-                                <>
-                                  {canShowGmCode ? (
-                                    <button
-                                      className="ghostBtn"
-                                      style={itemStyle}
-                                      onClick={() => ensureAndCopyGmCode(u)}
-                                      disabled={busy}
-                                      title="Copiar Código GM"
-                                    >
-                                      <Icon name="key" size={16} style={iconStyle} />
-                                      Código GM
-                                    </button>
-                                  ) : null}
+                            <button
+                              className="ghostBtn"
+                              style={itemStyle}
+                              onClick={() => {
+                                closeMenu();
+                                setPermModal({ open: true, user: { ...u, permissions: { ...u.permissions } } });
+                              }}
+                              disabled={busy}
+                            >
+                              <Icon name="shield" size={16} style={iconStyle} />
+                              Permisos
+                            </button>
 
-                                  <button
-                                    className="ghostBtn"
-                                    style={itemStyle}
-                                    onClick={() => {
-                                      closeMenu();
-                                      setPermModal({ open: true, user: { ...u, permissions: { ...u.permissions } } });
-                                    }}
-                                    disabled={busy}
-                                  >
-                                    <Icon name="shield" size={16} style={iconStyle} />
-                                    Permisos
-                                  </button>
+                            <button className="ghostBtn" style={itemStyle} onClick={() => openReset(u)} disabled={busy}>
+                              <Icon name="refresh" size={16} style={iconStyle} />
+                              Resetear contraseña
+                            </button>
 
-                                  <button className="ghostBtn" style={itemStyle} onClick={() => openReset(u)} disabled={busy}>
-                                    <Icon name="refresh" size={16} style={iconStyle} />
-                                    Resetear contraseña
-                                  </button>
+                            <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
 
-                                  <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
-
-                                  <button
-                                    className="dangerBtnInline"
-                                    style={{ ...itemStyle, textAlign: "left" }}
-                                    onClick={() => openDelete(u)}
-                                    disabled={busy}
-                                  >
-                                    <Icon name="trash" size={16} style={{ opacity: 0.95 }} />
-                                    Eliminar usuario
-                                  </button>
-                                </>
-                              );
-                            })()}
-                          </div>,
-                          document.body
-                        )
-                      : null}
-                  </div>
-                );
-              })}
+                            <button
+                              className="dangerBtnInline"
+                              style={{ ...itemStyle, textAlign: "left" }}
+                              onClick={() => openDelete(u)}
+                              disabled={busy}
+                            >
+                              <Icon name="trash" size={16} style={{ opacity: 0.95 }} />
+                              Eliminar usuario
+                            </button>
+                          </>
+                        );
+                      })()}
+                    </div>,
+                    document.body
+                  )
+                : null}
             </div>
-          )}
-        </div>
+          );
+        })}
+      </>
+    )}
+  </div>
+</div>
       )}
 
       {/* ✅ MODAL CREAR */}

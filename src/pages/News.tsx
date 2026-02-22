@@ -1,12 +1,16 @@
-// News.tsx (ADMIN) — mantener tu UI/UX base
-// ✅ Descripción: formato + emojis (picker sin libs, React 19 OK)
-// ✅ Imagen: popup con imagen completa (contain) + recorte con cursor “tipo Paint” (mover/resize/zoom)
-// ✅ Confirmar recorte => genera JPG + preview + se sube el recorte
-// ✅ Vista previa (cliente) funcionando (modal)
+// News.tsx (ADMIN) — UI/UX base + LISTADO TIPO EXCEL ✅
+// ✅ Acciones SOLO en menú ⋯ por fila (Editar / Activar-Desactivar / Vista previa / Borrar)
+// ✅ Descripción estilo Notificaciones: toolbar arriba (formatos + emoji + imagen) + textarea
+// ✅ Excel: columna Título solo título (sin tipo); Tipo en su columna; CTA -> Link (solo link, sin modo)
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+
+/** ✅ Emoji picker (compatible) — lazy para no romper el admin si algo falla */
+import type { EmojiClickData } from "emoji-picker-react";
+const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
 
 /* =======================
    TIPOS
@@ -19,7 +23,7 @@ type NewsItem = {
   id: string;
 
   title: string;
-  description: string;
+  description: string; // texto plano (pre-wrap)
 
   type: NewsType;
   publishedAt: string; // YYYY-MM-DD
@@ -41,13 +45,7 @@ const TYPE_LABEL: Record<NewsType, string> = {
   PROXIMAMENTE: "Próximamente",
 };
 
-const CTA_LABEL: Record<CtaMode, string> = {
-  CONSULTAR: "Consultar",
-  VER_DETALLE: "Ver detalle",
-};
-
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
-
 const NEWS_BUCKET = "news";
 
 const isHttpUrl = (v: string) => {
@@ -65,51 +63,24 @@ const openDatePicker = (el: HTMLInputElement | null) => {
   if (typeof anyEl.showPicker === "function") anyEl.showPicker();
 };
 
-/* =======================
-   SANITIZE HTML
-======================= */
-
-const ALLOWED_TAGS = new Set(["B", "STRONG", "I", "EM", "U", "BR", "P", "DIV", "SPAN"]);
-
-function sanitizeHtml(input: string) {
-  const html = String(input || "");
-  if (!html) return "";
-
-  try {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const body = doc.body;
-
-    const walk = (node: Node) => {
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const el = node as HTMLElement;
-        const tag = el.tagName.toUpperCase();
-
-        if (!ALLOWED_TAGS.has(tag)) {
-          const text = doc.createTextNode(el.textContent || "");
-          el.replaceWith(text);
-          return;
-        }
-
-        const attrs = Array.from(el.attributes);
-        for (const a of attrs) el.removeAttribute(a.name);
-
-        Array.from(el.childNodes).forEach(walk);
-      } else if (node.nodeType === Node.COMMENT_NODE) {
-        node.parentNode?.removeChild(node);
-      }
-    };
-
-    Array.from(body.childNodes).forEach(walk);
-    return body.innerHTML || "";
-  } catch {
-    return stripHtml(input);
-  }
-}
-
 function stripHtml(input: string) {
   const s = String(input || "");
-  return s.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+  return s
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>\s*<p>/gi, "\n\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\r/g, "");
 }
+
+/** Para compat con data vieja (si description venía con HTML) */
+function htmlToPlainText(input: string) {
+  return stripHtml(String(input || "")).trim();
+}
+
+const ellipsize = (s: string, n: number) => {
+  const t = String(s || "");
+  return t.length > n ? t.slice(0, n) + "…" : t;
+};
 
 /* =======================
    DB MAPPERS
@@ -132,7 +103,8 @@ function fromDb(row: any): NewsItem {
     publishedAt: row.published_at ? String(row.published_at) : fallbackDate,
 
     image: row.image_url || "",
-    imagePosition: typeof row.image_position === "number" ? Math.round(row.image_position) : 50,
+    imagePosition:
+      typeof row.image_position === "number" ? Math.round(row.image_position) : 50,
 
     ctaMode,
     ctaLink: row.cta_link || "",
@@ -147,7 +119,7 @@ function toDb(n: NewsItem) {
     id: n.id,
 
     title: (n.title || "").trim(),
-    description: sanitizeHtml(n.description || ""),
+    description: (n.description || "").trim(),
 
     type: n.type,
     published_at: n.publishedAt,
@@ -177,7 +149,6 @@ async function uploadNewsImage(file: File, newsId: string): Promise<string> {
     upsert: true,
     contentType: file.type || undefined,
   });
-
   if (upErr) throw upErr;
 
   const { data } = supabase.storage.from(NEWS_BUCKET).getPublicUrl(path);
@@ -186,327 +157,79 @@ async function uploadNewsImage(file: File, newsId: string): Promise<string> {
 }
 
 /* =======================
-   EMOJI PICKER
+   Emoji Boundary
 ======================= */
 
-type EmojiCat = { key: string; label: string; emojis: string[] };
-
-const EMOJI_CATS: EmojiCat[] = [
-  { key: "rec", label: "Recientes", emojis: [] },
-  {
-    key: "smileys",
-    label: "Caras",
-    emojis: ["😀", "😁", "😂", "🤣", "😅", "😆", "😉", "😊", "😍", "😘", "😎", "🤩", "🥳", "😭", "😤", "😡", "🤯", "😴", "🤔", "🙃", "😬", "🤗"],
-  },
-  {
-    key: "gestures",
-    label: "Manos",
-    emojis: ["👍", "👎", "👌", "✌️", "🤞", "🤟", "🤘", "👏", "🙌", "🫶", "🙏", "👊", "✊", "🤜", "🤛", "💪", "🖐️", "✋", "👋"],
-  },
-  {
-    key: "symbols",
-    label: "Símbolos",
-    emojis: ["✅", "❌", "⚠️", "🔥", "⭐", "✨", "💥", "💯", "🎉", "🎊", "📢", "📌", "📍", "⏳", "⌛", "💬", "💡", "🔒", "🔓", "⚡"],
-  },
-  {
-    key: "objects",
-    label: "Objetos",
-    emojis: ["🎮", "🕹️", "🧩", "🎟️", "🎫", "🎁", "💰", "💳", "📱", "💻", "🖥️", "🖱️", "⌨️", "📷", "🎥", "🎧", "🎤"],
-  },
-  {
-    key: "places",
-    label: "Lugar",
-    emojis: ["🏠", "🏢", "🏙️", "🗺️", "🚪", "🚻", "📍", "🧭", "🚗", "🚌", "🚇"],
-  },
-];
-
-const RECENTS_KEY = "escape_news_emoji_recents_v1";
-
-function readRecents(): string[] {
-  try {
-    const raw = localStorage.getItem(RECENTS_KEY);
-    const arr = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
-  } catch {
-    return [];
+class EmojiBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error?: any }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: any) {
+    console.error("Emoji Picker crashed:", error);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 12, fontSize: 12, opacity: 0.9, maxWidth: 360 }}>
+          ⚠️ El selector de emojis falló. La página sigue funcionando.
+        </div>
+      );
+    }
+    return this.props.children as any;
   }
 }
 
-function writeRecents(list: string[]) {
-  try {
-    localStorage.setItem(RECENTS_KEY, JSON.stringify(list.slice(0, 30)));
-  } catch {}
-}
-
 /* =======================
-   RICH TEXT
+   SIMPLE TEXT FORMAT (para textarea)
 ======================= */
 
-function RichTextEditor({
-  valueHtml,
-  onChangeHtml,
-}: {
-  valueHtml: string;
-  onChangeHtml: (html: string) => void;
-}) {
-  const ref = useRef<HTMLDivElement | null>(null);
+function wrapSelection(el: HTMLTextAreaElement, left: string, right: string) {
+  const start = el.selectionStart ?? 0;
+  const end = el.selectionEnd ?? 0;
+  const value = el.value ?? "";
+  const selected = value.slice(start, end);
 
-  const composingRef = useRef(false);
-  const focusedRef = useRef(false);
+  const next = value.slice(0, start) + left + selected + right + value.slice(end);
+  const nextCursorStart = start + left.length;
+  const nextCursorEnd = end + left.length;
 
-  const [emojiOpen, setEmojiOpen] = useState(false);
-  const [emojiQuery, setEmojiQuery] = useState("");
-  const [cat, setCat] = useState("smileys");
-  const [recents, setRecents] = useState<string[]>(() => readRecents());
+  return { next, nextCursorStart, nextCursorEnd };
+}
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (focusedRef.current) return;
-    if (composingRef.current) return;
+function toggleLinePrefix(el: HTMLTextAreaElement, prefix: string) {
+  // Aplica al/los renglones seleccionados (markdown-like)
+  const start = el.selectionStart ?? 0;
+  const end = el.selectionEnd ?? 0;
+  const value = el.value ?? "";
 
-    const incoming = String(valueHtml || "");
-    if (el.innerHTML !== incoming) el.innerHTML = incoming;
-  }, [valueHtml]);
+  const before = value.slice(0, start);
+  const sel = value.slice(start, end);
+  const after = value.slice(end);
 
-  const push = () => {
-    const el = ref.current;
-    if (!el) return;
-    onChangeHtml(el.innerHTML);
-  };
+  const selLines = sel.split("\n");
+  const allHave = selLines.every((l) => l.trim() === "" || l.startsWith(prefix));
 
-  const exec = (cmd: "bold" | "italic" | "underline") => {
-    ref.current?.focus();
-    document.execCommand(cmd);
-    push();
-  };
+  const nextLines = selLines.map((l) => {
+    if (l.trim() === "") return l;
+    if (allHave) return l.startsWith(prefix) ? l.slice(prefix.length) : l;
+    return prefix + l;
+  });
 
-  const insertTextAtCursor = (text: string) => {
-    const el = ref.current;
-    if (!el) return;
-    el.focus();
-    try {
-      document.execCommand("insertText", false, text);
-    } catch {
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        range.deleteContents();
-        range.insertNode(document.createTextNode(text));
-        range.collapse(false);
-      } else {
-        el.innerText = (el.innerText || "") + text;
-      }
-    }
-    push();
-  };
+  const nextSel = nextLines.join("\n");
+  const next = before + nextSel + after;
 
-  const pickEmoji = (e: string) => {
-    insertTextAtCursor(e);
-    const next = [e, ...recents.filter((x) => x !== e)].slice(0, 30);
-    setRecents(next);
-    writeRecents(next);
-    setEmojiOpen(false);
-    setEmojiQuery("");
-  };
-
-  const onPaste: React.ClipboardEventHandler<HTMLDivElement> = (ev) => {
-    ev.preventDefault();
-    const text = ev.clipboardData.getData("text/plain");
-    document.execCommand("insertText", false, text);
-    push();
-  };
-
-  const cats = useMemo(() => {
-    const base = EMOJI_CATS.map((c) => ({ ...c }));
-    base[0].emojis = recents.length ? recents : ["🔥", "🎉", "✅", "⚡", "🎮", "💥", "⭐", "😎"];
-    return base;
-  }, [recents]);
-
-  const currentList = useMemo(() => {
-    const s = emojiQuery.trim().toLowerCase();
-    const source =
-      cat === "rec"
-        ? cats.find((c) => c.key === "rec")?.emojis || []
-        : cats.find((c) => c.key === cat)?.emojis || [];
-
-    if (!s) return source;
-
-    const alias: Record<string, string[]> = {
-      fuego: ["🔥"],
-      ok: ["✅"],
-      check: ["✅"],
-      error: ["❌"],
-      cruz: ["❌"],
-      warning: ["⚠️"],
-      estrella: ["⭐", "✨"],
-      party: ["🎉", "🎊", "🥳"],
-      musica: ["🎧", "🎤"],
-      juego: ["🎮", "🕹️"],
-      plata: ["💰", "💳"],
-      reloj: ["⏳", "⌛"],
-      punto: ["📍", "📌"],
-      like: ["👍"],
-      corazon: ["🫶"],
-    };
-
-    const mapped = alias[s];
-    if (mapped) return Array.from(new Set([...mapped, ...source]));
-    return source;
-  }, [emojiQuery, cat, cats]);
-
-  useEffect(() => {
-    const onDocDown = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest?.("[data-emoji-pop]")) setEmojiOpen(false);
-    };
-    document.addEventListener("mousedown", onDocDown);
-    return () => document.removeEventListener("mousedown", onDocDown);
-  }, []);
-
-  return (
-    <div style={{ display: "grid", gap: 8 }}>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <button type="button" className="btnSmall" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("bold")} title="Negrita">
-          <b>B</b>
-        </button>
-        <button type="button" className="btnSmall" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("italic")} title="Cursiva">
-          <i>I</i>
-        </button>
-        <button type="button" className="btnSmall" onMouseDown={(e) => e.preventDefault()} onClick={() => exec("underline")} title="Subrayado">
-          <u>U</u>
-        </button>
-
-        <div style={{ position: "relative" }} data-emoji-pop>
-          <button
-            type="button"
-            className="btnSmall"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setEmojiOpen((v) => !v)}
-            title="Emojis"
-          >
-            😀 Emojis
-          </button>
-
-          {emojiOpen && (
-            <div
-              style={{
-                position: "absolute",
-                zIndex: 9999,
-                top: "110%",
-                left: 0,
-                width: 340,
-                borderRadius: 14,
-                overflow: "hidden",
-                border: "1px solid rgba(255,255,255,0.15)",
-                background: "rgba(0,0,0,0.92)",
-                padding: 10,
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                <input
-                  className="input"
-                  value={emojiQuery}
-                  onChange={(e) => setEmojiQuery(e.target.value)}
-                  placeholder="Buscar (ej: fuego, ok, party, like)…"
-                  style={{ flex: 1 }}
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                {cats.map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    className={cat === c.key ? "btnSmall" : "ghostBtn"}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setCat(c.key)}
-                    style={{ padding: "6px 10px", borderRadius: 12 }}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-
-              <div
-                style={{
-                  maxHeight: 220,
-                  overflow: "auto",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(10, 1fr)",
-                  gap: 6,
-                  padding: 4,
-                }}
-              >
-                {currentList.map((e) => (
-                  <button
-                    key={e}
-                    type="button"
-                    className="ghostBtn"
-                    onMouseDown={(ev) => ev.preventDefault()}
-                    onClick={() => pickEmoji(e)}
-                    style={{ padding: 8, borderRadius: 12, fontSize: 18, lineHeight: 1 }}
-                    title={e}
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ marginTop: 8, opacity: 0.7, fontSize: 12 }}>
-                Tip: clickeás un emoji y lo inserta donde está el cursor.
-              </div>
-            </div>
-          )}
-        </div>
-
-        <span style={{ opacity: 0.7, fontSize: 12 }}>Tip: escribí normal y aplicá formato.</span>
-      </div>
-
-      <div
-        className="input"
-        ref={ref}
-        contentEditable
-        suppressContentEditableWarning
-        tabIndex={0}
-        spellCheck
-        onFocus={() => {
-          focusedRef.current = true;
-        }}
-        onBlur={() => {
-          focusedRef.current = false;
-          push();
-        }}
-        onCompositionStart={() => (composingRef.current = true)}
-        onCompositionEnd={() => (composingRef.current = false)}
-        onInput={() => push()}
-        onPaste={onPaste}
-        style={{
-          minHeight: 110,
-          padding: 12,
-          borderRadius: 14,
-          lineHeight: 1.35,
-          overflow: "auto",
-          whiteSpace: "pre-wrap",
-          pointerEvents: "auto",
-          userSelect: "text",
-          cursor: "text",
-          position: "relative",
-          zIndex: 2,
-        }}
-      />
-    </div>
-  );
+  return { next };
 }
 
 /* =======================
-   CROPPER “cursor only” (como Salas) ✅
-   - Drag dentro: move
-   - Drag bordes/esquinas: resize
-   - Ruedita: zoom del recorte
-   - Doble click: recorte full
-   - SHIFT: mantener ratio card
+   CROPPER
 ======================= */
 
 const NEWS_CARD_ASPECT = 900 / 520;
@@ -535,12 +258,7 @@ const zoomRect = (r: CropRect, nat: NatImg, factor: number, minSize = 80): CropR
   const { cx, cy } = rectCenter(r);
   const nw = r.w * factor;
   const nh = r.h * factor;
-  const next: CropRect = {
-    x: cx - nw / 2,
-    y: cy - nh / 2,
-    w: nw,
-    h: nh,
-  };
+  const next: CropRect = { x: cx - nw / 2, y: cy - nh / 2, w: nw, h: nh };
   return clampRectToImage(next, nat, minSize);
 };
 
@@ -552,14 +270,11 @@ const applyAspectFromAnchor = (
   minSize = 80
 ): CropRect => {
   let r = { ...rect };
-
   const controlsW = handle.includes("e") || handle.includes("w");
   if (controlsW) r.h = r.w / aspect;
   else r.w = r.h * aspect;
-
   if (handle.includes("n")) r.y = r.y + (rect.h - r.h);
   if (handle.includes("w")) r.x = r.x + (rect.w - r.w);
-
   return clampRectToImage(r, nat, minSize);
 };
 
@@ -601,7 +316,6 @@ function CropperModal({
       cursorRef.current = "default";
       return;
     }
-
     if (!sourceUrl) return;
 
     setNatImg(null);
@@ -722,7 +436,6 @@ function CropperModal({
     dragModeRef.current = null;
     dragHandleRef.current = null;
     dragStartRef.current = null;
-
     const stage = stageRef.current;
     if (stage) stage.style.cursor = cursorRef.current || "default";
   };
@@ -803,7 +516,6 @@ function CropperModal({
       if (!h) return;
 
       let next = { ...start.rect };
-
       if (h.includes("e")) next.w = start.rect.w + ndx;
       if (h.includes("s")) next.h = start.rect.h + ndy;
 
@@ -817,10 +529,7 @@ function CropperModal({
       }
 
       next = clampRectToImage(next, natImg, 80);
-
-      if (e.shiftKey) {
-        next = applyAspectFromAnchor(next, natImg, h, NEWS_CARD_ASPECT, 80);
-      }
+      if (e.shiftKey) next = applyAspectFromAnchor(next, natImg, h, NEWS_CARD_ASPECT, 80);
 
       setCropRect(next);
       return;
@@ -837,7 +546,6 @@ function CropperModal({
   const onStageWheel: React.WheelEventHandler<HTMLDivElement> = (e) => {
     if (!natImg || !cropRect) return;
     e.preventDefault();
-
     const dir = e.deltaY > 0 ? 1 : -1;
     const factor = dir > 0 ? 1.06 : 0.94;
     setCropRect(zoomRect(cropRect, natImg, factor, 80));
@@ -852,13 +560,7 @@ function CropperModal({
     if (!natImg || !cropRect || !open) return null;
     const sr = natToScreenRect(cropRect);
     if (!sr) return null;
-
-    return {
-      left: sr.left,
-      top: sr.top,
-      width: sr.width,
-      height: sr.height,
-    } as React.CSSProperties;
+    return { left: sr.left, top: sr.top, width: sr.width, height: sr.height } as React.CSSProperties;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [natImg, cropRect, open]);
 
@@ -886,7 +588,6 @@ function CropperModal({
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
 
-      // ✅ JPG (liviano, sin drama)
       const blob: Blob = await new Promise((resolve, reject) => {
         canvas.toBlob(
           (b) => (b ? resolve(b) : reject(new Error("No pude exportar el recorte."))),
@@ -921,7 +622,8 @@ function CropperModal({
 
           <div className="modalBody">
             <div style={{ opacity: 0.78, fontSize: 12, marginBottom: 10 }}>
-              Mouse: <b>mover</b> arrastrando dentro, <b>resize</b> arrastrando bordes/esquinas. Ruedita = zoom del recorte. Doble click = máximo. Mantener <b>Shift</b> = ratio card.
+              Mouse: <b>mover</b> arrastrando dentro, <b>resize</b> arrastrando bordes/esquinas. Ruedita = zoom
+              del recorte. Doble click = máximo. Mantener <b>Shift</b> = ratio card.
             </div>
 
             <div
@@ -995,7 +697,7 @@ function CropperModal({
 }
 
 /* =======================
-   PREVIEW (como card cliente)
+   PREVIEW (cliente)
 ======================= */
 
 function ClientCardPreview({
@@ -1004,11 +706,10 @@ function ClientCardPreview({
 }: {
   item: {
     title: string;
-    descriptionHtml: string;
+    descriptionText: string;
     type: NewsType;
     publishedAt: string;
     imageUrl: string;
-    ctaMode: CtaMode;
     ctaLink: string;
     active: boolean;
   };
@@ -1054,9 +755,7 @@ function ClientCardPreview({
                     ) : null}
 
                     <div style={{ padding: "6px 10px", borderRadius: 999, background: "rgba(255,255,255,0.10)" }}>
-                      <span style={{ color: "#fff", fontSize: 11, fontWeight: 800 }}>
-                        {TYPE_LABEL[item.type].toUpperCase()}
-                      </span>
+                      <span style={{ color: "#fff", fontSize: 11, fontWeight: 800 }}>{TYPE_LABEL[item.type].toUpperCase()}</span>
                     </div>
 
                     {!item.active ? (
@@ -1071,10 +770,9 @@ function ClientCardPreview({
 
                 <div style={{ color: "#fff", fontSize: 16, fontWeight: 800, marginBottom: 6 }}>{item.title}</div>
 
-                <div
-                  style={{ color: "rgba(255,255,255,0.78)", fontSize: 13, lineHeight: "18px" }}
-                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(item.descriptionHtml) }}
-                />
+                <div style={{ color: "rgba(255,255,255,0.78)", fontSize: 13, lineHeight: "18px", whiteSpace: "pre-wrap" }}>
+                  {item.descriptionText}
+                </div>
 
                 {item.ctaLink ? (
                   <div
@@ -1091,15 +789,13 @@ function ClientCardPreview({
                       letterSpacing: 0.4,
                     }}
                   >
-                    {CTA_LABEL[item.ctaMode]}
+                    Abrir link
                   </div>
                 ) : null}
               </div>
             </div>
 
-            <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>
-              Nota: acá no abre links (solo preview visual).
-            </div>
+            <div style={{ marginTop: 10, opacity: 0.7, fontSize: 12 }}>Nota: acá no abre links (solo preview visual).</div>
           </div>
 
           <div className="modalFoot">
@@ -1114,13 +810,142 @@ function ClientCardPreview({
 }
 
 /* =======================
+   ICONOS SVG (menú ⋯)
+======================= */
+
+function Icon({
+  name,
+  size = 16,
+  style,
+}: {
+  name: "dots" | "edit" | "eye" | "toggle" | "trash";
+  size?: number;
+  style?: React.CSSProperties;
+}) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+    style,
+  } as any;
+
+  if (name === "dots") {
+    return (
+      <svg {...common}>
+        <circle cx="5" cy="12" r="1.8" fill="currentColor" />
+        <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+        <circle cx="19" cy="12" r="1.8" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  if (name === "edit") {
+    return (
+      <svg {...common}>
+        <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path
+          d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "eye") {
+    return (
+      <svg {...common}>
+        <path d="M1.5 12s4-7.5 10.5-7.5S22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12Z" stroke="currentColor" strokeWidth="2" />
+        <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    );
+  }
+
+  if (name === "toggle") {
+    return (
+      <svg {...common}>
+        <path d="M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        <circle cx="10" cy="12" r="3" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...common}>
+      <path d="M4 7h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M6 7l1 14h10l1-14" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M9 7V4h6v3" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/* =======================
+   ICONOS SVG (toolbar formato)
+======================= */
+
+function FIcon({
+  name,
+  size = 16,
+}: {
+  name: "bold" | "italic" | "underline" | "list";
+  size?: number;
+}) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+  } as any;
+
+  if (name === "bold") {
+    return (
+      <svg {...common}>
+        <path d="M7 4h6a4 4 0 0 1 0 8H7V4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M7 12h7a4 4 0 0 1 0 8H7v-8Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+  if (name === "italic") {
+    return (
+      <svg {...common}>
+        <path d="M19 4h-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M13 20H5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M15 4 9 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === "underline") {
+    return (
+      <svg {...common}>
+        <path d="M7 4v7a5 5 0 0 0 10 0V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M5 20h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common}>
+      <path d="M6 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M6 12h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M6 17h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="4" cy="7" r="1" fill="currentColor" />
+      <circle cx="4" cy="12" r="1" fill="currentColor" />
+      <circle cx="4" cy="17" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+/* =======================
    COMPONENTE PRINCIPAL
 ======================= */
 
 export default function News() {
   const nav = useNavigate();
 
-  // ✅ PERMISO: ADMIN_GENERAL siempre, GM/ADMIN solo si canManageNews
   const canManageNews = useMemo(() => {
     const isSuper =
       localStorage.getItem("eg_admin_is_super") === "true" ||
@@ -1169,7 +994,78 @@ export default function News() {
   const cropTempObjectUrlRef = useRef<string | null>(null);
   const cropOriginalNameRef = useRef<string>("image.jpg");
 
+  // Preview (cliente) global (desde ⋯)
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState<NewsItem | null>(null);
+
+  // ✅ menú ⋯ por fila (portal a body)
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const menuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+
+  // ✅ Emoji picker: inserta donde esté el cursor (textarea)
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const emojiBtnRef = useRef<HTMLButtonElement | null>(null);
+  const emojiPanelRef = useRef<HTMLDivElement | null>(null);
+  const [emojiPos, setEmojiPos] = useState<{ top: number; left: number } | null>(null);
+
+  const descRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const openEmoji = () => {
+    const btn = emojiBtnRef.current;
+    if (!btn) {
+      setEmojiOpen((v) => !v);
+      return;
+    }
+    const r = btn.getBoundingClientRect();
+    setEmojiPos({
+      top: r.bottom + 8 + window.scrollY,
+      left: Math.max(12, r.right - 360 + window.scrollX),
+    });
+    setEmojiOpen(true);
+  };
+
+  const insertEmoji = (emo: string) => {
+    if (!editing) return;
+    const el = descRef.current;
+    if (!el) return;
+
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const value = el.value ?? "";
+    const next = value.slice(0, start) + emo + value.slice(end);
+    const cursor = start + emo.length;
+
+    setEditing((p) => (p ? { ...p, description: next } : p));
+
+    requestAnimationFrame(() => {
+      try {
+        el.focus();
+        el.setSelectionRange(cursor, cursor);
+      } catch {}
+    });
+  };
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!emojiOpen) return;
+      const btn = emojiBtnRef.current;
+      const panel = emojiPanelRef.current;
+      const t = e.target as Node;
+      if (btn && btn.contains(t)) return;
+      if (panel && panel.contains(t)) return;
+      setEmojiOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setEmojiOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [emojiOpen]);
 
   useEffect(() => {
     let mounted = true;
@@ -1211,14 +1107,13 @@ export default function News() {
     const s = q.trim().toLowerCase();
 
     return items.filter((n) => {
-      const descText = stripHtml(n.description || "").toLowerCase();
+      const descText = htmlToPlainText(n.description || "").toLowerCase();
 
       const okSearch = !s
         ? true
-        : n.title.toLowerCase().includes(s) ||
+        : (n.title || "").toLowerCase().includes(s) ||
           descText.includes(s) ||
-          TYPE_LABEL[n.type].toLowerCase().includes(s) ||
-          CTA_LABEL[n.ctaMode].toLowerCase().includes(s);
+          TYPE_LABEL[n.type].toLowerCase().includes(s);
 
       const okType = !typeFilter ? true : n.type === typeFilter;
 
@@ -1249,6 +1144,85 @@ export default function News() {
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [filtered]);
 
+  const computeMenuPosFromAnchor = () => {
+    const btn = menuAnchorRef.current;
+    if (!btn) return null;
+
+    const r = btn.getBoundingClientRect();
+    const top = r.top + window.scrollY;
+    const left = r.right + window.scrollX;
+
+    const MENU_W = 260;
+    const gap = 10;
+
+    let x = left + gap;
+    const maxX = window.scrollX + window.innerWidth - 12 - MENU_W;
+    if (x > maxX) x = r.left + window.scrollX - gap - MENU_W;
+
+    let y = top - 6;
+    const maxY = window.scrollY + window.innerHeight - 12 - 260;
+    if (y > maxY) y = maxY;
+
+    const minY = window.scrollY + 12;
+    if (y < minY) y = minY;
+
+    return { top: y, left: x };
+  };
+
+  const openMenuFor = (id: string, btn: HTMLButtonElement) => {
+    menuAnchorRef.current = btn;
+    setMenuOpenId(id);
+    setMenuPos(computeMenuPosFromAnchor());
+  };
+
+  const closeMenu = () => {
+    setMenuOpenId(null);
+    setMenuPos(null);
+    menuAnchorRef.current = null;
+  };
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (!menuOpenId) return;
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+
+      const insideBtn = t.closest?.('[data-menu-btn="1"]');
+      const insidePopup = t.closest?.('[data-menu-popup="1"]');
+      if (insideBtn || insidePopup) return;
+
+      closeMenu();
+    };
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        closeMenu();
+        setPreviewOpen(false);
+        setPreviewItem(null);
+      }
+    };
+
+    const onScrollResize = () => {
+      if (!menuOpenId) return;
+      const pos = computeMenuPosFromAnchor();
+      if (pos) setMenuPos(pos);
+      else closeMenu();
+    };
+
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScrollResize, true);
+    window.addEventListener("resize", onScrollResize);
+
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScrollResize, true);
+      window.removeEventListener("resize", onScrollResize);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuOpenId]);
+
   const closeCrop = () => {
     setCropOpen(false);
     setCropSourceUrl(null);
@@ -1269,8 +1243,10 @@ export default function News() {
 
     if (fileRef.current) fileRef.current.value = "";
 
+    setEmojiOpen(false);
+    setEmojiPos(null);
+
     closeCrop();
-    setPreviewOpen(false);
   };
 
   const startCreate = () => {
@@ -1312,7 +1288,7 @@ export default function News() {
       imagePosition: n.imagePosition ?? 50,
       ctaLink: n.ctaLink || "",
       title: n.title || "",
-      description: n.description || "",
+      description: htmlToPlainText(n.description || ""),
     });
 
     setEditingImageFile(null);
@@ -1337,20 +1313,17 @@ export default function News() {
 
       cropOriginalNameRef.current = originalName;
 
-      // Limpio el objectURL anterior si existía
       if (cropTempObjectUrlRef.current) {
         URL.revokeObjectURL(cropTempObjectUrlRef.current);
         cropTempObjectUrlRef.current = null;
       }
 
-      // Si ya es un object url (o data), lo uso directo
       if (!/^https?:\/\//i.test(url)) {
         setCropSourceUrl(url);
         setCropOpen(true);
         return;
       }
 
-      // Si es remoto, lo bajo a blob para evitar canvas taint
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error("No pude descargar la imagen para recortarla.");
 
@@ -1376,15 +1349,11 @@ export default function News() {
       return;
     }
 
-    // guardo nombre original para el JPG final
     cropOriginalNameRef.current = file.name;
 
     const url = URL.createObjectURL(file);
 
-    // ⚠️ no guardo el file original, porque vamos a guardar el recorte
-    // setEditingImageFile(file);  <-- NO: queremos subir el recorte, no el original
     setLocalPreview(url);
-
     openCropperWithUrl(url, file.name);
 
     e.target.value = "";
@@ -1401,15 +1370,9 @@ export default function News() {
   };
 
   const onCropConfirm = (file: File, previewUrl: string) => {
-    // ✅ el recorte es lo que se sube
     setEditingImageFile(file);
-
-    // preview del recorte
     setLocalPreview(previewUrl);
-
-    // reseteo posición (ya viene recortada)
     setEditing((prev) => (prev ? { ...prev, imagePosition: 50 } : prev));
-
     closeCrop();
   };
 
@@ -1418,7 +1381,7 @@ export default function News() {
     if (!editing) return;
 
     if (!editing.title.trim()) return alert("Poné un título.");
-    if (!stripHtml(editing.description || "").trim()) return alert("Poné una descripción.");
+    if (!String(editing.description || "").trim()) return alert("Poné una descripción.");
     if (!editing.publishedAt) return alert("Elegí fecha de publicación.");
     if (!editing.type) return alert("Elegí el tipo de novedad.");
 
@@ -1435,18 +1398,16 @@ export default function News() {
     try {
       let finalImageUrl = editing.image;
 
-      // ✅ si hay recorte nuevo, subimos recorte
       if (editingImageFile) {
         finalImageUrl = await uploadNewsImage(editingImageFile, editing.id);
       } else {
-        // si no hay file, tiene que ser URL http(s) o vacío
         if (finalImageUrl && !/^https?:\/\//i.test(finalImageUrl)) finalImageUrl = "";
       }
 
       const normalized: NewsItem = {
         ...editing,
         title: (editing.title || "").trim(),
-        description: sanitizeHtml(editing.description || ""),
+        description: String(editing.description || "").trim(),
         image: finalImageUrl,
         ctaMode: editing.ctaMode || (editing.type === "PROMO" ? "CONSULTAR" : "VER_DETALLE"),
         ctaLink: (editing.ctaLink || "").trim(),
@@ -1459,7 +1420,6 @@ export default function News() {
         .upsert(payload, { onConflict: "id" })
         .select("*")
         .single();
-
       if (error) throw error;
 
       const saved = fromDb(data);
@@ -1514,19 +1474,104 @@ export default function News() {
     }
   };
 
-  const currentPreviewData = useMemo(() => {
-    if (!editing) return null;
+  const openCardPreview = (n: NewsItem) => {
+    setPreviewItem(n);
+    setPreviewOpen(true);
+  };
+
+  const previewData = useMemo(() => {
+    const n = previewItem;
+    if (!n) return null;
     return {
-      title: editing.title || "",
-      descriptionHtml: editing.description || "",
-      type: editing.type,
-      publishedAt: editing.publishedAt,
-      imageUrl: editing.image && editing.image.trim() ? editing.image : "https://picsum.photos/seed/news-placeholder/900/520",
-      ctaMode: editing.ctaMode,
-      ctaLink: editing.ctaLink,
-      active: editing.active,
+      title: n.title || "",
+      descriptionText: htmlToPlainText(n.description || ""),
+      type: n.type,
+      publishedAt: n.publishedAt,
+      imageUrl: n.image && n.image.trim() ? n.image : "https://picsum.photos/seed/news-placeholder/900/520",
+      ctaLink: n.ctaLink,
+      active: n.active,
     };
-  }, [editing]);
+  }, [previewItem]);
+
+  // ✅ estilos tabla tipo Excel
+  const tableWrapStyle: React.CSSProperties = {
+    borderRadius: 16,
+    overflow: "hidden",
+    border: "1px solid rgba(255,255,255,.12)",
+    background: "rgba(0,0,0,.25)",
+  };
+
+  const scrollerStyle: React.CSSProperties = {
+    width: "100%",
+    overflow: "auto",
+    maxHeight: "calc(100vh - 240px)",
+  };
+
+  const tableStyle: React.CSSProperties = {
+    width: "100%",
+    borderCollapse: "separate",
+    borderSpacing: 0,
+    tableLayout: "fixed",
+    minWidth: 980,
+  };
+
+  const thStyle: React.CSSProperties = {
+    position: "sticky" as any,
+    top: 0,
+    zIndex: 5,
+    background: "rgba(10,10,10,.92)",
+    backdropFilter: "blur(6px)",
+    borderBottom: "1px solid rgba(255,255,255,.12)",
+    padding: "12px 10px",
+    fontSize: 13,
+    fontWeight: 900,
+    textAlign: "left" as any,
+    letterSpacing: 0.3,
+    color: "rgba(255,255,255,.92)",
+  };
+
+  const tdBase: React.CSSProperties = {
+    borderBottom: "1px solid rgba(255,255,255,.08)",
+    padding: "10px 10px",
+    verticalAlign: "top",
+    fontSize: 12,
+    color: "rgba(255,255,255,.85)",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
+
+  const badge = (txt: string, kind: "type" | "on" | "off" | "hot" = "type") => {
+    const bg =
+      kind === "hot" ? "rgba(255,165,0,0.18)"
+      : kind === "on" ? "rgba(0,255,242,0.12)"
+      : kind === "off" ? "rgba(255,0,0,0.16)"
+      : "rgba(255,255,255,0.10)";
+    const br =
+      kind === "on" ? "1px solid rgba(0,255,242,0.28)"
+      : kind === "off" ? "1px solid rgba(255,0,0,0.22)"
+      : "1px solid rgba(255,255,255,0.10)";
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "6px 10px",
+          borderRadius: 999,
+          background: bg,
+          border: br,
+          fontSize: 11,
+          fontWeight: 900,
+          color: "#fff",
+          lineHeight: 1,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {txt}
+      </span>
+    );
+  };
 
   return (
     <div className="page">
@@ -1547,7 +1592,7 @@ export default function News() {
           className="input"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por título, descripción, tipo o CTA…"
+          placeholder="Buscar por título, descripción o tipo…"
           style={{ flex: 1, minWidth: 240 }}
         />
 
@@ -1592,88 +1637,202 @@ export default function News() {
           Cargando novedades…
         </div>
       ) : (
-        <div className="roomsScroll">
-          {groupedByMonth.length === 0 ? (
-            <div className="panel" style={{ padding: 16 }}>
-              No hay novedades con estos filtros.
-            </div>
-          ) : (
-            groupedByMonth.map(([month, list]) => (
-              <div key={month} style={{ marginBottom: 16 }}>
-                <div style={{ opacity: 0.85, fontSize: 12, margin: "6px 0 10px" }}>
-                  <b>Historial:</b> {month}
-                </div>
+        <div style={tableWrapStyle}>
+          <div style={scrollerStyle}>
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={{ ...thStyle, width: 74 }}>Imagen</th>
+                  <th style={{ ...thStyle, width: 260 }}>Título</th>
+                  <th style={{ ...thStyle, width: 190 }}>Descripción</th>
+                  <th style={{ ...thStyle, width: 150 }}>Tipo</th>
+                  <th style={{ ...thStyle, width: 120 }}>Fecha</th>
+                  <th style={{ ...thStyle, width: 240 }}>Link</th>
+                  <th style={{ ...thStyle, width: 110 }}>Estado</th>
+                  <th style={{ ...thStyle, width: 70, textAlign: "center" }}>⋯</th>
+                </tr>
+              </thead>
 
-                <div className="roomsGrid" style={{ alignItems: "start", gridAutoRows: "max-content" }}>
-                  {list.map((n) => (
-                    <div
-                      key={n.id}
-                      className="roomCard"
-                      style={{ height: "fit-content", alignSelf: "start", minHeight: 0 }}
-                    >
-                      <div className="roomImgWrap">
-                        <img
-                          src={n.image || "https://picsum.photos/seed/news-placeholder/900/520"}
-                          alt={n.title || TYPE_LABEL[n.type]}
-                          style={{ objectFit: "cover", objectPosition: `50% ${n.imagePosition}%` }}
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/news-placeholder/900/520";
+              <tbody>
+                {groupedByMonth.length === 0 ? (
+                  <tr>
+                    <td style={{ ...tdBase, padding: 16 }} colSpan={8}>
+                      No hay novedades con estos filtros.
+                    </td>
+                  </tr>
+                ) : (
+                  groupedByMonth.map(([month, list]) => (
+                    <React.Fragment key={month}>
+                      <tr>
+                        <td
+                          colSpan={8}
+                          style={{
+                            ...tdBase,
+                            padding: "10px 12px",
+                            background: "rgba(0,0,0,.35)",
+                            fontSize: 12,
+                            fontWeight: 900,
+                            color: "rgba(255,255,255,.9)",
                           }}
-                        />
-                        <div className="roomBadge">{TYPE_LABEL[n.type]}</div>
-                        {!n.active && <div className="roomBadge off">INACTIVA</div>}
-                      </div>
+                        >
+                          Historial: {month}
+                        </td>
+                      </tr>
 
-                      <div className="roomBody" style={{ display: "flex", flexDirection: "column", height: "auto", flex: "0 0 auto" }}>
-                        <div className="roomTitle" style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                          <span>{n.title || TYPE_LABEL[n.type]}</span>
-                          <span style={{ fontSize: 12, opacity: 0.8 }}>{n.publishedAt}</span>
-                        </div>
+                      {list.map((n, idx) => {
+                        const desc = htmlToPlainText(n.description || "");
+                        const rowBg = idx % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.00)";
 
-                        <div style={{ opacity: 0.75, fontSize: 11, marginBottom: 6 }}>{TYPE_LABEL[n.type]}</div>
+                        return (
+                          <tr
+                            key={n.id}
+                            style={{ background: rowBg }}
+                            onMouseEnter={(e) => {
+                              (e.currentTarget as HTMLTableRowElement).style.background = "rgba(255,255,255,0.04)";
+                            }}
+                            onMouseLeave={(e) => {
+                              (e.currentTarget as HTMLTableRowElement).style.background = rowBg;
+                            }}
+                          >
+                            <td style={{ ...tdBase, padding: 8 }}>
+                              <div style={{ width: 56, height: 38, borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,.12)", background: "rgba(0,0,0,.35)" }}>
+                                <img
+                                  src={n.image || "https://picsum.photos/seed/news-placeholder/900/520"}
+                                  alt={n.title || TYPE_LABEL[n.type]}
+                                  style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `50% ${n.imagePosition}%`, display: "block" }}
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/news-placeholder/900/520";
+                                  }}
+                                />
+                              </div>
+                            </td>
 
-                        {n.description ? (
-                          <div
-                            style={{ opacity: 0.82, fontSize: 12, marginBottom: 6, lineHeight: 1.3 }}
-                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.description) }}
-                          />
-                        ) : null}
+                            {/* ✅ SOLO título (sin tipo) */}
+                            <td style={{ ...tdBase }} title={n.title || ""}>
+                              <div style={{ fontWeight: 900, fontSize: 13, color: "rgba(255,255,255,.92)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {n.title || "—"}
+                              </div>
+                            </td>
 
-                        <div style={{ opacity: 0.7, fontSize: 11, marginTop: 2, marginBottom: 8 }}>
-                          Botón: <b>{CTA_LABEL[n.ctaMode]}</b>
-                          {n.ctaLink ? (
-                            <>
-                              {" "}
-                              · Link:{" "}
-                              <span style={{ opacity: 0.95 }}>
-                                {n.ctaLink.length > 38 ? n.ctaLink.slice(0, 38) + "…" : n.ctaLink}
-                              </span>
-                            </>
-                          ) : null}
-                        </div>
+                            <td style={{ ...tdBase }} title={desc}>
+                              {ellipsize(desc, 120) || "—"}
+                            </td>
 
-                        {canManageNews ? (
-                          <div className="roomActions" style={{ marginTop: 0 }}>
-                            <button className="ghostBtn" onClick={() => startEdit(n)}>
-                              Editar
-                            </button>
+                            {/* ✅ Tipo en su propia columna */}
+                            <td style={{ ...tdBase }}>{badge(TYPE_LABEL[n.type].toUpperCase(), n.type === "DESTACADO" ? "hot" : "type")}</td>
 
-                            <button className={n.active ? "dangerBtnInline" : "btnSmall"} onClick={() => toggleActive(n.id)}>
-                              {n.active ? "Desactivar" : "Activar"}
-                            </button>
+                            <td style={{ ...tdBase, fontSize: 12, opacity: 0.9 }}>{n.publishedAt}</td>
 
-                            <button className="dangerBtnInline" onClick={() => remove(n.id)}>
-                              Borrar
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))
-          )}
+                            {/* ✅ Link solamente */}
+                            <td style={{ ...tdBase }} title={n.ctaLink || ""}>
+                              {n.ctaLink ? ellipsize(n.ctaLink, 54) : <span style={{ opacity: 0.7 }}>Sin link</span>}
+                            </td>
+
+                            <td style={{ ...tdBase }}>{n.active ? badge("ACTIVA", "on") : badge("INACTIVA", "off")}</td>
+
+                            <td style={{ ...tdBase, textAlign: "center", padding: 8 }}>
+                              {canManageNews ? (
+                                <button
+                                  type="button"
+                                  className="ghostBtn"
+                                  data-menu-btn="1"
+                                  onClick={(e) => {
+                                    if (saving) return;
+                                    const btn = e.currentTarget as HTMLButtonElement;
+                                    if (menuOpenId === n.id) {
+                                      closeMenu();
+                                      return;
+                                    }
+                                    openMenuFor(n.id, btn);
+                                  }}
+                                  style={{
+                                    padding: "8px 10px",
+                                    borderRadius: 12,
+                                    background: "rgba(0,0,0,0.55)",
+                                    border: "1px solid rgba(255,255,255,0.14)",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                  title="Opciones"
+                                  aria-label="Opciones"
+                                >
+                                  <Icon name="dots" size={16} />
+                                </button>
+                              ) : (
+                                <span style={{ opacity: 0.5 }}>—</span>
+                              )}
+
+                              {menuOpenId === n.id && menuPos
+                                ? createPortal(
+                                    <div
+                                      data-menu-popup="1"
+                                      style={{
+                                        position: "fixed",
+                                        left: menuPos.left,
+                                        top: menuPos.top,
+                                        zIndex: 99999,
+                                        width: 260,
+                                        borderRadius: 12,
+                                        overflow: "hidden",
+                                        border: "1px solid rgba(255,255,255,.14)",
+                                        background: "rgba(0,0,0,.94)",
+                                        boxShadow: "0 12px 34px rgba(0,0,0,.45)",
+                                      }}
+                                      onMouseDown={(ev) => ev.stopPropagation()}
+                                    >
+                                      {(() => {
+                                        const itemStyle: React.CSSProperties = {
+                                          width: "100%",
+                                          justifyContent: "flex-start" as any,
+                                          borderRadius: 0,
+                                          padding: "10px 12px",
+                                          display: "flex",
+                                          gap: 10,
+                                          alignItems: "center",
+                                        };
+                                        const iconStyle: React.CSSProperties = { opacity: 0.92 };
+
+                                        return (
+                                          <>
+                                            <button className="ghostBtn" style={itemStyle} onClick={() => { closeMenu(); startEdit(n); }} disabled={saving}>
+                                              <Icon name="edit" size={16} style={iconStyle} />
+                                              Editar
+                                            </button>
+
+                                            <button className="ghostBtn" style={itemStyle} onClick={() => { closeMenu(); openCardPreview(n); }} disabled={saving}>
+                                              <Icon name="eye" size={16} style={iconStyle} />
+                                              Vista previa
+                                            </button>
+
+                                            <button className="ghostBtn" style={itemStyle} onClick={() => { closeMenu(); toggleActive(n.id); }} disabled={saving} title={n.active ? "Desactivar" : "Activar"}>
+                                              <Icon name="toggle" size={16} style={iconStyle} />
+                                              {n.active ? "Desactivar" : "Activar"}
+                                            </button>
+
+                                            <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
+
+                                            <button className="dangerBtnInline" style={{ ...itemStyle, textAlign: "left" }} onClick={() => { closeMenu(); remove(n.id); }} disabled={saving}>
+                                              <Icon name="trash" size={16} style={{ opacity: 0.95 }} />
+                                              Borrar
+                                            </button>
+                                          </>
+                                        );
+                                      })()}
+                                    </div>,
+                                    document.body
+                                  )
+                                : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -1682,7 +1841,7 @@ export default function News() {
         <>
           <div className="backdrop show" onMouseDown={closeModal} />
           <div className="modalCenter" onMouseDown={closeModal}>
-            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ position: "relative" }}>
               <div className="modalHead">
                 <div className="modalTitle">{items.some((x) => x.id === editing.id) ? "Editar novedad" : "Nueva novedad"}</div>
                 <button className="iconBtn" onClick={closeModal} aria-label="Cerrar">
@@ -1696,12 +1855,7 @@ export default function News() {
                 <div className="formGrid2">
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Título</span>
-                    <input
-                      className="input"
-                      value={editing.title}
-                      onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                      placeholder="Ej: 2x1 esta semana"
-                    />
+                    <input className="input" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} placeholder="Ej: 2x1 esta semana" />
                   </label>
 
                   <label className="field">
@@ -1739,58 +1893,190 @@ export default function News() {
                     />
                   </label>
 
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                  {/* ✅ Descripción: toolbar con formatos + emoji + SOLO 1 icono imagen (acá arriba) */}
+                  <div className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Descripción</span>
-                    <RichTextEditor
-                      valueHtml={editing.description}
-                      onChangeHtml={(html) => setEditing((prev) => (prev ? { ...prev, description: html } : prev))}
+
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+                      {/* Formatos (aplican markdown simple en textarea) */}
+                      <button
+                        type="button"
+                        className="ghostBtn"
+                        title="Negrita"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          const el = descRef.current;
+                          if (!el || !editing) return;
+                          const r = wrapSelection(el, "**", "**");
+                          setEditing({ ...editing, description: r.next });
+                          requestAnimationFrame(() => {
+                            try {
+                              el.focus();
+                              el.setSelectionRange(r.nextCursorStart, r.nextCursorEnd);
+                            } catch {}
+                          });
+                        }}
+                        style={{ padding: "6px 10px", lineHeight: 1, display: "inline-flex", gap: 6, alignItems: "center" }}
+                      >
+                        <FIcon name="bold" size={16} />
+                      </button>
+
+                      <button
+                        type="button"
+                        className="ghostBtn"
+                        title="Cursiva"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          const el = descRef.current;
+                          if (!el || !editing) return;
+                          const r = wrapSelection(el, "_", "_");
+                          setEditing({ ...editing, description: r.next });
+                          requestAnimationFrame(() => {
+                            try {
+                              el.focus();
+                              el.setSelectionRange(r.nextCursorStart, r.nextCursorEnd);
+                            } catch {}
+                          });
+                        }}
+                        style={{ padding: "6px 10px", lineHeight: 1, display: "inline-flex", gap: 6, alignItems: "center" }}
+                      >
+                        <FIcon name="italic" size={16} />
+                      </button>
+
+                      <button
+                        type="button"
+                        className="ghostBtn"
+                        title="Subrayado (marca con __texto__)"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          const el = descRef.current;
+                          if (!el || !editing) return;
+                          const r = wrapSelection(el, "__", "__");
+                          setEditing({ ...editing, description: r.next });
+                          requestAnimationFrame(() => {
+                            try {
+                              el.focus();
+                              el.setSelectionRange(r.nextCursorStart, r.nextCursorEnd);
+                            } catch {}
+                          });
+                        }}
+                        style={{ padding: "6px 10px", lineHeight: 1, display: "inline-flex", gap: 6, alignItems: "center" }}
+                      >
+                        <FIcon name="underline" size={16} />
+                      </button>
+
+                      <button
+                        type="button"
+                        className="ghostBtn"
+                        title="Lista (• )"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          const el = descRef.current;
+                          if (!el || !editing) return;
+                          const r = toggleLinePrefix(el, "• ");
+                          setEditing({ ...editing, description: r.next });
+                          requestAnimationFrame(() => {
+                            try {
+                              el.focus();
+                            } catch {}
+                          });
+                        }}
+                        style={{ padding: "6px 10px", lineHeight: 1, display: "inline-flex", gap: 6, alignItems: "center" }}
+                      >
+                        <FIcon name="list" size={16} />
+                      </button>
+
+                      <div style={{ width: 1, height: 22, background: "rgba(255,255,255,.12)", marginInline: 4 }} />
+
+                      {/* Emoji */}
+                      <button
+                        ref={emojiBtnRef}
+                        type="button"
+                        className="ghostBtn"
+                        onClick={() => (emojiOpen ? setEmojiOpen(false) : openEmoji())}
+                        title="Emojis"
+                        style={{ padding: "6px 10px", lineHeight: 1 }}
+                      >
+                        😀
+                      </button>
+
+                      {/* Solo 1 botón imagen (acá) */}
+                      <button type="button" className="btnSmall" onClick={onPickImage} title="Elegir imagen">
+                        Imagen…
+                      </button>
+                    </div>
+
+                    {/* Emoji popup */}
+                    {emojiOpen && emojiPos
+                      ? createPortal(
+                          <div
+                            ref={emojiPanelRef}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            style={{
+                              position: "absolute",
+                              top: emojiPos.top,
+                              left: emojiPos.left,
+                              zIndex: 99999,
+                              borderRadius: 12,
+                              overflow: "hidden",
+                              border: "1px solid rgba(255,255,255,.12)",
+                              background: "rgba(0,0,0,.9)",
+                            }}
+                          >
+                            <EmojiBoundary>
+                              <Suspense fallback={<div style={{ padding: 12, fontSize: 12, opacity: 0.9 }}>Cargando emojis…</div>}>
+                                <EmojiPicker
+                                  theme={"dark" as any}
+                                  width={360}
+                                  height={420}
+                                  searchPlaceHolder="Buscar emoji…"
+                                  onEmojiClick={(emojiData: EmojiClickData) => {
+                                    const emo = (emojiData as any)?.emoji || "";
+                                    if (!emo) return;
+                                    insertEmoji(emo);
+                                  }}
+                                />
+                              </Suspense>
+                            </EmojiBoundary>
+                          </div>,
+                          document.body
+                        )
+                      : null}
+
+                    <textarea
+                      ref={descRef}
+                      className="input"
+                      rows={6}
+                      value={editing.description || ""}
+                      onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                      style={{ resize: "vertical", whiteSpace: "pre-wrap" }}
+                      placeholder="Escribí el contenido…"
                     />
+                  </div>
+
+                  {/* Link (CTA) */}
+                  <label className="field" style={{ gridColumn: "1 / -1" }}>
+                    <span className="label">Link</span>
+                    <input className="input" value={editing.ctaLink} onChange={(e) => setEditing({ ...editing, ctaLink: e.target.value })} placeholder="https://..." inputMode="url" />
+                    <div style={{ marginTop: 6, opacity: 0.65, fontSize: 12 }}>Tip: si no querés botón en cliente, dejalo vacío.</div>
                   </label>
 
                   <label className="field">
-                    <span className="label">Botón (CTA) en cliente</span>
-                    <select
-                      className="input"
-                      value={editing.ctaMode}
-                      onChange={(e) => setEditing({ ...editing, ctaMode: e.target.value as CtaMode })}
-                    >
-                      <option value="CONSULTAR">Consultar</option>
-                      <option value="VER_DETALLE">Ver detalle</option>
+                    <span className="label">Estado</span>
+                    <select className="input" value={editing.active ? "1" : "0"} onChange={(e) => setEditing({ ...editing, active: e.target.value === "1" })}>
+                      <option value="1">Activa</option>
+                      <option value="0">Inactiva</option>
                     </select>
                   </label>
 
-                  <label className="field">
-                    <span className="label">Link del botón</span>
-                    <input
-                      className="input"
-                      value={editing.ctaLink}
-                      onChange={(e) => setEditing({ ...editing, ctaLink: e.target.value })}
-                      placeholder="https://..."
-                      inputMode="url"
-                    />
-                  </label>
-
+                  {/* Preview imagen + recorte */}
                   <div className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Imagen</span>
-
-                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <button type="button" className="btnSmall" onClick={onPickImage}>
-                        Elegir imagen…
-                      </button>
-
-                      {editing.image ? (
-                        <button type="button" className="ghostBtn" onClick={removeImage}>
-                          Quitar
-                        </button>
-                      ) : (
-                        <span style={{ opacity: 0.8, fontSize: 12 }}>No hay imagen seleccionada</span>
-                      )}
-                    </div>
 
                     {editing.image ? (
                       <div
                         style={{
-                          marginTop: 10,
+                          marginTop: 6,
                           borderRadius: 14,
                           overflow: "hidden",
                           border: "1px solid rgba(255,255,255,.12)",
@@ -1812,26 +2098,22 @@ export default function News() {
                           }}
                         />
                       </div>
-                    ) : null}
+                    ) : (
+                      <div style={{ marginTop: 6, opacity: 0.75, fontSize: 12 }}>No hay imagen seleccionada.</div>
+                    )}
+
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                      {editing.image ? (
+                        <button type="button" className="ghostBtn" onClick={removeImage}>
+                          Quitar imagen
+                        </button>
+                      ) : null}
+                    </div>
 
                     {editing.image ? (
-                      <div style={{ marginTop: 8, opacity: 0.75, fontSize: 12 }}>
-                        Tip: elegís imagen y se abre el recorte. Para re-recortar después: click en la preview.
-                      </div>
+                      <div style={{ marginTop: 8, opacity: 0.75, fontSize: 12 }}>Tip: para re-recortar después: click en la preview.</div>
                     ) : null}
                   </div>
-
-                  <label className="field">
-                    <span className="label">Estado</span>
-                    <select
-                      className="input"
-                      value={editing.active ? "1" : "0"}
-                      onChange={(e) => setEditing({ ...editing, active: e.target.value === "1" })}
-                    >
-                      <option value="1">Activa</option>
-                      <option value="0">Inactiva</option>
-                    </select>
-                  </label>
                 </div>
               </div>
 
@@ -1839,11 +2121,6 @@ export default function News() {
                 <button className="ghostBtn" onClick={closeModal} disabled={saving}>
                   Cancelar
                 </button>
-
-                <button className="btnSmall" onClick={() => setPreviewOpen(true)} disabled={saving} type="button">
-                  Vista previa
-                </button>
-
                 <button className="btnSmall" onClick={save} disabled={saving}>
                   {saving ? "Guardando…" : "Guardar"}
                 </button>
@@ -1852,20 +2129,20 @@ export default function News() {
           </div>
 
           {/* Cropper */}
-          <CropperModal
-            open={cropOpen}
-            sourceUrl={cropSourceUrl}
-            originalFileName={cropOriginalNameRef.current}
-            onClose={closeCrop}
-            onConfirm={onCropConfirm}
-          />
-
-          {/* Preview cliente */}
-          {previewOpen && currentPreviewData ? (
-            <ClientCardPreview item={currentPreviewData as any} onClose={() => setPreviewOpen(false)} />
-          ) : null}
+          <CropperModal open={cropOpen} sourceUrl={cropSourceUrl} originalFileName={cropOriginalNameRef.current} onClose={closeCrop} onConfirm={onCropConfirm} />
         </>
       )}
+
+      {/* Preview cliente (global, desde ⋯) */}
+      {previewOpen && previewData ? (
+        <ClientCardPreview
+          item={previewData as any}
+          onClose={() => {
+            setPreviewOpen(false);
+            setPreviewItem(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

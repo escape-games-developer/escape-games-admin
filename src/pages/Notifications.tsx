@@ -37,7 +37,7 @@ type TargetMode = "TEST" | "ALL";
 type Status = "DRAFT" | "SENT" | "FAILED";
 
 // ✅ UI-only: Tipo (mail/sms). No lo persistimos en DB todavía.
-type Channel = "MAIL" | "SMS";
+type Channel = "MAIL" | "SMS" | "PUSH";
 
 type NotificationRow = {
   id: string;
@@ -50,6 +50,10 @@ type NotificationRow = {
   sent_at: string | null;
 
   image_url?: string | null;
+
+  // ✅ NUEVO (persistido)
+  channel?: Channel | null;
+  push_action?: string | null; // por ahora fijo: OPEN_NEWS
 };
 
 type Category = "PROMO" | "DESCUENTO" | "NOVEDAD";
@@ -486,10 +490,10 @@ export default function Notifications() {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from("notifications")
-        .select("id, subject, body, status, target, test_email, created_at, sent_at, image_url")
-        .order("created_at", { ascending: false })
-        .limit(200);
+  .from("notifications")
+  .select("id, subject, body, status, target, test_email, created_at, sent_at, image_url, channel, push_action")
+  .order("created_at", { ascending: false })
+  .limit(200);;
 
       if (error) throw error;
       setItems((data as NotificationRow[]) ?? []);
@@ -633,26 +637,29 @@ export default function Notifications() {
 
   const startCreate = () => {
     const id = genId();
-    setEditing({
-      id,
-      subject: "",
-      body: "",
-      status: "DRAFT",
-      target: "TEST",
-      test_email: "",
-      created_at: new Date().toISOString(),
-      sent_at: null,
-      image_url: null,
-    });
-    setChannel("MAIL"); // UI-only
+   setEditing({
+  id,
+  subject: "",
+  body: "",
+  status: "DRAFT",
+  target: "TEST",
+  test_email: "",
+  created_at: new Date().toISOString(),
+  sent_at: null,
+  image_url: null,
+
+  channel: "MAIL",
+  push_action: "OPEN_NEWS",
+});
+setChannel("MAIL"); // UI-only
     lastFocusRef.current = "body";
     resetModalTransient();
     setOpen(true);
   };
 
   const startEdit = (n: NotificationRow) => {
-    setEditing({ ...n });
-    setChannel("MAIL"); // UI-only
+    setEditing({ ...n, channel: (n.channel as Channel) || "MAIL", push_action: n.push_action || "OPEN_NEWS" });
+setChannel(((n.channel as Channel) || "MAIL"));
     lastFocusRef.current = "body";
     resetModalTransient();
     setOpen(true);
@@ -1219,22 +1226,39 @@ export default function Notifications() {
       } else {
         if (finalImageUrl && finalImageUrl.startsWith("blob:")) finalImageUrl = null;
       }
+// ✅ Canal real elegido
+const finalChannel: Channel = (channel as Channel) || "MAIL";
 
-      const payload = {
-        id: editing.id,
-        subject,
-        body,
-        status: editing.status,
-        target,
-        test_email: target === "TEST" ? testEmail : null,
-        image_url: finalImageUrl,
-      };
+// ✅ Acción fija para push (abre Novedades en la app cliente)
+const pushAction = "OPEN_NEWS";
+
+// ✅ Si queda en SENT, aseguramos fecha/hora de envío
+const sentAt =
+  editing.status === "SENT"
+    ? (editing.sent_at || new Date().toISOString())
+    : null;
+
+const payload = {
+  id: editing.id,
+  subject,
+  body,
+  status: editing.status,
+  target,
+  test_email: target === "TEST" ? testEmail : null,
+  image_url: finalImageUrl,
+
+  // ✅ clave
+  sent_at: sentAt,
+
+  // si ya sumaste push:
+  channel: finalChannel,
+  push_action: pushAction,
+};
 
       const { data, error } = await supabase
         .from("notifications")
         .upsert(payload, { onConflict: "id" })
-        .select("id, subject, body, status, target, test_email, created_at, sent_at, image_url")
-        .single();
+.select("id, subject, body, status, target, test_email, created_at, sent_at, image_url, channel, push_action")        .single();
 
       if (error) throw error;
 
@@ -1265,8 +1289,7 @@ export default function Notifications() {
         .from("notifications")
         .update(patch)
         .eq("id", n.id)
-        .select("id, subject, body, status, target, test_email, created_at, sent_at, image_url")
-        .single();
+.select("id, subject, body, status, target, test_email, created_at, sent_at, image_url, channel, push_action")        .single();
 
       if (error) throw error;
 
@@ -1420,294 +1443,168 @@ const rowBase: React.CSSProperties = {
         </select>
       </div>
 
-      {loading ? (
-        <div className="panel" style={{ padding: 16 }}>
-          Cargando notificaciones…
-        </div>
-      ) : (
-        <div
-          className="panel"
-          style={{
-            padding: 0,
-            width: "100%",
-            height: "calc(100vh - 260px)",
-            overflow: "auto",
-          }}
-        >
-          {sorted.length === 0 ? (
-            <div style={{ padding: 16, opacity: 0.8 }}>No hay resultados.</div>
-          ) : (
-            <div style={{ width: "100%" }}>
-              {/* ✅ Header sticky estilo excel */}
-              <div
-                style={{
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 5,
-                  display: "grid",
-                  gridTemplateColumns: GRID_COLS,
-                  gap: 0,
-                  alignItems: "stretch",
-                  background: "rgba(0,0,0,.70)",
-                  backdropFilter: "blur(6px)",
-                  borderBottom: "1px solid rgba(255,255,255,.12)",
-                  borderTop: "1px solid rgba(255,255,255,.08)",
-                }}
-              >
+{loading ? (
+  <div className="panel" style={{ padding: 16 }}>
+    Cargando notificaciones…
+  </div>
+) : (
+  <div
+  className="panel"
+  style={{
+    padding: 0,
+    width: "100%",
+    height: "calc(100vh - 260px)",
+    overflow: "auto",
+  }}
+>
+  <div style={{ width: "100%" }}>
+    {/* ✅ Header sticky SIEMPRE */}
+    <div
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 5,
+        display: "grid",
+        gridTemplateColumns: GRID_COLS,
+        gap: 0,
+        alignItems: "stretch",
+        background: "rgba(0,0,0,.70)",
+        backdropFilter: "blur(6px)",
+        borderBottom: "1px solid rgba(255,255,255,.12)",
+        borderTop: "1px solid rgba(255,255,255,.08)",
+      }}
+    >
+      <div style={headerClickable("date")} onClick={() => setSort((p) => toggleSort(p, "date"))}>
+        Fecha{sortIndicator(sort, "date")}
+      </div>
+
+      <div style={headerClickable("time")} onClick={() => setSort((p) => toggleSort(p, "time"))}>
+        Hora{sortIndicator(sort, "time")}
+      </div>
+
+      <div style={headerClickable("title")} onClick={() => setSort((p) => toggleSort(p, "title"))}>
+        Título{sortIndicator(sort, "title")}
+      </div>
+
+      <div style={headerClickable("category")} onClick={() => setSort((p) => toggleSort(p, "category"))}>
+        Categoría{sortIndicator(sort, "category")}
+      </div>
+
+      <div style={headerCellBase}>Tipo</div>
+
+      <div style={headerClickable("status")} onClick={() => setSort((p) => toggleSort(p, "status"))}>
+        Estado{sortIndicator(sort, "status")}
+      </div>
+
+      <div style={{ ...headerCellBase, borderRight: "none" }} />
+    </div>
+
+    {/* ✅ Body: filas o vacío */}
+    {sorted.length === 0 ? (
+      <div style={{ padding: 16, opacity: 0.8 }}>No hay resultados.</div>
+    ) : (
+      <>
+        {sorted.map((n, idx) => {
+          const d = getRowDate(n);
+          const cat = inferCategory(n);
+          const isEven = idx % 2 === 0;
+
+          return (
+            <div
+              key={n.id}
+              style={{
+                ...rowBase,
+                background: isEven ? "rgba(255,255,255,.02)" : "rgba(255,255,255,.00)",
+                transition: "background .12s ease",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.05)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLDivElement).style.background = isEven
+                  ? "rgba(255,255,255,.02)"
+                  : "rgba(255,255,255,.00)";
+              }}
+            >
+              <div style={{ ...cellBase, opacity: 0.9 }}>{fmtDateOnly(d)}</div>
+              <div style={{ ...cellBase, opacity: 0.85 }}>{fmtTimeOnly(d)}</div>
+
+              <div style={{ ...cellBase, justifyContent: "center" }}>
                 <div
-                  style={headerClickable("date")}
-                  onClick={() => setSort((p) => toggleSort(p, "date"))}
-                  title="Ordenar por fecha"
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    fontWeight: 800,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                  title={n.subject}
                 >
-                  Fecha{sortIndicator(sort, "date")}
+                  {n.subject}
                 </div>
-
-                <div
-                  style={headerClickable("time")}
-                  onClick={() => setSort((p) => toggleSort(p, "time"))}
-                  title="Ordenar por hora"
-                >
-                  Hora{sortIndicator(sort, "time")}
-                </div>
-
-                <div
-                  style={headerClickable("title")}
-                  onClick={() => setSort((p) => toggleSort(p, "title"))}
-                  title="Ordenar por título"
-                >
-                  Título{sortIndicator(sort, "title")}
-                </div>
-
-                <div
-                  style={headerClickable("category")}
-                  onClick={() => setSort((p) => toggleSort(p, "category"))}
-                  title="Ordenar por categoría"
-                >
-                  Categoría{sortIndicator(sort, "category")}
-                </div>
-
-                <div style={headerCellBase} title="Tipo (por ahora bloqueado en la grilla)">
-                  Tipo
-                </div>
-
-                <div
-                  style={headerClickable("status")}
-                  onClick={() => setSort((p) => toggleSort(p, "status"))}
-                  title="Ordenar por estado"
-                >
-                  Estado{sortIndicator(sort, "status")}
-                </div>
-
-                {/* ✅ sin ⋯ en el header */}
-                <div style={{ ...headerCellBase, borderRight: "none" }} />
               </div>
 
-              {/* ✅ Rows */}
-              {sorted.map((n, idx) => {
-                const d = getRowDate(n);
-                const cat = inferCategory(n);
-                const isEven = idx % 2 === 0;
+              <div style={{ ...cellBase, opacity: 0.9 }}>{cat}</div>
+              <div style={{ ...cellBase, opacity: 0.85 }}>{(n.channel || "MAIL") as any}</div>
 
-                return (
-                  <div
-                    key={n.id}
-                    style={{
-                      ...rowBase,
-                      background: isEven ? "rgba(255,255,255,.02)" : "rgba(255,255,255,.00)",
-                      transition: "background .12s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.05)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLDivElement).style.background = isEven
-                        ? "rgba(255,255,255,.02)"
-                        : "rgba(255,255,255,.00)";
-                    }}
-                  >
-                    {/* ✅ Fecha (MISMO font) */}
-                    <div style={{ ...cellBase, opacity: 0.9, textAlign: "center" }}>
-                      {fmtDateOnly(d)}
-                    </div>
+              <div style={{ ...cellBase, opacity: 0.95 }}>
+                {n.status === "DRAFT" ? "BORRADOR" : n.status === "SENT" ? "ENVIADO" : "FALLIDO"}
+              </div>
 
-                    {/* ✅ Hora (MISMO font) */}
-                    <div style={{ ...cellBase, opacity: 0.85, textAlign: "center" }}>
-                      {fmtTimeOnly(d)}
-                    </div>
-
-                    {/* ✅ Título: SOLO subject + centrado vertical REAL */}
-                    <div style={{ ...cellBase, justifyContent: "center" }}>
-                      <div
-                        style={{
-                          width: "100%",
-                          textAlign: "left",
-                          fontWeight: 800,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                        title={n.subject}
-                      >
-                        {n.subject}
-                      </div>
-                    </div>
-
-                    <div style={{ ...cellBase, opacity: 0.9, textAlign: "center" }}>{cat}</div>
-
-                    <div style={{ ...cellBase, opacity: 0.7, textAlign: "center" }}>
-                      MAIL <span style={{ opacity: 0.55 }}>(bloqueado)</span>
-                    </div>
-
-                    <div style={{ ...cellBase, opacity: 0.95, textAlign: "center" }}>
-                      {n.status === "DRAFT" ? "BORRADOR" : n.status === "SENT" ? "ENVIADO" : "FALLIDO"}
-                    </div>
-
-                    {/* ✅ ⋯ solo filas, centrado en altura */}
-                    <div style={{ ...cellBase, borderRight: "none", justifyContent: "flex-end" }}>
-                      <button
-                        type="button"
-                        className="ghostBtn"
-                        style={{
-                          padding: "6px 10px",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                        data-menu-btn="1"
-                        onClick={(e) => {
-                          if (saving) return;
-                          const btn = e.currentTarget as HTMLButtonElement;
-                          if (menuOpenId === n.id) {
-                            closeMenu();
-                            return;
-                          }
-                          openMenuFor(n.id, btn);
-                        }}
-                        disabled={saving}
-                        aria-label="Opciones"
-                        title="Opciones"
-                      >
-                        <Icon name="dots" size={16} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* ✅ Menú (PORTAL a body) — aparece al lado de la fila SIEMPRE */}
-              {menuOpenId && menuPos
-                ? createPortal(
-                    <div
-                      data-menu-popup="1"
-                      style={{
-                        position: "absolute",
-                        left: menuPos.left,
-                        top: menuPos.top,
-                        zIndex: 99999,
-                        width: 240,
-                        borderRadius: 12,
-                        overflow: "hidden",
-                        border: "1px solid rgba(255,255,255,.14)",
-                        background: "rgba(0,0,0,.94)",
-                        boxShadow: "0 12px 34px rgba(0,0,0,.45)",
-                      }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                    >
-                      {(() => {
-                        const n = sorted.find((x) => x.id === menuOpenId);
-                        if (!n) return null;
-
-                        const itemStyle: React.CSSProperties = {
-                          width: "100%",
-                          justifyContent: "flex-start" as any,
-                          borderRadius: 0,
-                          padding: "10px 12px",
-                          display: "flex",
-                          gap: 10,
-                          alignItems: "center",
-                        };
-
-                        const iconStyle: React.CSSProperties = {
-                          opacity: 0.9,
-                        };
-
-                        return (
-                          <>
-                            <button
-                              className="ghostBtn"
-                              style={{
-                                ...itemStyle,
-                                opacity: n.status === "SENT" ? 0.5 : 1,
-                              }}
-                              onClick={() => {
-                                closeMenu();
-                                if (n.status !== "SENT") startEdit(n);
-                              }}
-                              disabled={saving || n.status === "SENT"}
-                              title={n.status === "SENT" ? "No se puede editar una enviada" : "Editar"}
-                            >
-                              <Icon name="edit" size={16} style={iconStyle} />
-                              Editar
-                            </button>
-
-                            <button
-                              className="ghostBtn"
-                              style={itemStyle}
-                              onClick={() => {
-                                closeMenu();
-                                setPreview(n);
-                              }}
-                              disabled={saving}
-                            >
-                              <Icon name="eye" size={16} style={iconStyle} />
-                              Vista previa
-                            </button>
-
-                            <button
-                              className="ghostBtn"
-                              style={{
-                                ...itemStyle,
-                                opacity: n.status === "SENT" ? 0.5 : 1,
-                              }}
-                              onClick={async () => {
-                                closeMenu();
-                                await sendNotification(n);
-                              }}
-                              disabled={saving || n.status === "SENT"}
-                              title={n.status === "SENT" ? "Ya está enviada" : "Enviar"}
-                            >
-                              <Icon name="send" size={16} style={iconStyle} />
-                              Enviar
-                            </button>
-
-                            <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
-
-                            <button
-                              className="dangerBtnInline"
-                              style={{
-                                ...itemStyle,
-                                textAlign: "left",
-                              }}
-                              onClick={async () => {
-                                closeMenu();
-                                await deleteRow(n);
-                              }}
-                              disabled={saving}
-                            >
-                              <Icon name="trash" size={16} style={{ opacity: 0.95 }} />
-                              Borrar
-                            </button>
-                          </>
-                        );
-                      })()}
-                    </div>,
-                    document.body
-                  )
-                : null}
+              <div style={{ ...cellBase, borderRight: "none", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="ghostBtn"
+                  style={{ padding: "6px 10px", display: "inline-flex", alignItems: "center", gap: 6 }}
+                  data-menu-btn="1"
+                  onClick={(e) => {
+                    if (saving) return;
+                    const btn = e.currentTarget as HTMLButtonElement;
+                    if (menuOpenId === n.id) return closeMenu();
+                    openMenuFor(n.id, btn);
+                  }}
+                  disabled={saving}
+                  aria-label="Opciones"
+                  title="Opciones"
+                >
+                  <Icon name="dots" size={16} />
+                </button>
+              </div>
             </div>
-          )}
-        </div>
-      )}
+          );
+        })}
+
+        {/* ✅ Menú portal (solo si hay filas, pero también funciona si lo dejás igual) */}
+        {menuOpenId && menuPos
+          ? createPortal(
+              <div
+                data-menu-popup="1"
+                style={{
+                  position: "fixed",
+                  left: menuPos.left,
+                  top: menuPos.top,
+                  zIndex: 99999,
+                  width: 240,
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  border: "1px solid rgba(255,255,255,.14)",
+                  background: "rgba(0,0,0,.94)",
+                  boxShadow: "0 12px 34px rgba(0,0,0,.45)",
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                {/* ...tu contenido del menú igual que antes... */}
+              </div>,
+              document.body
+            )
+          : null}
+      </>
+    )}
+  </div>
+</div>
+)}
+
 
       {/* ✅ Modal vista previa */}
       {preview ? (
@@ -2060,6 +1957,7 @@ const rowBase: React.CSSProperties = {
                         <select className="input" value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
                           <option value="MAIL">MAIL</option>
                           <option value="SMS">SMS</option>
+                          <option value="PUSH">PUSH</option>
                         </select>
                       </label>
                     </div>
@@ -2070,6 +1968,7 @@ const rowBase: React.CSSProperties = {
                       <select className="input" value={channel} onChange={(e) => setChannel(e.target.value as Channel)}>
                         <option value="MAIL">MAIL</option>
                         <option value="SMS">SMS</option>
+                        <option value="PUSH">PUSH</option>
                       </select>
                     </label>
                   )}
