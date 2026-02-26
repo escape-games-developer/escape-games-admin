@@ -1,8 +1,9 @@
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  text-align: left;
 }
 
 .logo {
@@ -56,41 +57,76 @@ svg.logo {
   width: auto !important;
   max-height: none !important;
 }
-.profileGmCode {
-  margin-top: 4px;
-  font-size: 13px;
-  line-height: 1.2;
-}
-/* ===== News cards: compactas ===== */
+/* =========================
+   FULL SCREEN OVERRIDES
+   (para que el admin use toda la pantalla)
+========================= */
 
-/* Evita alturas forzadas */
-.roomCard,
-.roomBody {
-  height: auto !important;
-  min-height: 0 !important;
+html, body, #root {
+  height: 100%;
+  width: 100%;
 }
 
-/* Si el layout usa flex y estira, esto lo corrige */
-.roomBody {
-  display: block !important;
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-width: 320px;
+
+  /* 🚫 sacamos el layout “card centrada” de Vite */
+  display: block;
+  place-items: initial;
 }
 
-/* La descripción HTML suele traer <p> con margen grande */
-.roomBody [data-news-desc] p,
-.roomBody [data-news-desc] ul,
-.roomBody [data-news-desc] ol,
-.roomBody [data-news-desc] blockquote {
+/* 🚫 sacamos max-width/padding/centrado del template */
+#root {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  text-align: left;
+
+  /* opcional pero útil si tu layout usa flex */
+  display: flex;
+  flex-direction: column;
+}
+/* =========================
+   ADMIN WIDE (solo algunas páginas)
+========================= */
+body.adminWide .shell .main .content {
+  max-width: none !important;
+  width: 100% !important;
   margin: 0 !important;
+  padding-left: 20px;
+  padding-right: 20px;
+  box-sizing: border-box;
+}
+
+/* ayuda a que el scroller interno funcione bien */
+body.adminWide .shell,
+body.adminWide .main,
+body.adminWide .content {
+  min-height: 0;
+}
+/* ✅ ADMIN WIDE: sin márgenes laterales ni inferior */
+body.adminWide .shell .main {
   padding: 0 !important;
 }
 
-/* Separación mínima entre texto y acciones */
-.roomActions {
-  margin-top: 8px !important;
-  padding-top: 0 !important;
+body.adminWide .shell .main .content {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;     /* <- chau padding izq/der/abajo */
+  box-sizing: border-box;
 }
 
-/* Si tenés gap grande en roomBody, lo bajamos */
-.roomBody {
-  gap: 0 !important;
+/* opcional: si hay "aire" abajo por line-height o algo raro */
+body.adminWide .shell .main .content > * {
+  margin-bottom: 0;
+}
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* si tu scroller es interno */
 }

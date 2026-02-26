@@ -979,6 +979,8 @@ export default function Users() {
     minWidth: 0,
     overflow: "hidden",
     textAlign: "center",
+
+    
   };
 
   const cellBase: React.CSSProperties = {

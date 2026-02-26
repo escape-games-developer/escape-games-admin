@@ -20,14 +20,12 @@ export default function AdminLayout() {
     let mounted = true;
 
     const boot = async () => {
-      // ✅ Requiere sesión
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
         nav("/login", { replace: true });
         return;
       }
 
-      // ✅ Requiere estar en tabla admins
       const { data: adminRow } = await supabase
         .from("admins")
         .select("mail, branch_id")
@@ -48,7 +46,6 @@ export default function AdminLayout() {
 
     boot();
 
-    // si cambia la sesión, revalida
     const { data: sub } = supabase.auth.onAuthStateChange(() => {
       boot();
     });
@@ -59,14 +56,13 @@ export default function AdminLayout() {
     };
   }, [nav]);
 
-  // Cierra drawer al cambiar de ruta
   useEffect(() => {
     setDrawerOpen(false);
   }, [loc.pathname]);
 
   // ✅ FULL WIDTH solo en ciertas páginas
   useEffect(() => {
-    // ✅ agregado /notificaciones
+    // 👇 sumo NOTIFICACIONES
     const widePaths = ["/salas", "/novedades", "/usuarios", "/notificaciones"];
     const isWide = widePaths.includes(loc.pathname);
 
@@ -84,11 +80,7 @@ export default function AdminLayout() {
   return (
     <div className="shell">
       <Header onOpenMenu={() => setDrawerOpen(true)} />
-      <Drawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        userName={admin.userName}
-      />
+      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} userName={admin.userName} />
       <main className="main">
         <div className="content">
           <Outlet />
