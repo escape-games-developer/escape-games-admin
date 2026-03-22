@@ -120,7 +120,7 @@ export default function Login() {
         <div style={{ textAlign: "center", marginBottom: 8 }}>
           <div style={{ fontWeight: 900, fontSize: 18 }}>Acceso Administrador</div>
           <div style={{ opacity: 0.8, fontSize: 12 }}>
-            Ingresá con tu usuario de Supabase
+          
           </div>
         </div>
 

@@ -291,7 +291,6 @@ function printPngFromCanvas(canvasId: string, title: string) {
   setTimeout(remove, 15000);
 }
 
-// Bomb card local
 type BombCardState = { title: string; description: string; imageUrl: string };
 const BOMB_STORAGE_KEY = "eg_admin_bomb_card_v1";
 
@@ -321,7 +320,7 @@ function saveBombCard(next: BombCardState) {
 }
 
 /* =========================
-   CROP POPUP (SALAS) - CURSOR ONLY ✅
+   CROP POPUP (SALAS)
 ========================= */
 
 const ROOM_CARD_ASPECT = 900 / 520;
@@ -385,7 +384,7 @@ function applyAspectFromAnchor(rect: CropRect, nat: NatImg, handle: Handle, aspe
 }
 
 /* =======================
-   ICONOS SVG (tabla / menú)
+   ICONOS SVG
 ======================= */
 
 function Icon({
@@ -393,7 +392,18 @@ function Icon({
   size = 16,
   style,
 }: {
-  name: "dots" | "edit" | "eye" | "toggle" | "trash" | "qr" | "records" | "link";
+  name:
+    | "dots"
+    | "edit"
+    | "eye"
+    | "toggle"
+    | "trash"
+    | "qr"
+    | "records"
+    | "link"
+    | "refresh"
+    | "copy"
+    | "image";
   size?: number;
   style?: React.CSSProperties;
 }) {
@@ -501,7 +511,45 @@ function Icon({
     );
   }
 
-  // trash
+  if (name === "refresh") {
+    return (
+      <svg {...common}>
+        <path d="M20 11a8 8 0 1 0 2 5.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        <path d="M20 4v6h-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (name === "copy") {
+    return (
+      <svg {...common}>
+        <rect x="9" y="9" width="11" height="11" rx="2.5" stroke="currentColor" strokeWidth="2" />
+        <path
+          d="M15 9V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v5a3 3 0 0 0 3 3h2"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (name === "image") {
+    return (
+      <svg {...common}>
+        <rect x="3" y="5" width="18" height="14" rx="2.5" stroke="currentColor" strokeWidth="2" />
+        <circle cx="9" cy="10" r="1.6" fill="currentColor" />
+        <path
+          d="M21 16l-4.8-4.8a1.5 1.5 0 0 0-2.1 0L8 17.3"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
   return (
     <svg {...common}>
       <path d="M4 7h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -575,7 +623,6 @@ export default function Rooms() {
     ready: false,
   });
 
-  // ✅ Crop popup state
   const [cropModal, setCropModal] = useState<CropModalState | null>(null);
   const [natImg, setNatImg] = useState<NatImg | null>(null);
   const [cropRect, setCropRect] = useState<CropRect | null>(null);
@@ -588,7 +635,6 @@ export default function Rooms() {
 
   const cursorRef = useRef<string>("default");
 
-  // ✅ menú ⋯ por fila (portal a body)
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const menuAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
@@ -617,6 +663,7 @@ export default function Rooms() {
         : kind === "off"
         ? "1px solid rgba(255,0,0,0.22)"
         : "1px solid rgba(255,255,255,0.10)";
+
     return (
       <span
         style={{
@@ -645,21 +692,18 @@ export default function Rooms() {
 
     const r = btn.getBoundingClientRect();
 
-    // ✅ position: fixed => coords de viewport (NO sumes scroll)
     const top = r.top;
     const left = r.right;
 
     const MENU_W = 270;
-    const MENU_H = 300; // aprox para clamp
+    const MENU_H = 300;
     const gap = 10;
 
-    // X
     let x = left + gap;
     const maxX = window.innerWidth - 12 - MENU_W;
     if (x > maxX) x = r.left - gap - MENU_W;
     if (x < 12) x = 12;
 
-    // Y
     let y = top - 6;
     const maxY = window.innerHeight - 12 - MENU_H;
     if (y > maxY) y = maxY;
@@ -705,7 +749,6 @@ export default function Rooms() {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [themesOpen, cropModal?.open]);
 
   useEffect(() => {
@@ -840,7 +883,6 @@ export default function Rooms() {
       mounted = false;
       if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me.ready, me.isBranchScoped, me.branchId]);
 
   useEffect(() => {
@@ -872,7 +914,6 @@ export default function Rooms() {
       window.removeEventListener("scroll", onScrollResize, true);
       window.removeEventListener("resize", onScrollResize);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuOpenId]);
 
   const filtered = useMemo(() => {
@@ -885,6 +926,7 @@ export default function Rooms() {
       const okSearch = !s ? true : name.includes(s) || branchName.includes(s);
       const okBranch = !branchFilter ? true : (r.branch || "") === branchFilter;
       const okScoped = me.isBranchScoped && me.branchId ? r.branch_id === me.branchId : true;
+
       return okSearch && okBranch && okScoped;
     });
   }, [items, q, branchFilter, me.isBranchScoped, me.branchId, branchesById]);
@@ -988,7 +1030,10 @@ export default function Rooms() {
 
     const r1 = String(recordsModal.record1 || "").trim();
     const r2 = String(recordsModal.record2 || "").trim();
-    if (!isMMSS(r1) || !isMMSS(r2)) return alert("Formato inválido. Usá MM:SS (ej: 12:34).");
+
+    if (!isMMSS(r1) || !isMMSS(r2)) {
+      return alert("Formato inválido. Usá MM:SS (ej: 12:34).");
+    }
 
     setSaving(true);
     try {
@@ -1000,6 +1045,7 @@ export default function Rooms() {
         .eq("id", recordsModal.roomId)
         .select("*")
         .single();
+
       if (error) throw error;
 
       const saved = fromDb(data);
@@ -1153,7 +1199,6 @@ export default function Rooms() {
     }
   };
 
-  // ===== Crop geometry mapping (contain) =====
   const getContainBox = () => {
     if (!natImg) return null;
     const stage = cropStageRef.current;
@@ -1569,6 +1614,7 @@ export default function Rooms() {
   };
 
   const onBombPickImage = () => bombFileRef.current?.click();
+
   const onBombFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const file = e.target.files?.[0] || null;
     if (!file) return;
@@ -1586,47 +1632,39 @@ export default function Rooms() {
 
   const canEditBomb = !me.isBranchScoped && (me.isSuper || me.perms.canManageRooms);
 
-  // overlay style (display)
   const cropRectStyle = useMemo(() => {
     if (!natImg || !cropRect || !cropModal?.open) return null;
     const sr = natToScreenRect(cropRect);
     if (!sr) return null;
-
     return { left: sr.left, top: sr.top, width: sr.width, height: sr.height } as React.CSSProperties;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [natImg, cropRect, cropModal?.open]);
 
-  // ✅ estilos tabla tipo Excel (igual línea visual que Novedades)
-  // ✅ FIX: full height sin hueco + sin scroll horizontal
   const tableWrapStyle: React.CSSProperties = {
     borderRadius: 16,
     overflow: "hidden",
     border: "1px solid rgba(255,255,255,.12)",
     background: "rgba(0,0,0,.25)",
     flex: 1,
-    minHeight: 0, // CLAVE: permite que el hijo scroller estire sin “hueco”
-    minWidth: 0, // CLAVE: evita overflow horizontal en flex
+    minHeight: 0,
+    minWidth: 0,
     display: "flex",
     flexDirection: "column",
   };
 
-  // ✅ FULL HEIGHT real + SOLO scroll vertical (sin barra horizontal)
   const scrollerStyle: React.CSSProperties = {
-  width: "100%",
-  flex: 1,
-  minHeight: 0,
+    width: "100%",
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    overflowX: "hidden",
+  };
 
-  overflowY: "auto",
-  overflowX: "hidden",     // ✅ NO scroll horizontal
-};
-
-  // ✅ Tabla “fit” al contenedor (sin minWidth fijo)
   const tableStyle: React.CSSProperties = {
     width: "100%",
     borderCollapse: "separate",
     borderSpacing: 0,
     tableLayout: "fixed",
-    minWidth: 0, // ✅ antes 1120 => eso te forzaba scroll horizontal
+    minWidth: 0,
   };
 
   const thStyle: React.CSSProperties = {
@@ -1661,22 +1699,22 @@ export default function Rooms() {
   };
 
   return (
-  <div
-    className="page"
-    style={{
-  height: "100%",
-  minHeight: 0,
-  flex: 1,
-  width: "100%",
-  minWidth: 0,
-  display: "flex",
-  flexDirection: "column",
-  overflow: "hidden",
-  padding: 0,
-  margin: 0,
-  boxSizing: "border-box",
-}}
-  >
+    <div
+      className="page"
+      style={{
+        height: "100%",
+        minHeight: 0,
+        flex: 1,
+        width: "100%",
+        minWidth: 0,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        padding: 0,
+        margin: 0,
+        boxSizing: "border-box",
+      }}
+    >
       <div className="pageHeadRow" style={{ gap: 12, flex: "0 0 auto" }}>
         <div>
           <div className="pageTitle">Salas</div>
@@ -1728,44 +1766,34 @@ export default function Rooms() {
         )}
       </div>
 
-      {/* ✅ “Excel” full screen (ARREGLADO: 1 wrapper + 1 scroller + 1 table) */}
-   
- {/* ✅ “Excel” full screen */}
-<div
-  style={{
-    ...tableWrapStyle,
-    marginTop: 12,
-    marginBottom: 0,
-    flex: "1 1 auto",
-    minHeight: 0,
-  }}
->
-  <div style={scrollerStyle}>
-    <table style={tableStyle}>
+      <div
+        style={{
+          ...tableWrapStyle,
+          marginTop: 12,
+          marginBottom: 0,
+          flex: "1 1 auto",
+          minHeight: 0,
+        }}
+      >
+        <div style={scrollerStyle}>
+          <table style={tableStyle}>
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: 74 }}>Imagen</th>
-
                 <th style={{ ...thStyle, width: "clamp(180px, 22vw, 260px)" as any }}>Nombre</th>
                 <th style={{ ...thStyle, width: "clamp(120px, 14vw, 170px)" as any }}>Sucursal</th>
-
                 <th style={{ ...thStyle, width: "clamp(120px, 14vw, 160px)" as any }}>Categoría</th>
                 <th style={{ ...thStyle, width: "clamp(110px, 12vw, 140px)" as any }}>Nivel</th>
-
                 <th style={{ ...thStyle, width: "clamp(110px, 12vw, 130px)" as any }}>Jugadores</th>
                 <th style={{ ...thStyle, width: "clamp(110px, 12vw, 120px)" as any }}>Dificultad</th>
-
                 <th style={{ ...thStyle, width: "clamp(110px, 12vw, 120px)" as any }}>Récords</th>
                 <th style={{ ...thStyle, width: "clamp(90px, 10vw, 120px)" as any }}>Puntos</th>
-
                 <th style={{ ...thStyle, width: "clamp(100px, 12vw, 110px)" as any }}>Estado</th>
-
                 <th style={{ ...thStyle, width: 70, textAlign: "center" }}>⋯</th>
               </tr>
             </thead>
 
             <tbody>
-              {/* ✅ BOMB: primera fila NORMAL */}
               <tr
                 style={{ background: "rgba(255,255,255,0.02)" }}
                 onMouseEnter={(e) => {
@@ -1909,7 +1937,6 @@ export default function Rooms() {
                                 {canEditBomb ? (
                                   <>
                                     <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
-
                                     <button
                                       className="ghostBtn"
                                       style={itemStyle}
@@ -2032,7 +2059,9 @@ export default function Rooms() {
                         {badge(String(CAT_LABEL[r.category] || r.category).toUpperCase(), r.category === "WOW" ? "hot" : "type")}
                       </td>
 
-                      <td style={{ ...tdBase }}>{badge(String(LEVEL_LABEL[r.level] || r.level).toUpperCase(), "type")}</td>
+                      <td style={{ ...tdBase }}>
+                        {badge(String(LEVEL_LABEL[r.level] || r.level).toUpperCase(), "type")}
+                      </td>
 
                       <td style={{ ...tdBase }}>
                         <span style={{ fontWeight: 900 }}>
@@ -2113,7 +2142,6 @@ export default function Rooms() {
                                     alignItems: "center",
                                   };
                                   const iconStyle: React.CSSProperties = { opacity: 0.92 };
-
                                   const canTouchRoom = !me.isBranchScoped || !me.branchId || r.branch_id === me.branchId;
 
                                   return (
@@ -2241,7 +2269,6 @@ export default function Rooms() {
         </div>
       </div>
 
-      {/* Modal descripción */}
       {descModal ? (
         <>
           <div className="backdrop show" onMouseDown={() => setDescModal(null)} />
@@ -2254,7 +2281,9 @@ export default function Rooms() {
                 </button>
               </div>
               <div className="modalBody">
-                <div style={{ textAlign: "left", whiteSpace: "pre-wrap", lineHeight: 1.45, fontSize: 14 }}>{descModal.text}</div>
+                <div style={{ textAlign: "left", whiteSpace: "pre-wrap", lineHeight: 1.45, fontSize: 14 }}>
+                  {descModal.text}
+                </div>
               </div>
               <div className="modalFoot">
                 <button className="ghostBtn" onClick={() => setDescModal(null)}>
@@ -2266,582 +2295,652 @@ export default function Rooms() {
         </>
       ) : null}
 
-      {/* Modal QR (tabla) */}
-      {qrModal ? (
-        <>
-          <div className="backdrop show" onMouseDown={() => setQrModal(null)} />
-          <div className="modalCenter" onMouseDown={() => setQrModal(null)}>
-            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
-              <div className="modalHead">
-                <div className="modalTitle">QR</div>
-                <button className="iconBtn" onClick={() => setQrModal(null)} aria-label="Cerrar">
-                  ✕
+     {qrModal ? (
+  <>
+    <div className="backdrop show" onMouseDown={() => setQrModal(null)} />
+    <div className="modalCenter" onMouseDown={() => setQrModal(null)}>
+      <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+        <div className="modalHead">
+          <div className="modalTitle">QR</div>
+          <button className="iconBtn" onClick={() => setQrModal(null)} aria-label="Cerrar">
+            ✕
+          </button>
+        </div>
+        <div className="modalBody">
+          <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 10 }}>{qrModal.title}</div>
+
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              style={{
+                borderRadius: 14,
+                overflow: "hidden",
+                border: "1px solid rgba(255,255,255,.12)",
+                background: "rgba(255,255,255,.96)",
+                padding: 10,
+              }}
+            >
+              <QRCodeCanvas
+                id={qrModal.canvasId}
+                value={qrModal.value}
+                size={160}
+                includeMargin
+                bgColor="#ffffff"
+                fgColor="#000000"
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button className="ghostBtn" onClick={() => copy(qrModal.value)}>
+                Copiar valor QR
+              </button>
+              <button
+                className="ghostBtn"
+                onClick={() => downloadPngFromCanvas(qrModal.canvasId, `qr-${Date.now()}.png`)}
+              >
+                Descargar PNG
+              </button>
+              <button className="ghostBtn" onClick={() => printPngFromCanvas(qrModal.canvasId, qrModal.title)}>
+                Imprimir
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12, opacity: 0.75, fontSize: 12 }}>
+            Valor: <span style={{ fontFamily: "monospace" }}>{qrModal.value}</span>
+          </div>
+        </div>
+
+        <div className="modalFoot">
+          <button className="ghostBtn" onClick={() => setQrModal(null)}>
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  </>
+) : null}
+
+{recordsModal ? (
+  <>
+    <div className="backdrop show" onMouseDown={() => setRecordsModal(null)} />
+    <div className="modalCenter" onMouseDown={() => setRecordsModal(null)}>
+      <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="modalHead">
+          <div className="modalTitle">Editar récords</div>
+          <button className="iconBtn" onClick={() => setRecordsModal(null)} aria-label="Cerrar">
+            ✕
+          </button>
+        </div>
+
+        <div className="modalBody">
+          <div className="formGrid2">
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span className="label">Récord 1 (MM:SS)</span>
+              <input
+                className="input"
+                value={recordsModal.record1}
+                onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))}
+                placeholder="12:34"
+                inputMode="numeric"
+              />
+            </label>
+
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span className="label">Récord 2 (MM:SS)</span>
+              <input
+                className="input"
+                value={recordsModal.record2}
+                onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))}
+                placeholder="14:10"
+                inputMode="numeric"
+              />
+            </label>
+
+            <div style={{ gridColumn: "1 / -1", opacity: 0.75, fontSize: 12 }}>
+              Formato válido: <b>MM:SS</b> (ej: 08:45).
+            </div>
+          </div>
+        </div>
+
+        <div className="modalFoot">
+          <button className="ghostBtn" onClick={() => setRecordsModal(null)} disabled={saving}>
+            Cancelar
+          </button>
+          <button className="btnSmall" onClick={saveRecords} disabled={saving}>
+            {saving ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  </>
+) : null}
+
+{bombEditing && canEditBomb ? (
+  <>
+    <div className="backdrop show" onMouseDown={() => setBombEditing(false)} />
+    <div className="modalCenter" onMouseDown={() => setBombEditing(false)}>
+      <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="modalHead">
+          <div className="modalTitle">Editar Bomb Ticket</div>
+          <button className="iconBtn" onClick={() => setBombEditing(false)} aria-label="Cerrar">
+            ✕
+          </button>
+        </div>
+
+        <div className="modalBody">
+          <input ref={bombFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onBombFileChange} />
+
+          <div className="formGrid2">
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span className="label">Título</span>
+              <input className="input" value={bomb.title} onChange={(e) => setBomb((p) => ({ ...p, title: e.target.value }))} />
+            </label>
+
+            <label className="field" style={{ gridColumn: "1 / -1" }}>
+              <span className="label">Descripción</span>
+              <textarea
+                className="input"
+                rows={3}
+                value={bomb.description}
+                onChange={(e) => setBomb((p) => ({ ...p, description: e.target.value }))}
+                style={{ resize: "vertical" }}
+              />
+            </label>
+
+            <div className="field" style={{ gridColumn: "1 / -1" }}>
+              <span className="label">Imagen</span>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <button type="button" className="btnSmall" onClick={onBombPickImage}>
+                  Elegir imagen…
                 </button>
-              </div>
-              <div className="modalBody">
-                <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 10 }}>{qrModal.title}</div>
-
-                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                  <div
-                    style={{
-                      borderRadius: 14,
-                      overflow: "hidden",
-                      border: "1px solid rgba(255,255,255,.12)",
-                      background: "rgba(255,255,255,.96)",
-                      padding: 10,
-                    }}
-                  >
-                    <QRCodeCanvas
-                      id={qrModal.canvasId}
-                      value={qrModal.value}
-                      size={160}
-                      includeMargin
-                      bgColor="#ffffff"
-                      fgColor="#000000"
-                    />
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    <button className="ghostBtn" onClick={() => copy(qrModal.value)}>
-                      Copiar valor QR
-                    </button>
-                    <button className="ghostBtn" onClick={() => downloadPngFromCanvas(qrModal.canvasId, `qr-${Date.now()}.png`)}>
-                      Descargar PNG
-                    </button>
-                    <button className="ghostBtn" onClick={() => printPngFromCanvas(qrModal.canvasId, qrModal.title)}>
-                      Imprimir
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: 12, opacity: 0.75, fontSize: 12 }}>
-                  Valor: <span style={{ fontFamily: "monospace" }}>{qrModal.value}</span>
-                </div>
-              </div>
-
-              <div className="modalFoot">
-                <button className="ghostBtn" onClick={() => setQrModal(null)}>
-                  Cerrar
-                </button>
+                {bomb.imageUrl ? (
+                  <button type="button" className="ghostBtn" onClick={() => setBomb((p) => ({ ...p, imageUrl: "" }))}>
+                    Quitar
+                  </button>
+                ) : (
+                  <span style={{ opacity: 0.8, fontSize: 12 }}>Sin imagen (placeholder)</span>
+                )}
               </div>
             </div>
           </div>
-        </>
-      ) : null}
+        </div>
 
-      {/* Modal récords */}
-      {recordsModal ? (
-        <>
-          <div className="backdrop show" onMouseDown={() => setRecordsModal(null)} />
-          <div className="modalCenter" onMouseDown={() => setRecordsModal(null)}>
-            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
-              <div className="modalHead">
-                <div className="modalTitle">Editar récords</div>
-                <button className="iconBtn" onClick={() => setRecordsModal(null)} aria-label="Cerrar">
-                  ✕
-                </button>
-              </div>
+        <div className="modalFoot">
+          <button className="ghostBtn" onClick={() => setBombEditing(false)}>
+            Listo
+          </button>
+        </div>
+      </div>
+    </div>
+  </>
+) : null}
 
-              <div className="modalBody">
-                <div className="formGrid2">
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span className="label">Récord 1 (MM:SS)</span>
-                    <input
-                      className="input"
-                      value={recordsModal.record1}
-                      onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))}
-                      placeholder="12:34"
-                      inputMode="numeric"
-                    />
-                  </label>
+{open && editing ? (
+  <>
+    <div className="backdrop show" onMouseDown={closeModal} />
 
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span className="label">Récord 2 (MM:SS)</span>
-                    <input
-                      className="input"
-                      value={recordsModal.record2}
-                      onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))}
-                      placeholder="14:10"
-                      inputMode="numeric"
-                    />
-                  </label>
-
-                  <div style={{ gridColumn: "1 / -1", opacity: 0.75, fontSize: 12 }}>
-                    Formato válido: <b>MM:SS</b> (ej: 08:45).
-                  </div>
-                </div>
-              </div>
-
-              <div className="modalFoot">
-                <button className="ghostBtn" onClick={() => setRecordsModal(null)} disabled={saving}>
-                  Cancelar
-                </button>
-                <button className="btnSmall" onClick={saveRecords} disabled={saving}>
-                  {saving ? "Guardando…" : "Guardar"}
-                </button>
-              </div>
-            </div>
+    <div className="modalCenter" onMouseDown={closeModal}>
+      <div
+        className="modalBox"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{
+          width: "min(1180px, calc(100vw - 32px))",
+          maxWidth: "1180px",
+        }}
+      >
+        <div className="modalHead">
+          <div className="modalTitle">
+            {items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}
           </div>
-        </>
-      ) : null}
+          <button className="iconBtn" onClick={closeModal} aria-label="Cerrar">
+            ✕
+          </button>
+        </div>
 
-      {/* Modal editar Bomb Ticket */}
-      {bombEditing && canEditBomb ? (
-        <>
-          <div className="backdrop show" onMouseDown={() => setBombEditing(false)} />
-          <div className="modalCenter" onMouseDown={() => setBombEditing(false)}>
-            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
-              <div className="modalHead">
-                <div className="modalTitle">Editar Bomb Ticket</div>
-                <button className="iconBtn" onClick={() => setBombEditing(false)} aria-label="Cerrar">
-                  ✕
-                </button>
-              </div>
+        <div
+          className="modalBody roomsFormScroll"
+          style={{
+            maxHeight: "min(78vh, 820px)",
+            overflowY: "auto",
+            overflowX: "hidden",
+            scrollbarWidth: "thin",
+            scrollbarColor: "rgba(180,180,180,.7) transparent",
+            paddingRight: 8,
+          }}
+        >
+          <style>
+            {`
+              .roomsFormScroll::-webkit-scrollbar { width: 6px; }
+              .roomsFormScroll::-webkit-scrollbar-track { background: transparent; }
+              .roomsFormScroll::-webkit-scrollbar-thumb {
+                background: rgba(160,160,160,.55);
+                border-radius: 999px;
+              }
+              .roomsFormScroll::-webkit-scrollbar-thumb:hover {
+                background: rgba(190,190,190,.8);
+              }
+              @media (max-width: 980px) {
+                .rooms-row-3 { grid-template-columns: 1fr !important; }
+                .rooms-row-2 { grid-template-columns: 1fr !important; }
+              }
+            `}
+          </style>
 
-              <div className="modalBody">
-                <input ref={bombFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onBombFileChange} />
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFileChange} />
 
-                <div className="formGrid2">
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span className="label">Título</span>
-                    <input className="input" value={bomb.title} onChange={(e) => setBomb((p) => ({ ...p, title: e.target.value }))} />
-                  </label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Nombre</span>
+                <input className="input" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+              </label>
 
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span className="label">Descripción</span>
-                    <textarea
-                      className="input"
-                      rows={3}
-                      value={bomb.description}
-                      onChange={(e) => setBomb((p) => ({ ...p, description: e.target.value }))}
-                      style={{ resize: "vertical" }}
-                    />
-                  </label>
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Categoría</span>
+                <select className="input" value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as RoomCategory })}>
+                  <option value="WOW">WOW</option>
+                  <option value="CLASICO">Clásico (20%)</option>
+                  <option value="DESPEDIDA">Despedida</option>
+                </select>
+              </label>
 
-                  <div className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span className="label">Imagen</span>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <button type="button" className="btnSmall" onClick={onBombPickImage}>
-                        Elegir imagen…
-                      </button>
-                      {bomb.imageUrl ? (
-                        <button type="button" className="ghostBtn" onClick={() => setBomb((p) => ({ ...p, imageUrl: "" }))}>
-                          Quitar
-                        </button>
-                      ) : (
-                        <span style={{ opacity: 0.8, fontSize: 12 }}>Sin imagen (placeholder)</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="modalFoot">
-                <button className="ghostBtn" onClick={() => setBombEditing(false)}>
-                  Listo
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : null}
-
-      {/* Modal crear/editar sala */}
-      {open && editing ? (
-        <>
-          <div className="backdrop show" onMouseDown={closeModal} />
-          <div className="modalCenter" onMouseDown={closeModal}>
-            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
-              <div className="modalHead">
-                <div className="modalTitle">{items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}</div>
-                <button className="iconBtn" onClick={closeModal} aria-label="Cerrar">
-                  ✕
-                </button>
-              </div>
-
-              <div className="modalBody">
-                <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFileChange} />
-
-                <div className="formGrid2">
-                  <label className="field">
-                    <span className="label">Nombre</span>
-                    <input className="input" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-                  </label>
-
-                  <label className="field">
-                    <span className="label">Categoría</span>
-                    <select
-                      className="input"
-                      value={editing.category}
-                      onChange={(e) => setEditing({ ...editing, category: e.target.value as RoomCategory })}
-                    >
-                      <option value="WOW">WOW</option>
-                      <option value="CLASICO">Clásico (20%)</option>
-                      <option value="DESPEDIDA">Despedida</option>
-                    </select>
-                  </label>
-
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span className="label">QR único</span>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <input
-                        className="input"
-                        value={editing.qrCode || ""}
-                        onChange={(e) => setEditing({ ...editing, qrCode: e.target.value })}
-                        placeholder={`Ej: ${makeRoomQr(editing.id)}`}
-                        style={{ flex: 1, minWidth: 260, fontFamily: "monospace" }}
-                      />
-                      <button type="button" className="ghostBtn" onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}>
-                        Regenerar
-                      </button>
-                      <button type="button" className="ghostBtn" onClick={() => editing.qrCode && copy(editing.qrCode)} disabled={!editing.qrCode}>
-                        Copiar
-                      </button>
-                    </div>
-                  </label>
-
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span className="label">Link de reserva</span>
-                    <input
-                      className="input"
-                      value={editing.reserveUrl}
-                      onChange={(e) => setEditing({ ...editing, reserveUrl: e.target.value })}
-                      placeholder="https://..."
-                      inputMode="url"
-                    />
-                  </label>
-
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span className="label">Teléfono WhatsApp</span>
-                    <input
-                      className="input"
-                      value={editing.whatsappPhone}
-                      onChange={(e) => setEditing({ ...editing, whatsappPhone: e.target.value })}
-                      placeholder="Ej: +54911XXXXXXXX"
-                      inputMode="tel"
-                    />
-                  </label>
-
-                  <div className="field" ref={themesWrapRef}>
-                    <span className="label">Temáticas (hasta 4)</span>
-                    <button type="button" className="input multiSelectBtn" onClick={() => setThemesOpen((v) => !v)} aria-expanded={themesOpen}>
-                      {selectedThemes.length ? (
-                        <span className="multiSelectValue">
-                          {selectedThemes.map((t) => (
-                            <span key={t} className="tagChip">
-                              {t}
-                            </span>
-                          ))}
-                        </span>
-                      ) : (
-                        <span style={{ opacity: 0.75 }}>Elegí hasta 4…</span>
-                      )}
-                      <span className="multiSelectCaret">▾</span>
-                    </button>
-
-                    {themesOpen && (
-                      <div className="multiSelectPanel">
-                        <div className="multiSelectTop">
-                          <div style={{ opacity: 0.85, fontSize: 12 }}>
-                            Seleccionadas: <b>{selectedThemes.length}</b>/4
-                          </div>
-                          <button type="button" className="ghostBtn" onClick={clearThemes} disabled={!selectedThemes.length}>
-                            Limpiar
-                          </button>
-                        </div>
-
-                        <div className="multiSelectList">
-                          {ROOM_THEMES_MULTI.map((t) => {
-                            const checked = selectedThemes.includes(t);
-                            const disabled = !checked && atThemesLimit;
-                            return (
-                              <label key={t} className={`multiSelectItem ${disabled ? "disabled" : ""}`}>
-                                <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleTheme(t)} />
-                                <span>{t}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-
-                        {atThemesLimit ? <div className="multiSelectHint">Llegaste al máximo de 4 temáticas.</div> : null}
-                      </div>
-                    )}
-                  </div>
-
-                  <label className="field">
-                    <span className="label">Sucursal</span>
-                    <select
-                      className="input"
-                      value={editing.branch}
-                      onChange={(e) => {
-                        const name = e.target.value;
-                        const bid = branchesByName.get(name) || null;
-                        setEditing({ ...editing, branch: name, branch_id: bid });
-                      }}
-                      disabled={me.isBranchScoped}
-                    >
-                      {branches.map((b) => (
-                        <option key={b.id} value={b.name}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span className="label">Descripción (breve)</span>
-                    <textarea
-                      className="input"
-                      value={editing.description}
-                      onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                      rows={3}
-                      style={{ resize: "vertical" }}
-                    />
-                  </label>
-
-                  <div className="field" style={{ gridColumn: "1 / -1" }}>
-                    <span className="label">Foto de la sala</span>
-
-                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <button type="button" className="btnSmall" onClick={onPickImage}>
-                        Elegir imagen…
-                      </button>
-                      {editing.photo ? (
-                        <button type="button" className="ghostBtn" onClick={removeImage}>
-                          Quitar
-                        </button>
-                      ) : (
-                        <span style={{ opacity: 0.8, fontSize: 12 }}>No hay imagen seleccionada</span>
-                      )}
-                    </div>
-
-                    {editing.photo ? (
-                      <div
-                        ref={previewWrapRef}
-                        onMouseDown={onPreviewMouseDown}
-                        onMouseMove={onPreviewMouseMove}
-                        onMouseUp={endDrag}
-                        onMouseLeave={endDrag}
-                        style={{
-                          marginTop: 10,
-                          borderRadius: 14,
-                          overflow: "hidden",
-                          border: "1px solid rgba(255,255,255,.12)",
-                          background: "rgba(0,0,0,.25)",
-                          cursor: "grab",
-                          userSelect: "none",
-                        }}
-                        title="Ajuste vertical fino (opcional)"
-                      >
-                        <img
-                          src={editing.photo}
-                          alt="Preview"
-                          style={{
-                            width: "100%",
-                            height: 220,
-                            objectFit: "cover",
-                            objectPosition: `50% ${editing.photoPosition}%`,
-                            display: "block",
-                            pointerEvents: "none",
-                          }}
-                        />
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <label className="field">
-                    <span className="label">Jugadores mín</span>
-                    <input
-                      className="input"
-                      value={String(editing.playersMin ?? 1)}
-                      onChange={(e) => setEditing({ ...editing, playersMin: Number(e.target.value) })}
-                      inputMode="numeric"
-                    />
-                  </label>
-
-                  <label className="field">
-                    <span className="label">Jugadores máx</span>
-                    <input
-                      className="input"
-                      value={String(editing.playersMax ?? 6)}
-                      onChange={(e) => setEditing({ ...editing, playersMax: Number(e.target.value) })}
-                      inputMode="numeric"
-                    />
-                  </label>
-
-                  <label className="field">
-                    <span className="label">Dificultad (1–10)</span>
-                    <select
-                      className="input"
-                      value={String(editing.difficulty ?? 5)}
-                      onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}
-                    >
-                      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="field">
-                    <span className="label">Nivel</span>
-                    <select className="input" value={editing.level} onChange={(e) => setEditing({ ...editing, level: e.target.value as RoomLevel })}>
-                      <option value="FACIL">Fácil</option>
-                      <option value="INTERMEDIO">Intermedio</option>
-                      <option value="AVANZADO">Avanzado</option>
-                    </select>
-                  </label>
-
-                  <label className="field">
-                    <span className="label">Factor Sorpresa (1–10)</span>
-                    <select
-                      className="input"
-                      value={String(editing.surprise ?? 5)}
-                      onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}
-                    >
-                      {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="field">
-                    <span className="label">Récord 1 (MM:SS)</span>
-                    <input className="input" value={editing.record1} onChange={(e) => setEditing({ ...editing, record1: e.target.value })} placeholder="12:34" />
-                  </label>
-
-                  <label className="field">
-                    <span className="label">Récord 2 (MM:SS)</span>
-                    <input className="input" value={editing.record2} onChange={(e) => setEditing({ ...editing, record2: e.target.value })} placeholder="14:10" />
-                  </label>
-
-                  <label className="field">
-                    <span className="label">Puntaje (1–3)</span>
-                    <select
-                      className="input"
-                      value={String(editing.points ?? 1)}
-                      onChange={(e) => setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })}
-                    >
-                      {[1, 2, 3].map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="field">
-                    <span className="label">Estado</span>
-                    <select className="input" value={editing.active ? "1" : "0"} onChange={(e) => setEditing({ ...editing, active: e.target.value === "1" })}>
-                      <option value="1">Activa</option>
-                      <option value="0">Inactiva</option>
-                    </select>
-                  </label>
-                </div>
-              </div>
-
-              <div className="modalFoot">
-                <button className="ghostBtn" onClick={closeModal} disabled={saving}>
-                  Cancelar
-                </button>
-                <button className="btnSmall" onClick={save} disabled={saving}>
-                  {saving ? "Guardando…" : "Guardar"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : null}
-
-      {/* ==========================
-          CROP POPUP (CURSOR ONLY) ✅
-      ========================== */}
-      {cropModal?.open ? (
-        <>
-          <div className="backdrop show" onMouseDown={closeCropModal} style={{ zIndex: 9998 }} />
-          <div className="modalCenter" onMouseDown={closeCropModal} style={{ zIndex: 9999 }}>
-            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
-              <div className="modalHead">
-                <div className="modalTitle">Recortar imagen</div>
-                <button className="iconBtn" onClick={closeCropModal} aria-label="Cerrar">
-                  ✕
-                </button>
-              </div>
-
-              <div className="modalBody">
-                <div style={{ opacity: 0.78, fontSize: 12, marginBottom: 10 }}>
-                  Mouse: <b>mover</b> arrastrando dentro, <b>resize</b> arrastrando bordes/esquinas. Ruedita = zoom del recorte.
-                  Doble click = máximo. Mantener <b>Shift</b> = ratio card.
-                </div>
-
-                <div
-                  ref={cropStageRef}
-                  onMouseDown={onCropStageMouseDown}
-                  onMouseMove={onCropStageMouseMove}
-                  onMouseUp={endCropDrag}
-                  onMouseLeave={endCropDrag}
-                  onWheel={onCropWheel}
-                  onDoubleClick={onCropDoubleClick}
-                  style={{
-                    position: "relative",
-                    width: "100%",
-                    height: "min(58vh, 560px)",
-                    borderRadius: 14,
-                    overflow: "hidden",
-                    border: "1px solid rgba(255,255,255,.12)",
-                    background: "rgba(0,0,0,.25)",
-                    userSelect: "none",
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Sucursal</span>
+                <select
+                  className="input"
+                  value={editing.branch}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    const bid = branchesByName.get(name) || null;
+                    setEditing({ ...editing, branch: name, branch_id: bid });
                   }}
+                  disabled={me.isBranchScoped}
                 >
-                  <img
-                    src={cropModal.srcUrl}
-                    alt="Crop"
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                      display: "block",
-                      pointerEvents: "none",
-                    }}
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.name}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Teléfono</span>
+                <input
+                  className="input"
+                  value={editing.whatsappPhone}
+                  onChange={(e) => setEditing({ ...editing, whatsappPhone: e.target.value })}
+                  placeholder="Ej: +54911XXXXXXXX"
+                  inputMode="tel"
+                />
+              </label>
+
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Link de reserva</span>
+                <input
+                  className="input"
+                  value={editing.reserveUrl}
+                  onChange={(e) => setEditing({ ...editing, reserveUrl: e.target.value })}
+                  placeholder="https://..."
+                  inputMode="url"
+                />
+              </label>
+
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">QR único</span>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, alignItems: "center" }}>
+                  <input
+                    className="input"
+                    value={editing.qrCode || ""}
+                    onChange={(e) => setEditing({ ...editing, qrCode: e.target.value })}
+                    placeholder={`Ej: ${makeRoomQr(editing.id)}`}
+                    style={{ minWidth: 0, fontFamily: "monospace" }}
                   />
 
-                  {natImg && cropRectStyle ? (
-                    <>
-                      <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.35)" }} />
-                      <div
-                        style={{
-                          position: "absolute",
-                          ...cropRectStyle,
-                          boxShadow: "0 0 0 9999px rgba(0,0,0,.35)",
-                          border: "2px solid rgba(255,255,255,.9)",
-                          borderRadius: 12,
-                          pointerEvents: "none",
-                        }}
-                      />
-                    </>
+                  <button
+                    type="button"
+                    className="ghostBtn"
+                    onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}
+                    title="Regenerar QR"
+                    aria-label="Regenerar QR"
+                    style={{ width: 42, minWidth: 42, height: 42, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Icon name="refresh" size={18} />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="ghostBtn"
+                    onClick={() => editing.qrCode && copy(editing.qrCode)}
+                    disabled={!editing.qrCode}
+                    title="Copiar QR"
+                    aria-label="Copiar QR"
+                    style={{ width: 42, minWidth: 42, height: 42, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <Icon name="copy" size={18} />
+                  </button>
+                </div>
+              </label>
+            </div>
+
+            <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Récord 1</span>
+                <input className="input" value={editing.record1} onChange={(e) => setEditing({ ...editing, record1: e.target.value })} placeholder="12:34" />
+              </label>
+
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Récord 2</span>
+                <input className="input" value={editing.record2} onChange={(e) => setEditing({ ...editing, record2: e.target.value })} placeholder="14:10" />
+              </label>
+
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Puntaje</span>
+                <select className="input" value={String(editing.points ?? 1)} onChange={(e) => setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })}>
+                  {[1, 2, 3].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Jugadores mín</span>
+                <input className="input" value={String(editing.playersMin ?? 1)} onChange={(e) => setEditing({ ...editing, playersMin: Number(e.target.value) })} inputMode="numeric" />
+              </label>
+
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Jugadores máx</span>
+                <input className="input" value={String(editing.playersMax ?? 6)} onChange={(e) => setEditing({ ...editing, playersMax: Number(e.target.value) })} inputMode="numeric" />
+              </label>
+
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Nivel</span>
+                <select className="input" value={editing.level} onChange={(e) => setEditing({ ...editing, level: e.target.value as RoomLevel })}>
+                  <option value="FACIL">Fácil</option>
+                  <option value="INTERMEDIO">Intermedio</option>
+                  <option value="AVANZADO">Avanzado</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Dificultad</span>
+                <select className="input" value={String(editing.difficulty ?? 5)} onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}>
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Factor sorpresa</span>
+                <select className="input" value={String(editing.surprise ?? 5)} onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}>
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="field" style={{ minWidth: 0 }}>
+                <span className="label">Elegir imagen</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <button type="button" className="btnSmall" onClick={onPickImage} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <Icon name="image" size={16} />
+                    Elegir
+                  </button>
+
+                  {editing.photo ? (
+                    <button type="button" className="ghostBtn" onClick={removeImage}>
+                      Quitar
+                    </button>
                   ) : (
-                    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.8 }}>
-                      Cargando imagen…
-                    </div>
+                    <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
                   )}
                 </div>
               </div>
+            </div>
 
-              <div className="modalFoot">
-                <button className="ghostBtn" onClick={closeCropModal}>
-                  Cancelar
+            <div className="rooms-row-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(280px, 1fr))", gap: 12 }}>
+              <div className="field" ref={themesWrapRef} style={{ minWidth: 0 }}>
+                <span className="label">Temática</span>
+                <button type="button" className="input multiSelectBtn" onClick={() => setThemesOpen((v) => !v)} aria-expanded={themesOpen}>
+                  {selectedThemes.length ? (
+                    <span className="multiSelectValue">
+                      {selectedThemes.map((t) => (
+                        <span key={t} className="tagChip">
+                          {t}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span style={{ opacity: 0.75 }}>Elegí hasta 4…</span>
+                  )}
+                  <span className="multiSelectCaret">▾</span>
                 </button>
-                <button className="btnSmall" onClick={confirmCrop} disabled={!natImg || !cropRect}>
-                  Usar recorte
-                </button>
+
+                {themesOpen && (
+                  <div className="multiSelectPanel">
+                    <div className="multiSelectTop">
+                      <div style={{ opacity: 0.85, fontSize: 12 }}>
+                        Seleccionadas: <b>{selectedThemes.length}</b>/4
+                      </div>
+                      <button type="button" className="ghostBtn" onClick={clearThemes} disabled={!selectedThemes.length}>
+                        Limpiar
+                      </button>
+                    </div>
+
+                    <div className="multiSelectList">
+                      {ROOM_THEMES_MULTI.map((t) => {
+                        const checked = selectedThemes.includes(t);
+                        const disabled = !checked && atThemesLimit;
+                        return (
+                          <label key={t} className={`multiSelectItem ${disabled ? "disabled" : ""}`}>
+                            <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleTheme(t)} />
+                            <span>{t}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    {atThemesLimit ? <div className="multiSelectHint">Llegaste al máximo de 4 temáticas.</div> : null}
+                  </div>
+                )}
+              </div>
+
+              <label className="field" style={{ minWidth: 0 }}>
+                <span className="label">Estado</span>
+                <select className="input" value={editing.active ? "1" : "0"} onChange={(e) => setEditing({ ...editing, active: e.target.value === "1" })}>
+                  <option value="1">Activa</option>
+                  <option value="0">Inactiva</option>
+                </select>
+              </label>
+            </div>
+
+            <label className="field" style={{ minWidth: 0 }}>
+              <span className="label">Descripción</span>
+              <textarea className="input" value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} rows={3} style={{ resize: "vertical" }} />
+            </label>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+              <div className="field" style={{ minWidth: 0 }}>
+                <span className="label">Previa de imagen</span>
+
+                {editing.photo ? (
+                  <div
+                    ref={previewWrapRef}
+                    onMouseDown={onPreviewMouseDown}
+                    onMouseMove={onPreviewMouseMove}
+                    onMouseUp={endDrag}
+                    onMouseLeave={endDrag}
+                    style={{
+                      borderRadius: 16,
+                      overflow: "hidden",
+                      border: "1px solid rgba(255,255,255,.12)",
+                      background: "rgba(0,0,0,.25)",
+                      cursor: "grab",
+                      userSelect: "none",
+                    }}
+                    title="Ajuste vertical fino"
+                  >
+                    <img
+                      src={editing.photo}
+                      alt="Preview"
+                      style={{
+                        width: "100%",
+                        height: "clamp(220px, 34vh, 360px)",
+                        objectFit: "cover",
+                        objectPosition: `50% ${editing.photoPosition}%`,
+                        display: "block",
+                        pointerEvents: "none",
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      minHeight: 180,
+                      borderRadius: 16,
+                      border: "1px dashed rgba(255,255,255,.18)",
+                      background: "rgba(255,255,255,.03)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center",
+                      padding: 20,
+                      opacity: 0.75,
+                    }}
+                  >
+                    Acá se va a ver la previa de la imagen.
+                  </div>
+                )}
               </div>
             </div>
           </div>
-        </>
-      ) : null}
+        </div>
+
+        <div className="modalFoot">
+          <button className="ghostBtn" onClick={closeModal} disabled={saving}>
+            Cancelar
+          </button>
+          <button className="btnSmall" onClick={save} disabled={saving}>
+            {saving ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  </>
+) : null}
+
+{cropModal?.open ? (
+  <>
+    <div className="backdrop show" onMouseDown={closeCropModal} style={{ zIndex: 9998 }} />
+    <div className="modalCenter" onMouseDown={closeCropModal} style={{ zIndex: 9999 }}>
+      <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
+        <div className="modalHead">
+          <div className="modalTitle">Recortar imagen</div>
+          <button className="iconBtn" onClick={closeCropModal} aria-label="Cerrar">
+            ✕
+          </button>
+        </div>
+
+        <div className="modalBody">
+          <div style={{ opacity: 0.78, fontSize: 12, marginBottom: 10 }}>
+            Mouse: <b>mover</b> arrastrando dentro, <b>resize</b> arrastrando bordes/esquinas. Ruedita = zoom del recorte.
+            Doble click = máximo. Mantener <b>Shift</b> = ratio card.
+          </div>
+
+          <div
+            ref={cropStageRef}
+            onMouseDown={onCropStageMouseDown}
+            onMouseMove={onCropStageMouseMove}
+            onMouseUp={endCropDrag}
+            onMouseLeave={endCropDrag}
+            onWheel={onCropWheel}
+            onDoubleClick={onCropDoubleClick}
+            style={{
+              position: "relative",
+              width: "100%",
+              height: "min(58vh, 560px)",
+              borderRadius: 14,
+              overflow: "hidden",
+              border: "1px solid rgba(255,255,255,.12)",
+              background: "rgba(0,0,0,.25)",
+              userSelect: "none",
+            }}
+          >
+            <img
+              src={cropModal.srcUrl}
+              alt="Crop"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                display: "block",
+                pointerEvents: "none",
+              }}
+            />
+
+            {natImg && cropRectStyle ? (
+              <>
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    background: "rgba(0,0,0,.35)",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    ...cropRectStyle,
+                    boxShadow: "0 0 0 9999px rgba(0,0,0,.35)",
+                    border: "2px solid rgba(255,255,255,.9)",
+                    borderRadius: 12,
+                    pointerEvents: "none",
+                  }}
+                />
+              </>
+            ) : (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: 0.8,
+                }}
+              >
+                Cargando imagen…
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="modalFoot">
+          <button className="ghostBtn" onClick={closeCropModal}>
+            Cancelar
+          </button>
+          <button className="btnSmall" onClick={confirmCrop} disabled={!natImg || !cropRect}>
+            Usar recorte
+          </button>
+        </div>
+      </div>
+    </div>
+  </>
+) : null}
+
     </div>
   );
 }

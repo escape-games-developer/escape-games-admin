@@ -1,9 +1,10 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase";
 
 type TargetMode = "TEST" | "ALL";
-type Status = "DRAFT" | "SENT" | "FAILED";
+type Status = "DRAFT" | "SENT";
+type Channel = "APP" | "MAIL" | "SMS";
 
 type NotificationRow = {
   id: string;
@@ -12,6 +13,8 @@ type NotificationRow = {
   status: Status;
   target: TargetMode;
   test_email: string | null;
+  test_phone: string | null;
+  send_via: Channel;
   created_at: string;
   sent_at: string | null;
   image_url?: string | null;
@@ -562,21 +565,23 @@ export default function Notifications() {
   };
 
   const startCreate = () => {
-    const id = genId();
-    setEditing({
-      id,
-      subject: "",
-      body: "",
-      status: "DRAFT",
-      target: "TEST",
-      test_email: "",
-      created_at: new Date().toISOString(),
-      sent_at: null,
-      image_url: null,
-    });
-    resetModalTransient();
-    setOpen(true);
-  };
+  const id = genId();
+  setEditing({
+    id,
+    subject: "",
+    body: "",
+    status: "DRAFT",
+    target: "TEST",
+    test_email: "",
+    test_phone: "",
+    send_via: "APP",
+    created_at: new Date().toISOString(),
+    sent_at: null,
+    image_url: null,
+  });
+  resetModalTransient();
+  setOpen(true);
+};
 
   const startEdit = (n: NotificationRow) => {
     setEditing({ ...n });
@@ -638,8 +643,15 @@ export default function Notifications() {
     if (body.length < 5) return alert("Poné un mensaje (mínimo 5 caracteres).");
 
     const target = editing.target;
-    const testEmail = String(editing.test_email || "").trim();
-    if (target === "TEST" && !testEmail.includes("@")) return alert("Para TEST necesitás un email válido.");
+const sendVia = editing.send_via;
+
+const testEmail = String(editing.test_email || "").trim();
+const testPhone = String(editing.test_phone || "").trim();
+
+if (target === "TEST") {
+  if (sendVia === "MAIL" && !testEmail.includes("@")) return alert("Para TEST + MAIL necesitás un email válido.");
+  if (sendVia === "SMS" && testPhone.length < 8) return alert("Para TEST + SMS necesitás un teléfono válido.");
+}
 
     setSaving(true);
     try {
@@ -651,20 +663,22 @@ export default function Notifications() {
         if (finalImageUrl && finalImageUrl.startsWith("blob:")) finalImageUrl = null;
       }
 
-      const payload = {
-        id: editing.id,
-        subject,
-        body,
-        status: editing.status,
-        target,
-        test_email: target === "TEST" ? testEmail : null,
-        image_url: finalImageUrl,
-      };
+     const payload = {
+  id: editing.id,
+  subject,
+  body,
+  status: editing.status,
+  target,
+  send_via: sendVia,
+  test_email: target === "TEST" && sendVia === "MAIL" ? testEmail : null,
+  test_phone: target === "TEST" && sendVia === "SMS" ? testPhone : null,
+  image_url: finalImageUrl,
+};
 
       const { data, error } = await supabase
         .from("notifications")
         .upsert(payload, { onConflict: "id" })
-        .select("id, subject, body, status, target, test_email, created_at, sent_at, image_url")
+        .select("id, subject, body, status, target, test_email, test_phone, send_via, created_at, sent_at, image_url")
         .single();
 
       if (error) throw error;
@@ -787,11 +801,20 @@ export default function Notifications() {
   };
 
   const excelScrollerStyle: React.CSSProperties = {
-    flex: 1,
-    minHeight: 0,
-    width: "100%",
-    overflow: "auto",
-  };
+  flex: 1,
+  minHeight: 0,
+  width: "100%",
+  overflow: "auto",
+
+  // Firefox
+  scrollbarWidth: "none",
+
+  // IE / Edge viejo
+  msOverflowStyle: "none",
+
+
+  
+};
 
   const excelHeaderStyle: React.CSSProperties = {
     position: "sticky",
@@ -806,32 +829,24 @@ export default function Notifications() {
     borderBottom: "1px solid rgba(255,255,255,.12)",
   };
 
-  const headerCellBase: React.CSSProperties = {
-    padding: "12px 10px",
-    textAlign: "center",
-    fontSize: 14,
-    fontWeight: 900,
-    opacity: 0.95,
-    userSelect: "none",
-    borderRight: "1px solid rgba(255,255,255,.10)",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    letterSpacing: 0.2,
-
-
-
-  // ✅ centrado perfecto
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
+const headerCellBase: React.CSSProperties = {
+  padding: "12px 10px",
   textAlign: "center",
+  fontSize: 14,
+  fontWeight: 900,
+  opacity: 0.95,
+  userSelect: "none",
+  borderRight: "1px solid rgba(255,255,255,.10)",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  letterSpacing: 0.2,
 };
 
-   const headerClickable = (key: SortKey): React.CSSProperties => ({
-    ...headerCellBase,
-    cursor: "pointer",
-  });
+const headerClickable = (_key: SortKey): React.CSSProperties => ({
+  ...headerCellBase,
+  cursor: "pointer",
+});
 
   const cellBase: React.CSSProperties = {
     padding: "10px 10px",
@@ -957,12 +972,12 @@ export default function Notifications() {
 
               <div style={{ ...cellBase, opacity: 0.9, textAlign: "center" }}>{cat}</div>
 
-              <div style={{ ...cellBase, opacity: 0.7, textAlign: "center" }}>
-                MAIL <span style={{ opacity: 0.55 }}>(bloqueado)</span>
-              </div>
+              <div style={{ ...cellBase, opacity: 0.9, textAlign: "center" }}>
+  {n.send_via === "APP" ? "APP" : n.send_via === "MAIL" ? "MAIL" : "SMS"}
+</div>
 
               <div style={{ ...cellBase, opacity: 0.95, textAlign: "center" }}>
-                {n.status === "DRAFT" ? "BORRADOR" : n.status === "SENT" ? "ENVIADO" : "FALLIDO"}
+                {n.status === "DRAFT" ? "BORRADOR" : "ENVIADO"}
               </div>
 
               <div style={{ ...cellBase, borderRight: "none", display: "flex", justifyContent: "flex-end" }}>
@@ -1006,11 +1021,10 @@ export default function Notifications() {
         />
 
         <select style={selectStyle} value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
-          <option value="">Todos los estados</option>
-          <option value="DRAFT">Borrador</option>
-          <option value="SENT">Enviado</option>
-          <option value="FAILED">Fallido</option>
-        </select>
+  <option value="">Todos los estados</option>
+  <option value="DRAFT">Borrador</option>
+  <option value="SENT">Enviado</option>
+</select>
 
         <select style={selectStyle} value={targetFilter} onChange={(e) => setTargetFilter(e.target.value as any)}>
           <option value="">Todos los destinos</option>
@@ -1258,11 +1272,11 @@ export default function Notifications() {
                   <label className="field" style={{ gridColumn: "1 / -1" }}>
                     <span className="label">Asunto</span>
                     <input
-                      className="input"
-                      value={editing.subject}
-                      onChange={(e) => setEditing({ ...editing, subject: e.target.value })}
-                      placeholder="Ej: Promo del finde"
-                    />
+  className="input"
+  value={editing.subject}
+  onChange={(e) => setEditing({ ...editing, subject: e.target.value })}
+  placeholder="Ej: Promo del finde"
+/>
                   </label>
 
                   <div className="field" style={{ gridColumn: "1 / -1" }}>
@@ -1455,42 +1469,75 @@ export default function Notifications() {
                     ) : null}
                   </div>
 
-                  <label className="field">
-                    <span className="label">Destino</span>
-                    <select
-                      className="input"
-                      value={editing.target}
-                      onChange={(e) => {
-                        const v = e.target.value as TargetMode;
-                        setEditing((p) => (p ? { ...p, target: v, test_email: v === "TEST" ? (p.test_email || "") : null } : p));
-                      }}
-                    >
-                      <option value="TEST">Test</option>
-                      <option value="ALL">Todos</option>
-                    </select>
-                  </label>
+                 <label className="field">
+  <span className="label">Canal</span>
+  <select
+    className="input"
+    value={editing.send_via}
+    onChange={(e) => {
+      const v = e.target.value as any; // Channel
+      setEditing((p) =>
+        p
+          ? {
+              ...p,
+              send_via: v,
+              // limpiar test que no corresponde
+              test_email: v === "MAIL" ? (p.test_email || "") : null,
+              test_phone: v === "SMS" ? (p.test_phone || "") : null,
+            }
+          : p
+      );
+    }}
+  >
+    <option value="APP">App</option>
+    <option value="MAIL">Mail</option>
+    <option value="SMS">SMS</option>
+  </select>
+</label>
 
                   <label className="field">
-                    <span className="label">Estado</span>
-                    <select className="input" value={editing.status} onChange={(e) => setEditing({ ...editing, status: e.target.value as Status })}>
-                      <option value="DRAFT">DRAFT</option>
-                      <option value="SENT">SENT</option>
-                      <option value="FAILED">FAILED</option>
-                    </select>
-                  </label>
+  <span className="label">Estado</span>
+  <select
+    className="input"
+    value={editing.status}
+    onChange={(e) => setEditing({ ...editing, status: e.target.value as Status })}
+  >
+    <option value="DRAFT">BORRADOR</option>
+    <option value="SENT">ENVIADO</option>
+  </select>
+</label>
 
-                  {editing.target === "TEST" ? (
-                    <label className="field" style={{ gridColumn: "1 / -1" }}>
-                      <span className="label">Email de prueba</span>
-                      <input
-                        className="input"
-                        value={String(editing.test_email || "")}
-                        onChange={(e) => setEditing({ ...editing, test_email: e.target.value })}
-                        placeholder="vos@dominio.com"
-                        inputMode="email"
-                      />
-                    </label>
-                  ) : null}
+                  {editing.target === "TEST" && editing.send_via === "MAIL" ? (
+  <label className="field" style={{ gridColumn: "1 / -1" }}>
+    <span className="label">Email de prueba</span>
+    <input
+      className="input"
+      value={String(editing.test_email || "")}
+      onChange={(e) => setEditing({ ...editing, test_email: e.target.value })}
+      placeholder="vos@dominio.com"
+      inputMode="email"
+    />
+  </label>
+) : null}
+
+{editing.target === "TEST" && editing.send_via === "SMS" ? (
+  <label className="field" style={{ gridColumn: "1 / -1" }}>
+    <span className="label">Teléfono de prueba</span>
+    <input
+      className="input"
+      value={String(editing.test_phone || "")}
+      onChange={(e) => setEditing({ ...editing, test_phone: e.target.value })}
+      placeholder="+54911..."
+      inputMode="tel"
+    />
+  </label>
+) : null}
+
+{editing.target === "TEST" && editing.send_via === "APP" ? (
+  <div style={{ gridColumn: "1 / -1", opacity: 0.75, fontSize: 12 }}>
+    En TEST + APP: por ahora no pide destino. Después lo enchufamos a device/user.
+  </div>
+) : null}
 
                   <div style={{ gridColumn: "1 / -1", opacity: 0.75, fontSize: 12 }}>
                     Hoy esto solo guarda en DB y marca estado. El envío real lo enchufamos después con Edge Function.

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import Drawer from "./Drawer";
 import Header from "./Header";
@@ -62,7 +62,6 @@ export default function AdminLayout() {
 
   // ✅ FULL WIDTH solo en ciertas páginas
   useEffect(() => {
-    // 👇 sumo NOTIFICACIONES
     const widePaths = ["/salas", "/novedades", "/usuarios", "/notificaciones"];
     const isWide = widePaths.includes(loc.pathname);
 
@@ -80,7 +79,17 @@ export default function AdminLayout() {
   return (
     <div className="shell">
       <Header onOpenMenu={() => setDrawerOpen(true)} />
-      <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)} userName={admin.userName} />
+
+      {/* ✅ Pasamos pathname para que el Drawer marque activo sin ocultar items */}
+      {/* ✅ Key estable para que no se remonte raro */}
+      <Drawer
+        key="admin-drawer"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        userName={admin.userName}
+      
+      />
+
       <main className="main">
         <div className="content">
           <Outlet />

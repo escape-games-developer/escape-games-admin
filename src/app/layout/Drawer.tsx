@@ -87,7 +87,6 @@ export default function Drawer({ open, onClose, userName }: Props) {
       const uid = data.session?.user?.id;
       if (!uid) return;
 
-      // ✅ 1) leer admins (SIN joins)
       const { data: adminRow, error: adminErr } = await supabase
         .from("admins")
         .select("branch_id, mail, gm_code, is_super, permissions")
@@ -109,10 +108,6 @@ export default function Drawer({ open, onClose, userName }: Props) {
         return;
       }
 
-      // ✅ regla final:
-      // is_super -> ADMIN_GENERAL
-      // gm_code -> GM
-      // else -> ADMIN
       let computed: UserRole;
       if (adminRow.is_super) computed = "ADMIN_GENERAL";
       else if (adminRow.gm_code) computed = "GM";
@@ -120,15 +115,12 @@ export default function Drawer({ open, onClose, userName }: Props) {
 
       setRole(computed);
 
-      // ✅ permisos
       const mergedPerms: UserPermissions = { ...defaultPerms, ...(adminRow.permissions || {}) };
       setPerms(mergedPerms);
 
-      // ✅ gm_code
       const code = adminRow.gm_code ? String(adminRow.gm_code) : "";
       setGmCode(code);
 
-      // ✅ 2) sucursal
       let branchLbl = adminRow.branch_id ? `Sucursal #${adminRow.branch_id}` : "";
       let branchName = "";
 
@@ -151,7 +143,6 @@ export default function Drawer({ open, onClose, userName }: Props) {
 
       setBranchLabel(branchLbl);
 
-      // ✅ persistimos
       localStorage.setItem("eg_admin_role", computed);
       localStorage.setItem("eg_admin_mail", adminRow.mail ?? "");
       localStorage.setItem("eg_admin_branch_id", String(adminRow.branch_id ?? ""));
@@ -204,11 +195,13 @@ export default function Drawer({ open, onClose, userName }: Props) {
     : permsToUse;
 
   // ✅ qué secciones mostrar (por permisos)
-  const canSeeRooms = effectivePerms.canManageRooms || effectivePerms.canEditRankings;
+  // 🔥 CAMBIO: "Salas" se muestra SIEMPRE. El permiso define si navega o queda disabled.
+  const canAccessRooms = effectivePerms.canManageRooms || effectivePerms.canEditRankings;
+
   const canSeeNews = effectivePerms.canManageNews;
   const canSeeUsers = effectivePerms.canManageUsers;
 
-  // ✅ NUEVO: Notificaciones SOLO ADMIN_GENERAL
+  // ✅ Notificaciones SOLO ADMIN_GENERAL
   const canSeeNotifications = isSuper;
 
   const logout = async () => {
@@ -231,6 +224,27 @@ export default function Drawer({ open, onClose, userName }: Props) {
       alert(err?.message || "No pude cerrar sesión. Probá de nuevo.");
     }
   };
+
+  // ✅ helper para item disabled (se ve siempre, pero no navega)
+  const DisabledNavItem = ({ children, title }: { children: React.ReactNode; title?: string }) => (
+    <div
+      className="navItem disabled"
+      title={title || "Sin permiso"}
+      role="link"
+      aria-disabled="true"
+      style={{
+        opacity: 0.55,
+        cursor: "not-allowed",
+        userSelect: "none",
+      }}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+    >
+      {children}
+    </div>
+  );
 
   return (
     <>
@@ -256,12 +270,9 @@ export default function Drawer({ open, onClose, userName }: Props) {
               <div className="profileName">{userName}</div>
               <div className="profileRole">{roleLabel}</div>
 
-              {/* ✅ STAFF: mostrar código GM (y sucursal solo si corresponde) */}
               {roleToUse !== "CLIENT" ? (
                 <>
-                  {!isSuper ? (
-                    <div className="profileBranch">Sucursal: {branchToUse || "sin asignar"}</div>
-                  ) : null}
+                  {!isSuper ? <div className="profileBranch">Sucursal: {branchToUse || "sin asignar"}</div> : null}
 
                   <div className="profileGmCode">
                     <span style={{ opacity: 0.7 }}>Código GM:</span> <b>{gmCodeToUse || "sin código"}</b>
@@ -276,7 +287,8 @@ export default function Drawer({ open, onClose, userName }: Props) {
           <div className="drawerSectionTitle">Secciones</div>
 
           <nav className="drawerNav">
-            {canSeeRooms ? (
+            {/* ✅ SALAS: SIEMPRE visible */}
+            {canAccessRooms ? (
               <NavLink
                 to="/salas"
                 onClick={onClose}
@@ -284,7 +296,9 @@ export default function Drawer({ open, onClose, userName }: Props) {
               >
                 Salas
               </NavLink>
-            ) : null}
+            ) : (
+              <DisabledNavItem title="Sin permiso para Salas">Salas</DisabledNavItem>
+            )}
 
             {canSeeNews ? (
               <NavLink
@@ -306,7 +320,6 @@ export default function Drawer({ open, onClose, userName }: Props) {
               </NavLink>
             ) : null}
 
-            {/* ✅ NUEVO: SOLO ADMIN_GENERAL */}
             {canSeeNotifications ? (
               <NavLink
                 to="/notificaciones"

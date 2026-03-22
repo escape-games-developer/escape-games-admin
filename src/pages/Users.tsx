@@ -465,8 +465,7 @@ export default function Users() {
   const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
   const ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
 
-  const [myRole, setMyRole] = useState<UserRole | "">("");
-
+const [, setMyRole] = useState<UserRole | "">("");
   // ✅ CAMBIO: permiso real (ADMIN_GENERAL siempre / GM+ADMIN por canManageUsers)
   const canManageUsers = useMemo(() => {
     const superFlag =
@@ -1484,9 +1483,9 @@ export default function Users() {
         {deleteModal.user ? (
           <>
             <div className="panel" style={{ padding: 12 }}>
-              Vas a borrar a: <b>{deleteModal.user.email}</b>
+              Estas seguro de querer borrar a: <b>{deleteModal.user.email}</b>
               <div style={{ marginTop: 8, opacity: 0.85 }}>
-                Ojo: esto es irreversible si tu Edge Function elimina auth + filas relacionadas.
+            
               </div>
             </div>
 
