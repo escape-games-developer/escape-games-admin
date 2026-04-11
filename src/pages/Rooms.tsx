@@ -12,8 +12,9 @@ type Room = {
   id: string;
   branch_id?: string | null;
 
-  photo: string;
-  photoPosition: number;
+  cardPhoto: string;
+bannerPhoto: string;
+photoPosition: number;
 
   name: string;
   slug?: string;
@@ -126,8 +127,9 @@ function fromDb(row: any): Room {
     id: row.id,
     branch_id: row.branch_id ?? null,
 
-    photo: row.photo_url || "",
-    photoPosition: typeof row.photo_position === "number" ? Math.round(row.photo_position) : 50,
+    cardPhoto: String(row.card_photo_url || row.photo_url || ""),
+bannerPhoto: String(row.banner_photo_url || row.photo_url || ""),
+photoPosition: typeof row.photo_position === "number" ? Math.round(row.photo_position) : 50,
 
     name: row.name || "",
     slug: row.slug || "",
@@ -189,8 +191,10 @@ function toDb(room: Room) {
 
     points: clamp(Number(room.points ?? 1), 1, 3),
 
-    photo_url: room.photo || null,
-    photo_position: Math.round(clamp(room.photoPosition ?? 50, 0, 100)),
+    photo_url: room.bannerPhoto || room.cardPhoto || null,
+card_photo_url: room.cardPhoto || null,
+banner_photo_url: room.bannerPhoto || null,
+photo_position: Math.round(clamp(room.photoPosition ?? 50, 0, 100)),
 
     qr_code: room.qrCode ? room.qrCode.trim() : null,
 
@@ -199,10 +203,10 @@ function toDb(room: Room) {
   };
 }
 
-async function uploadRoomImage(file: File, roomId: string): Promise<string> {
+async function uploadRoomImage(file: File, roomId: string, kind: "card" | "banner"): Promise<string> {
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
   const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
-  const path = `rooms/${roomId}/${Date.now()}.${safeExt}`;
+  const path = `rooms/${roomId}/${kind}-${Date.now()}.${safeExt}`;
 
   const { error: upErr } = await supabase.storage.from("rooms").upload(path, file, {
     cacheControl: "3600",
@@ -583,9 +587,16 @@ export default function Rooms() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const [editingPhotoFile, setEditingPhotoFile] = useState<File | null>(null);
-  const [tempPreviewUrl, setTempPreviewUrl] = useState<string | null>(null);
+  const cardFileRef = useRef<HTMLInputElement | null>(null);
+const bannerFileRef = useRef<HTMLInputElement | null>(null);
+
+const [editingCardPhotoFile, setEditingCardPhotoFile] = useState<File | null>(null);
+const [editingBannerPhotoFile, setEditingBannerPhotoFile] = useState<File | null>(null);
+
+const [tempCardPreviewUrl, setTempCardPreviewUrl] = useState<string | null>(null);
+const [tempBannerPreviewUrl, setTempBannerPreviewUrl] = useState<string | null>(null);
+
+const [cropTarget, setCropTarget] = useState<"card" | "banner" | null>(null);
 
   const previewWrapRef = useRef<HTMLDivElement | null>(null);
   const draggingRef = useRef(false);
@@ -881,10 +892,8 @@ export default function Rooms() {
 
     return () => {
       mounted = false;
-      if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
     };
   }, [me.ready, me.isBranchScoped, me.branchId]);
-
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (!menuOpenId) return;
@@ -951,16 +960,28 @@ export default function Rooms() {
   };
 
   const closeModal = () => {
-    setOpen(false);
-    setEditing(null);
-    setEditingPhotoFile(null);
-    setThemesOpen(false);
-    closeMenu();
-    if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
-    setTempPreviewUrl(null);
-    if (fileRef.current) fileRef.current.value = "";
-    if (cropModal?.open) closeCropModal();
-  };
+  setOpen(false);
+  setEditing(null);
+
+  setEditingCardPhotoFile(null);
+  setEditingBannerPhotoFile(null);
+
+  setThemesOpen(false);
+  closeMenu();
+
+  if (tempCardPreviewUrl) URL.revokeObjectURL(tempCardPreviewUrl);
+  if (tempBannerPreviewUrl) URL.revokeObjectURL(tempBannerPreviewUrl);
+
+  setTempCardPreviewUrl(null);
+  setTempBannerPreviewUrl(null);
+
+  if (cardFileRef.current) cardFileRef.current.value = "";
+  if (bannerFileRef.current) bannerFileRef.current.value = "";
+
+  setCropTarget(null);
+
+  if (cropModal?.open) closeCropModal();
+};
 
   const startCreate = () => {
     if (!canCreateRoom) return alert("No tenés permiso para crear salas.");
@@ -973,12 +994,14 @@ export default function Rooms() {
     }
 
     const id = crypto.randomUUID();
+
     setEditing({
       id,
       branch_id: defaultBranchId,
       branch: defaultBranchName,
 
-      photo: "",
+      cardPhoto: "",
+      bannerPhoto: "",
       photoPosition: 50,
 
       name: "",
@@ -1005,9 +1028,16 @@ export default function Rooms() {
       active: true,
     });
 
-    setEditingPhotoFile(null);
-    if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
-    setTempPreviewUrl(null);
+    setEditingCardPhotoFile(null);
+    setEditingBannerPhotoFile(null);
+
+    if (tempCardPreviewUrl) URL.revokeObjectURL(tempCardPreviewUrl);
+    if (tempBannerPreviewUrl) URL.revokeObjectURL(tempBannerPreviewUrl);
+
+    setTempCardPreviewUrl(null);
+    setTempBannerPreviewUrl(null);
+    setCropTarget(null);
+
     setOpen(true);
   };
 
@@ -1075,14 +1105,27 @@ export default function Rooms() {
       branch: r.branch || (r.branch_id ? branchesById.get(r.branch_id) || "" : ""),
     });
 
-    setEditingPhotoFile(null);
-    if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
-    setTempPreviewUrl(null);
+    setEditingCardPhotoFile(null);
+    setEditingBannerPhotoFile(null);
+
+    if (tempCardPreviewUrl) URL.revokeObjectURL(tempCardPreviewUrl);
+    if (tempBannerPreviewUrl) URL.revokeObjectURL(tempBannerPreviewUrl);
+
+    setTempCardPreviewUrl(null);
+    setTempBannerPreviewUrl(null);
+    setCropTarget(null);
+
     setOpen(true);
   };
+const onPickCardImage = () => {
+  setCropTarget("card");
+  cardFileRef.current?.click();
+};
 
-  const onPickImage = () => fileRef.current?.click();
-
+const onPickBannerImage = () => {
+  setCropTarget("banner");
+  bannerFileRef.current?.click();
+};
   const openCropperForFile = (file: File) => {
     const url = URL.createObjectURL(file);
 
@@ -1120,41 +1163,70 @@ export default function Rooms() {
   };
 
   const onFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    if (!canManageRoomFull) {
-      e.target.value = "";
-      return alert("No tenés permiso para cambiar la imagen.");
-    }
-
-    const file = e.target.files?.[0] || null;
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      alert("Elegí una imagen (JPG/PNG/WebP).");
-      e.target.value = "";
-      return;
-    }
-
-    if (!editing) {
-      e.target.value = "";
-      return;
-    }
-
-    openCropperForFile(file);
+  if (!canManageRoomFull) {
     e.target.value = "";
-  };
+    return alert("No tenés permiso para cambiar la imagen.");
+  }
 
-  const removeImage = () => {
-    if (!canManageRoomFull) return alert("No tenés permiso para quitar imagen.");
+  const file = e.target.files?.[0] || null;
+  if (!file) return;
 
-    setEditingPhotoFile(null);
-    if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
-    setTempPreviewUrl(null);
-    setEditing((prev) => (prev ? { ...prev, photo: "" } : prev));
-    if (fileRef.current) fileRef.current.value = "";
-  };
+  if (!file.type.startsWith("image/")) {
+    alert("Elegí una imagen (JPG/PNG/WebP).");
+    e.target.value = "";
+    return;
+  }
+
+  if (!editing) {
+    e.target.value = "";
+    return;
+  }
+
+  if (!cropTarget) {
+    e.target.value = "";
+    return alert("No se definió el destino de la imagen.");
+  }
+
+  openCropperForFile(file);
+  e.target.value = "";
+};
+
+ const removeCardImage = () => {
+  if (!canManageRoomFull) return alert("No tenés permiso para quitar imagen.");
+
+  setEditingCardPhotoFile(null);
+
+  if (tempCardPreviewUrl) URL.revokeObjectURL(tempCardPreviewUrl);
+  setTempCardPreviewUrl(null);
+
+  setEditing((prev) => (prev ? { ...prev, cardPhoto: "" } : prev));
+
+  if (cardFileRef.current) cardFileRef.current.value = "";
+};
+
+const removeBannerImage = () => {
+  if (!canManageRoomFull) return alert("No tenés permiso para quitar imagen.");
+
+  setEditingBannerPhotoFile(null);
+
+  if (tempBannerPreviewUrl) URL.revokeObjectURL(tempBannerPreviewUrl);
+  setTempBannerPreviewUrl(null);
+
+  setEditing((prev) =>
+    prev
+      ? {
+          ...prev,
+          bannerPhoto: "",
+          photoPosition: 50,
+        }
+      : prev
+  );
+
+  if (bannerFileRef.current) bannerFileRef.current.value = "";
+};
 
   const onPreviewMouseDown: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    if (!editing?.photo) return;
+    if (!editing?.bannerPhoto) return;
     if (!canManageRoomFull) return;
 
     const el = previewWrapRef.current;
@@ -1460,22 +1532,41 @@ export default function Rooms() {
 
       const croppedFile = new File([blob], toJpegName(cropModal.originalFile.name), { type: "image/jpeg" });
 
-      setEditingPhotoFile(croppedFile);
-
-      if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
       const prevUrl = URL.createObjectURL(croppedFile);
-      setTempPreviewUrl(prevUrl);
 
-      setEditing((prev) =>
-        prev
-          ? {
-              ...prev,
-              photo: prevUrl,
-              photoPosition: 50,
-            }
-          : prev
-      );
+if (cropTarget === "card") {
+  setEditingCardPhotoFile(croppedFile);
 
+  if (tempCardPreviewUrl) URL.revokeObjectURL(tempCardPreviewUrl);
+  setTempCardPreviewUrl(prevUrl);
+
+  setEditing((prev) =>
+    prev
+      ? {
+          ...prev,
+          cardPhoto: prevUrl,
+        }
+      : prev
+  );
+}
+
+if (cropTarget === "banner") {
+  setEditingBannerPhotoFile(croppedFile);
+
+  if (tempBannerPreviewUrl) URL.revokeObjectURL(tempBannerPreviewUrl);
+  setTempBannerPreviewUrl(prevUrl);
+
+  setEditing((prev) =>
+    prev
+      ? {
+          ...prev,
+          bannerPhoto: prevUrl,
+          photoPosition: 50,
+        }
+      : prev
+  );
+}
+setCropTarget(null);
       closeCropModal();
     } catch (err: any) {
       console.error(err);
@@ -1483,7 +1574,7 @@ export default function Rooms() {
     }
   };
 
-  const save = async () => {
+    const save = async () => {
     if (!editing) return;
     const isNew = !items.some((x) => x.id === editing.id);
 
@@ -1514,24 +1605,35 @@ export default function Rooms() {
     if (!isMMSS(editing.record1) || !isMMSS(editing.record2)) {
       return alert("Récord debe ser MM:SS (ej: 12:34).");
     }
-    if (isNew && !editingPhotoFile && !editing.photo) {
-      return alert("Seleccioná una imagen para la sala.");
+
+    if (isNew && !editingCardPhotoFile && !editingBannerPhotoFile && !editing.cardPhoto && !editing.bannerPhoto) {
+      return alert("Seleccioná al menos una imagen para la sala.");
     }
 
     setSaving(true);
     try {
-      let finalPhotoUrl = String(editing.photo || "").trim();
+      let finalCardPhotoUrl = String(editing.cardPhoto || "").trim();
+      let finalBannerPhotoUrl = String(editing.bannerPhoto || "").trim();
 
-      if (editingPhotoFile) finalPhotoUrl = await uploadRoomImage(editingPhotoFile, editing.id);
-      if (finalPhotoUrl && !/^https?:\/\//i.test(finalPhotoUrl)) finalPhotoUrl = "";
+      if (editingCardPhotoFile) {
+        finalCardPhotoUrl = await uploadRoomImage(editingCardPhotoFile, editing.id, "card");
+      }
 
-      if (isNew && !finalPhotoUrl) {
-        return alert("No pude generar la URL pública de la imagen. Revisá Storage/Policies y volvé a subir.");
+      if (editingBannerPhotoFile) {
+        finalBannerPhotoUrl = await uploadRoomImage(editingBannerPhotoFile, editing.id, "banner");
+      }
+
+      if (finalCardPhotoUrl && !/^https?:\/\//i.test(finalCardPhotoUrl)) finalCardPhotoUrl = "";
+      if (finalBannerPhotoUrl && !/^https?:\/\//i.test(finalBannerPhotoUrl)) finalBannerPhotoUrl = "";
+
+      if (isNew && !finalCardPhotoUrl && !finalBannerPhotoUrl) {
+        return alert("No pude generar la URL pública de las imágenes. Revisá Storage/Policies y volvé a subir.");
       }
 
       const payload = toDb({
         ...editing,
-        photo: finalPhotoUrl,
+        cardPhoto: finalCardPhotoUrl,
+        bannerPhoto: finalBannerPhotoUrl,
         playersMin: clamp(Number(editing.playersMin ?? 1), 1, 50),
         playersMax: clamp(Number(editing.playersMax ?? 6), 1, 50),
         difficulty: clamp(Number(editing.difficulty ?? 5), 1, 10),
@@ -1543,7 +1645,12 @@ export default function Rooms() {
         qrCode: String(editing.qrCode || "").trim(),
       });
 
-      const { data, error } = await supabase.from("rooms_v2").upsert(payload, { onConflict: "id" }).select("*").single();
+      const { data, error } = await supabase
+        .from("rooms_v2")
+        .upsert(payload, { onConflict: "id" })
+        .select("*")
+        .single();
+
       if (error) throw error;
 
       const saved = fromDb(data);
@@ -1582,7 +1689,7 @@ export default function Rooms() {
     }
   };
 
-  const deleteRoom = async (room: Room) => {
+    const deleteRoom = async (room: Room) => {
     if (!canManageRoomFull) return alert("No tenés permiso para borrar salas.");
 
     if (me.isBranchScoped && me.branchId && room.branch_id !== me.branchId) {
@@ -1596,12 +1703,18 @@ export default function Rooms() {
     setItems((p) => p.filter((x) => x.id !== room.id));
 
     try {
-      if (room.photo && room.photo.includes("/storage/v1/object/public/rooms/")) {
-        const idx = room.photo.indexOf("/storage/v1/object/public/rooms/");
-        const path = room.photo.slice(idx + "/storage/v1/object/public/rooms/".length).split("?")[0];
+      const pathsToDelete = [room.cardPhoto, room.bannerPhoto]
+        .filter(Boolean)
+        .filter((url, index, arr) => arr.indexOf(url) === index)
+        .filter((url) => url.includes("/storage/v1/object/public/rooms/"))
+        .map((url) => {
+          const idx = url.indexOf("/storage/v1/object/public/rooms/");
+          return url.slice(idx + "/storage/v1/object/public/rooms/".length).split("?")[0];
+        });
 
-        const { error: storageErr } = await supabase.storage.from("rooms").remove([path]);
-        if (storageErr) console.warn("No pude borrar imagen en storage:", storageErr);
+      if (pathsToDelete.length > 0) {
+        const { error: storageErr } = await supabase.storage.from("rooms").remove(pathsToDelete);
+        if (storageErr) console.warn("No pude borrar imágenes en storage:", storageErr);
       }
 
       const { error } = await supabase.from("rooms_v2").delete().eq("id", room.id);
@@ -1611,7 +1724,7 @@ export default function Rooms() {
       alert(err?.message || "No pude borrar la sala (revisá RLS / permisos).");
       setItems(prev);
     }
-  };
+  };  
 
   const onBombPickImage = () => bombFileRef.current?.click();
 
@@ -1639,82 +1752,81 @@ export default function Rooms() {
     return { left: sr.left, top: sr.top, width: sr.width, height: sr.height } as React.CSSProperties;
   }, [natImg, cropRect, cropModal?.open]);
 
-  const tableWrapStyle: React.CSSProperties = {
-    borderRadius: 16,
-    overflow: "hidden",
-    border: "1px solid rgba(255,255,255,.12)",
-    background: "rgba(0,0,0,.25)",
-    flex: 1,
-    minHeight: 0,
-    minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-  };
+const scrollerStyle: React.CSSProperties = {
+  width: "100%",
+  flex: 1,
+  minHeight: 0,
+  overflowY: "auto",
+  overflowX: "hidden",
+  borderRadius: 16,
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(0,0,0,0.25)",
+};
 
-  const scrollerStyle: React.CSSProperties = {
-    width: "100%",
-    flex: 1,
-    minHeight: 0,
-    overflowY: "auto",
-    overflowX: "hidden",
-  };
+const tableWrapStyle: React.CSSProperties = {
+  borderRadius: 16,
+  overflow: "hidden",
+  border: "1px solid rgba(255,255,255,0.12)",
+  background: "rgba(0,0,0,0.25)",
+  flex: "1 1 auto",
+  minHeight: 0,
+  minWidth: 0,
+  display: "flex",
+  flexDirection: "column",
+};
 
-  const tableStyle: React.CSSProperties = {
-    width: "100%",
-    borderCollapse: "separate",
-    borderSpacing: 0,
-    tableLayout: "fixed",
-    minWidth: 0,
-  };
+const tableStyle: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "separate",
+  borderSpacing: 0,
+  tableLayout: "fixed",
+  minWidth: 0,
+};
 
-  const thStyle: React.CSSProperties = {
-    position: "sticky" as any,
-    top: 0,
-    zIndex: 5,
-    background: "rgba(10,10,10,.92)",
-    backdropFilter: "blur(6px)",
-    borderBottom: "1px solid rgba(255,255,255,.12)",
-    padding: "12px 10px",
-    fontSize: 13,
-    fontWeight: 900,
-    textAlign: "left" as any,
-    letterSpacing: 0.3,
-    color: "rgba(255,255,255,.92)",
-  };
+const thStyle: React.CSSProperties = {
+  position: "sticky" as any,
+  top: 0,
+  zIndex: 5,
+  background: "rgba(10,10,10,0.92)",
+  backdropFilter: "blur(6px)",
+  borderBottom: "1px solid rgba(255,255,255,0.12)",
+  padding: "12px 10px",
+  fontSize: 13,
+  fontWeight: 900,
+  textAlign: "left" as any,
+  letterSpacing: 0.3,
+  color: "rgba(255,255,255,0.92)",
+};
 
-  const tdBase: React.CSSProperties = {
-    borderBottom: "1px solid rgba(255,255,255,.08)",
-    padding: "10px 10px",
-    verticalAlign: "top",
-    fontSize: 12,
-    color: "rgba(255,255,255,.85)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  };
+const tdBase: React.CSSProperties = {
+  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  padding: "10px 10px",
+  verticalAlign: "middle",
+};
 
   const openQr = (title: string, value: string) => {
     const canvasId = `qr_modal_canvas_${crypto.randomUUID()}`;
     setQrModal({ title, value, canvasId });
   };
 
-  return (
-    <div
-      className="page"
-      style={{
-        height: "100%",
-        minHeight: 0,
-        flex: 1,
-        width: "100%",
-        minWidth: 0,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        padding: 0,
-        margin: 0,
-        boxSizing: "border-box",
-      }}
-    >
+return (
+ <div
+  className="page"
+  style={{
+    height: "100%",
+    minHeight: 0,
+    flex: 1,
+    width: "100%",
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    padding: 0,
+    margin: 0,
+    boxSizing: "border-box",
+  }}
+
+  >
       <div className="pageHeadRow" style={{ gap: 12, flex: "0 0 auto" }}>
         <div>
           <div className="pageTitle">Salas</div>
@@ -1727,56 +1839,56 @@ export default function Rooms() {
         ) : null}
       </div>
 
-      <div
-        className="toolbarRow"
-        style={{
-          display: "flex",
-          gap: 10,
-          alignItems: "center",
-          flexWrap: "wrap",
-          flex: "0 0 auto",
-        }}
-      >
-        <input
-          className="input"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre o sucursal…"
-          style={{ flex: 1, minWidth: 240 }}
-        />
+<div
+  className="toolbarRow"
+  style={{
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    flexWrap: "wrap",
+    flex: "0 0 auto",
+  }}
+>
+  <input
+    className="input"
+    value={q}
+    onChange={(e) => setQ(e.target.value)}
+    placeholder="Buscar por nombre o sucursal…"
+    style={{ flex: 1, minWidth: 240 }}
+  />
 
-        {!me.isBranchScoped ? (
-          <select
-            className="input"
-            value={branchFilter}
-            onChange={(e) => setBranchFilter(e.target.value)}
-            style={{ width: 240 }}
-          >
-            <option value="">Todas las sucursales</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.name}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <div className="input" style={{ width: 240, opacity: 0.85, display: "flex", alignItems: "center" }}>
-            {myBranchName ? `Sucursal: ${myBranchName}` : "Sucursal: sin asignar"}
-          </div>
-        )}
-      </div>
-
-      <div
-        style={{
-          ...tableWrapStyle,
-          marginTop: 12,
-          marginBottom: 0,
-          flex: "1 1 auto",
-          minHeight: 0,
-        }}
-      >
-        <div style={scrollerStyle}>
-          <table style={tableStyle}>
+  {!me.isBranchScoped ? (
+    <select
+      className="input"
+      value={branchFilter}
+      onChange={(e) => setBranchFilter(e.target.value)}
+      style={{ width: 240 }}
+    >
+      <option value="">Todas las sucursales</option>
+      {branches.map((b) => (
+        <option key={b.id} value={b.name}>
+          {b.name}
+        </option>
+      ))}
+    </select>
+  ) : (
+    <div className="input" style={{ width: 240, opacity: 0.85, display: "flex", alignItems: "center" }}>
+      {myBranchName ? `Sucursal: ${myBranchName}` : "Sucursal: sin asignar"}
+    </div>
+  )}
+</div>
+<div
+  style={{
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    paddingTop: 12,
+  }}
+>
+  <div style={scrollerStyle}>
+    <table style={tableStyle}>
             <thead>
               <tr>
                 <th style={{ ...thStyle, width: 74 }}>Imagen</th>
@@ -2001,7 +2113,7 @@ export default function Rooms() {
                           }}
                         >
                           <img
-                            src={r.photo || "https://picsum.photos/seed/placeholder/900/520"}
+src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900/520"}
                             alt={r.name}
                             style={{
                               width: "100%",
@@ -2526,7 +2638,8 @@ export default function Rooms() {
             `}
           </style>
 
-          <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFileChange} />
+<input ref={cardFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFileChange} />
+<input ref={bannerFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFileChange} />
 
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
@@ -2668,11 +2781,17 @@ export default function Rooms() {
                 </select>
               </label>
             </div>
-
-            <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
+            <div
+              className="rooms-row-3"
+              style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}
+            >
               <label className="field" style={{ minWidth: 0 }}>
                 <span className="label">Dificultad</span>
-                <select className="input" value={String(editing.difficulty ?? 5)} onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}>
+                <select
+                  className="input"
+                  value={String(editing.difficulty ?? 5)}
+                  onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}
+                >
                   {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>
                       {n}
@@ -2683,7 +2802,11 @@ export default function Rooms() {
 
               <label className="field" style={{ minWidth: 0 }}>
                 <span className="label">Factor sorpresa</span>
-                <select className="input" value={String(editing.surprise ?? 5)} onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}>
+                <select
+                  className="input"
+                  value={String(editing.surprise ?? 5)}
+                  onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}
+                >
                   {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>
                       {n}
@@ -2691,17 +2814,50 @@ export default function Rooms() {
                   ))}
                 </select>
               </label>
+            </div>
 
+            <div
+              className="rooms-row-2"
+              style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(280px, 1fr))", gap: 12 }}
+            >
               <div className="field" style={{ minWidth: 0 }}>
-                <span className="label">Elegir imagen</span>
+                <span className="label">Imagen card</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <button type="button" className="btnSmall" onClick={onPickImage} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btnSmall"
+                    onClick={onPickCardImage}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                  >
                     <Icon name="image" size={16} />
                     Elegir
                   </button>
 
-                  {editing.photo ? (
-                    <button type="button" className="ghostBtn" onClick={removeImage}>
+                  {editing.cardPhoto ? (
+                    <button type="button" className="ghostBtn" onClick={removeCardImage}>
+                      Quitar
+                    </button>
+                  ) : (
+                    <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="field" style={{ minWidth: 0 }}>
+                <span className="label">Imagen banner</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btnSmall"
+                    onClick={onPickBannerImage}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                  >
+                    <Icon name="image" size={16} />
+                    Elegir
+                  </button>
+
+                  {editing.bannerPhoto ? (
+                    <button type="button" className="ghostBtn" onClick={removeBannerImage}>
                       Quitar
                     </button>
                   ) : (
@@ -2711,10 +2867,18 @@ export default function Rooms() {
               </div>
             </div>
 
-            <div className="rooms-row-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(280px, 1fr))", gap: 12 }}>
+            <div
+              className="rooms-row-2"
+              style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(280px, 1fr))", gap: 12 }}
+            >
               <div className="field" ref={themesWrapRef} style={{ minWidth: 0 }}>
                 <span className="label">Temática</span>
-                <button type="button" className="input multiSelectBtn" onClick={() => setThemesOpen((v) => !v)} aria-expanded={themesOpen}>
+                <button
+                  type="button"
+                  className="input multiSelectBtn"
+                  onClick={() => setThemesOpen((v) => !v)}
+                  aria-expanded={themesOpen}
+                >
                   {selectedThemes.length ? (
                     <span className="multiSelectValue">
                       {selectedThemes.map((t) => (
@@ -2744,23 +2908,35 @@ export default function Rooms() {
                       {ROOM_THEMES_MULTI.map((t) => {
                         const checked = selectedThemes.includes(t);
                         const disabled = !checked && atThemesLimit;
+
                         return (
                           <label key={t} className={`multiSelectItem ${disabled ? "disabled" : ""}`}>
-                            <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleTheme(t)} />
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={disabled}
+                              onChange={() => toggleTheme(t)}
+                            />
                             <span>{t}</span>
                           </label>
                         );
                       })}
                     </div>
 
-                    {atThemesLimit ? <div className="multiSelectHint">Llegaste al máximo de 4 temáticas.</div> : null}
+                    {atThemesLimit ? (
+                      <div className="multiSelectHint">Llegaste al máximo de 4 temáticas.</div>
+                    ) : null}
                   </div>
                 )}
               </div>
 
               <label className="field" style={{ minWidth: 0 }}>
                 <span className="label">Estado</span>
-                <select className="input" value={editing.active ? "1" : "0"} onChange={(e) => setEditing({ ...editing, active: e.target.value === "1" })}>
+                <select
+                  className="input"
+                  value={editing.active ? "1" : "0"}
+                  onChange={(e) => setEditing({ ...editing, active: e.target.value === "1" })}
+                >
                   <option value="1">Activa</option>
                   <option value="0">Inactiva</option>
                 </select>
@@ -2769,14 +2945,66 @@ export default function Rooms() {
 
             <label className="field" style={{ minWidth: 0 }}>
               <span className="label">Descripción</span>
-              <textarea className="input" value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} rows={3} style={{ resize: "vertical" }} />
+              <textarea
+                className="input"
+                value={editing.description}
+                onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                rows={3}
+                style={{ resize: "vertical" }}
+              />
             </label>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
+            <div
+              style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(280px, 1fr))", gap: 12 }}
+            >
               <div className="field" style={{ minWidth: 0 }}>
-                <span className="label">Previa de imagen</span>
+                <span className="label">Previa card</span>
 
-                {editing.photo ? (
+                {editing.cardPhoto ? (
+                  <div
+                    style={{
+                      borderRadius: 16,
+                      overflow: "hidden",
+                      border: "1px solid rgba(255,255,255,.12)",
+                      background: "rgba(0,0,0,.25)",
+                    }}
+                  >
+                    <img
+                      src={editing.cardPhoto}
+                      alt="Preview card"
+                      style={{
+                        width: "100%",
+                        height: "clamp(220px, 34vh, 360px)",
+                        objectFit: "contain",
+                        display: "block",
+                        background: "#000",
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      minHeight: 180,
+                      borderRadius: 16,
+                      border: "1px dashed rgba(255,255,255,.18)",
+                      background: "rgba(255,255,255,.03)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center",
+                      padding: 20,
+                      opacity: 0.75,
+                    }}
+                  >
+                    Acá se va a ver la previa de la imagen card.
+                  </div>
+                )}
+              </div>
+
+              <div className="field" style={{ minWidth: 0 }}>
+                <span className="label">Previa banner</span>
+
+                {editing.bannerPhoto ? (
                   <div
                     ref={previewWrapRef}
                     onMouseDown={onPreviewMouseDown}
@@ -2794,8 +3022,8 @@ export default function Rooms() {
                     title="Ajuste vertical fino"
                   >
                     <img
-                      src={editing.photo}
-                      alt="Preview"
+                      src={editing.bannerPhoto}
+                      alt="Preview banner"
                       style={{
                         width: "100%",
                         height: "clamp(220px, 34vh, 360px)",
@@ -2821,12 +3049,12 @@ export default function Rooms() {
                       opacity: 0.75,
                     }}
                   >
-                    Acá se va a ver la previa de la imagen.
+                    Acá se va a ver la previa de la imagen banner.
                   </div>
                 )}
               </div>
             </div>
-          </div>
+       </div>
         </div>
 
         <div className="modalFoot">

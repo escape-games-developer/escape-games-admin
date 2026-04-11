@@ -232,7 +232,9 @@
     CROPPER
   ======================= */
 
-  const NEWS_CARD_ASPECT = 900 / 520;
+const NEWS_IMAGE_WIDTH = 1200;
+const NEWS_IMAGE_HEIGHT = 500;
+const NEWS_CARD_ASPECT = NEWS_IMAGE_WIDTH / NEWS_IMAGE_HEIGHT;
 
   type NatImg = { w: number; h: number };
   type CropRect = { x: number; y: number; w: number; h: number };
@@ -326,14 +328,24 @@
         const nat = { w: img.naturalWidth || 1, h: img.naturalHeight || 1 };
         setNatImg(nat);
 
-        const margin = 0.08;
-        const init: CropRect = {
-          x: nat.w * margin,
-          y: nat.h * margin,
-          w: nat.w * (1 - margin * 2),
-          h: nat.h * (1 - margin * 2),
-        };
-        setCropRect(clampRectToImage(init, nat, 80));
+       const margin = 0.06;
+
+let w = nat.w * (1 - margin * 2);
+let h = w / NEWS_CARD_ASPECT;
+
+if (h > nat.h * (1 - margin * 2)) {
+  h = nat.h * (1 - margin * 2);
+  w = h * NEWS_CARD_ASPECT;
+}
+
+const init: CropRect = {
+  x: (nat.w - w) / 2,
+  y: (nat.h - h) / 2,
+  w,
+  h,
+};
+
+setCropRect(clampRectToImage(init, nat, 80));
       };
       img.onerror = () => {
         alert("No pude leer la imagen para recortar.");
@@ -529,7 +541,7 @@
         }
 
         next = clampRectToImage(next, natImg, 80);
-        if (e.shiftKey) next = applyAspectFromAnchor(next, natImg, h, NEWS_CARD_ASPECT, 80);
+next = applyAspectFromAnchor(next, natImg, h, NEWS_CARD_ASPECT, 80);
 
         setCropRect(next);
         return;
@@ -578,16 +590,16 @@
         const rect = clampRectToImage(cropRect, natImg, 80);
 
         const canvas = document.createElement("canvas");
-        canvas.width = Math.round(rect.w);
-        canvas.height = Math.round(rect.h);
+canvas.width = NEWS_IMAGE_WIDTH;
+canvas.height = NEWS_IMAGE_HEIGHT;
 
         const ctx = canvas.getContext("2d");
         if (!ctx) throw new Error("No pude abrir canvas para recortar.");
 
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
-
+        ctx.drawImage(img,rect.x,rect.y,rect.w,rect.h,0,0,NEWS_IMAGE_WIDTH, NEWS_IMAGE_HEIGHT);
+        
         const blob: Blob = await new Promise((resolve, reject) => {
           canvas.toBlob(
             (b) => (b ? resolve(b) : reject(new Error("No pude exportar el recorte."))),
@@ -623,7 +635,7 @@
             <div className="modalBody">
               <div style={{ opacity: 0.78, fontSize: 12, marginBottom: 10 }}>
                 Mouse: <b>mover</b> arrastrando dentro, <b>resize</b> arrastrando bordes/esquinas. Ruedita = zoom
-                del recorte. Doble click = máximo. Mantener <b>Shift</b> = ratio card.
+                del recorte. Doble click = máximo. El recorte mantiene automáticamente la proporción 1200x500.
               </div>
 
               <div
@@ -741,8 +753,13 @@
                   <img
                     src={item.imageUrl || "https://picsum.photos/seed/news-placeholder/900/520"}
                     alt={item.title || TYPE_LABEL[item.type]}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                  />
+style={{
+  width: "100%",
+  height: "100%",
+  objectFit: "contain",
+  display: "block",
+  background: "rgba(0,0,0,.35)",
+}}                  />
                 </div>
 
                 <div style={{ padding: 14 }}>
