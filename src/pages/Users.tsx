@@ -1,5 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 /** ✅ mismas sucursales que Rooms */
@@ -35,6 +34,7 @@ type User = {
   lastName: string;
   alias: string;
   email: string;
+  avatarUrl?: string;
   role: UserRole;
   branch: Branch | "";
   active: boolean;
@@ -86,8 +86,9 @@ function humanizeEdgeError(err: any) {
   const msg = raw.toLowerCase();
 
   if (msg.includes("failed to fetch")) return "No pude contactar la Edge Function. Revisá deploy / CORS / red.";
-  if (msg.includes("401") || msg.includes("unauthorized") || msg.includes("invalid jwt"))
-    return "No autorizado (401). Token inválido para la Edge Function (probable validación mal implementada en la Function).";
+  if (msg.includes("401") || msg.includes("unauthorized") || msg.includes("invalid jwt")) {
+    return "No autorizado (401). Token inválido para la Edge Function.";
+  }
   if (msg.includes("403")) return "Forbidden (403). Tu usuario no es Admin General.";
   if (msg.includes("409")) return "Ese mail ya existe (409).";
   return raw || "Error inesperado.";
@@ -100,6 +101,7 @@ function newUserTemplate(): User {
     lastName: "",
     alias: "",
     email: "",
+    avatarUrl: "",
     role: "CLIENT",
     branch: "",
     active: true,
@@ -108,7 +110,7 @@ function newUserTemplate(): User {
   };
 }
 
-/* ===== ICONOS SVG (igual al Login) ===== */
+/* ===== ICONOS SVG ===== */
 
 function EyeOpenIcon() {
   return (
@@ -136,10 +138,6 @@ function EyeClosedIcon() {
     </svg>
   );
 }
-
-/* =========================
-   SVG ICONS (sin emojis)
-========================= */
 
 function Icon({
   name,
@@ -224,7 +222,6 @@ function Icon({
     );
   }
 
-  // trash
   return (
     <svg {...common}>
       <path d="M4 7h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -235,7 +232,7 @@ function Icon({
   );
 }
 
-/** ======= UI helpers (modal) ======= */
+/** ===== Modal base ===== */
 function ModalShell({
   open,
   title,
@@ -250,48 +247,19 @@ function ModalShell({
   if (!open) return null;
 
   return (
-    <div
-      className="modalOverlay"
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        zIndex: 9999,
-      }}
-    >
-      <div
-        className="modalCard"
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: "min(720px, 100%)",
-          background: "#0f0f12",
-          border: "1px solid rgba(255,255,255,.08)",
-          borderRadius: 12,
-          boxShadow: "0 20px 60px rgba(0,0,0,.5)",
-        }}
-      >
-        <div
-          style={{
-            padding: 14,
-            borderBottom: "1px solid rgba(255,255,255,.08)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-          }}
-        >
-          <div style={{ fontSize: 16, fontWeight: 700 }}>{title}</div>
+    <div style={styles.overlay} onClick={onClose}>
+      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <div>
+            <h2 style={styles.modalTitle}>{title}</h2>
+          </div>
+
           <button className="ghostBtn" onClick={onClose}>
             ✕
           </button>
         </div>
 
-        <div style={{ padding: 14 }}>{children}</div>
+        <div style={{ padding: 22 }}>{children}</div>
       </div>
     </div>
   );
@@ -314,7 +282,7 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-/** ✅ Modal separado con state local */
+/** ✅ Modal crear */
 function CreateUserModal({
   open,
   initialUser,
@@ -465,11 +433,12 @@ export default function Users() {
   const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
   const ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
 
-const [, setMyRole] = useState<UserRole | "">("");
-  // ✅ CAMBIO: permiso real (ADMIN_GENERAL siempre / GM+ADMIN por canManageUsers)
+  const [, setMyRole] = useState<UserRole | "">("");
+
   const canManageUsers = useMemo(() => {
     const superFlag =
-      localStorage.getItem("eg_admin_is_super") === "true" || localStorage.getItem("eg_admin_role") === "ADMIN_GENERAL";
+      localStorage.getItem("eg_admin_is_super") === "true" ||
+      localStorage.getItem("eg_admin_role") === "ADMIN_GENERAL";
 
     if (superFlag) return true;
 
@@ -492,9 +461,18 @@ const [, setMyRole] = useState<UserRole | "">("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createInitial, setCreateInitial] = useState<User | null>(null);
 
-  const [permModal, setPermModal] = useState<{ open: boolean; user: User | null }>({ open: false, user: null });
-  const [resetModal, setResetModal] = useState<{ open: boolean; user: User | null }>({ open: false, user: null });
-  const [deleteModal, setDeleteModal] = useState<{ open: boolean; user: User | null }>({ open: false, user: null });
+  const [permModal, setPermModal] = useState<{ open: boolean; user: User | null }>({
+    open: false,
+    user: null,
+  });
+  const [resetModal, setResetModal] = useState<{ open: boolean; user: User | null }>({
+    open: false,
+    user: null,
+  });
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; user: User | null }>({
+    open: false,
+    user: null,
+  });
 
   const [resetPass1, setResetPass1] = useState("");
   const [resetPass2, setResetPass2] = useState("");
@@ -502,11 +480,7 @@ const [, setMyRole] = useState<UserRole | "">("");
   const [showResetPass2, setShowResetPass2] = useState(false);
 
   const [busy, setBusy] = useState(false);
-
-  // ✅ menú ⋯ (anclado al botón, portal a body) — igual a Notificaciones
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-  const menuAnchorRef = useRef<HTMLButtonElement | null>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     document.body.classList.add("users-fullwidth");
@@ -526,17 +500,28 @@ const [, setMyRole] = useState<UserRole | "">("");
           return;
         }
 
-        const { data: prof, error: pErr } = await supabase.from("profiles").select("role").eq("id", uid).maybeSingle();
+        const { data: prof, error: pErr } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", uid)
+          .maybeSingle();
+
         if (!pErr && prof?.role) {
           if (mounted) setMyRole(safeRole(prof.role));
           return;
         }
 
-        const { data: me } = await supabase.from("admins").select("is_super").eq("user_id", uid).maybeSingle();
+        const { data: me } = await supabase
+          .from("admins")
+          .select("is_super")
+          .eq("user_id", uid)
+          .maybeSingle();
+
         if (!me) {
           if (mounted) setMyRole("CLIENT");
           return;
         }
+
         if (mounted) setMyRole(me.is_super ? "ADMIN_GENERAL" : "GM");
       } catch {
         if (mounted) setMyRole("");
@@ -553,7 +538,7 @@ const [, setMyRole] = useState<UserRole | "">("");
     try {
       const { data: profs, error: e1 } = await supabase
         .from("profiles")
-        .select("id,nombre,apellido,alias,mail,role,is_active,created_at")
+        .select("id,nombre,apellido,alias,mail,role,is_active,created_at,photo_url")
         .order("created_at", { ascending: false });
       if (e1) throw e1;
 
@@ -585,6 +570,7 @@ const [, setMyRole] = useState<UserRole | "">("");
           lastName: p?.apellido || "",
           alias: "",
           email: a.mail || p?.mail || "",
+          avatarUrl: p?.photo_url || "",
           role,
           branch: (branchName as Branch) || "",
           active: p?.is_active ?? true,
@@ -601,7 +587,8 @@ const [, setMyRole] = useState<UserRole | "">("");
           lastName: p?.apellido || "",
           alias: p?.alias || "",
           email: p?.mail || "",
-          role: "CLIENT",
+          avatarUrl: p?.photo_url || "",
+          role: "CLIENT" as UserRole,
           branch: "",
           active: p?.is_active ?? true,
           permissions: defaultPerms(),
@@ -623,46 +610,10 @@ const [, setMyRole] = useState<UserRole | "">("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ menú: calcular posición igual a Notificaciones
-  const computeMenuPosFromAnchor = () => {
-    const btn = menuAnchorRef.current;
-    if (!btn) return null;
-
-    const r = btn.getBoundingClientRect();
-    const top = r.top + window.scrollY;
-    const left = r.right + window.scrollX;
-
-    const MENU_W = 260;
-    const gap = 10;
-
-    let x = left + gap;
-    const maxX = window.scrollX + window.innerWidth - 12 - MENU_W;
-    if (x > maxX) x = r.left + window.scrollX - gap - MENU_W;
-
-    let y = top - 6;
-    const maxY = window.scrollY + window.innerHeight - 12 - 260;
-    if (y > maxY) y = maxY;
-
-    const minY = window.scrollY + 12;
-    if (y < minY) y = minY;
-
-    return { top: y, left: x };
-  };
-
-  const openMenuFor = (id: string, btn: HTMLButtonElement) => {
-    menuAnchorRef.current = btn;
-    setMenuOpenId(id);
-    const pos = computeMenuPosFromAnchor();
-    setMenuPos(pos);
-  };
-
   const closeMenu = () => {
     setMenuOpenId(null);
-    setMenuPos(null);
-    menuAnchorRef.current = null;
   };
 
-  // ✅ cerrar menú click afuera / ESC + recalcular pos en scroll/resize
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (!menuOpenId) return;
@@ -686,25 +637,13 @@ const [, setMyRole] = useState<UserRole | "">("");
       }
     };
 
-    const onScrollResize = () => {
-      if (!menuOpenId) return;
-      const pos = computeMenuPosFromAnchor();
-      if (pos) setMenuPos(pos);
-      else closeMenu();
-    };
-
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onScrollResize, true);
-    window.addEventListener("resize", onScrollResize);
 
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onScrollResize, true);
-      window.removeEventListener("resize", onScrollResize);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [menuOpenId]);
 
   const filtered = useMemo(() => {
@@ -718,7 +657,20 @@ const [, setMyRole] = useState<UserRole | "">("");
     });
   }, [items, q, roleFilter, branchFilter]);
 
-  /** ✅ token válido */
+  const totals = useMemo(() => {
+    const totalUsers = filtered.length;
+    const activeUsers = filtered.filter((u) => u.active).length;
+    const gmCount = filtered.filter((u) => u.role === "GM").length;
+    const adminGeneralCount = filtered.filter((u) => u.role === "ADMIN_GENERAL").length;
+
+    return {
+      totalUsers,
+      activeUsers,
+      gmCount,
+      adminGeneralCount,
+    };
+  }, [filtered]);
+
   const getValidAccessToken = async (): Promise<string> => {
     const { data: s1, error: e1 } = await supabase.auth.getSession();
     if (e1) console.warn("getSession error:", e1);
@@ -741,9 +693,10 @@ const [, setMyRole] = useState<UserRole | "">("");
     return session.access_token;
   };
 
-  /** ✅ fetch directo a Functions */
   const invokeEdge = async <T,>(fnName: string, body: any): Promise<T> => {
-    if (!SUPABASE_URL || !ANON_KEY) throw new Error("Faltan envs: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY");
+    if (!SUPABASE_URL || !ANON_KEY) {
+      throw new Error("Faltan envs: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY");
+    }
 
     const token = await getValidAccessToken();
 
@@ -771,11 +724,9 @@ const [, setMyRole] = useState<UserRole | "">("");
     try {
       return JSON.parse(text) as T;
     } catch {
-      return (text as unknown) as T;
+      return text as unknown as T;
     }
   };
-
-  // ===== acciones =====
 
   const startCreate = () => {
     closeMenu();
@@ -842,7 +793,10 @@ const [, setMyRole] = useState<UserRole | "">("");
   const patchPerm = (key: keyof UserPermissions, value: boolean) => {
     setPermModal((prev) => {
       if (!prev.user) return prev;
-      return { open: true, user: { ...prev.user, permissions: { ...prev.user.permissions, [key]: value } } };
+      return {
+        open: true,
+        user: { ...prev.user, permissions: { ...prev.user.permissions, [key]: value } },
+      };
     });
   };
 
@@ -885,7 +839,10 @@ const [, setMyRole] = useState<UserRole | "">("");
 
     setBusy(true);
     try {
-      await invokeEdge<{ ok?: boolean }>("reset-user-password", { user_id: u.id, new_password: resetPass1 });
+      await invokeEdge<{ ok?: boolean }>("reset-user-password", {
+        user_id: u.id,
+        new_password: resetPass1,
+      });
       setResetModal({ open: false, user: null });
       alert("Contraseña reseteada.");
     } catch (err: any) {
@@ -958,548 +915,861 @@ const [, setMyRole] = useState<UserRole | "">("");
     }
   };
 
-  // ===== UI =====
+  const roleLabelOf = (r: UserRole) =>
+    r === "CLIENT" ? "Cliente" : r === "GM" ? "Game Master" : "Admin General";
 
-  const roleLabelOf = (r: UserRole) => (r === "CLIENT" ? "Cliente" : r === "GM" ? "Game Master" : "Admin General");
-
-   // ✅ tabla estilo Notificaciones
-  const GRID_COLS = "160px 160px 170px 1fr 170px 180px 140px 56px";
-  const ROW_MIN_H = 42;
-
-  const headerCellBase: React.CSSProperties = {
-    padding: "10px 12px",
-    fontSize: 14,
-    fontWeight: 800,
-    borderRight: "1px solid rgba(255,255,255,.08)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: ROW_MIN_H,
-    minWidth: 0,
-    overflow: "hidden",
-    textAlign: "center",
-
-    
-  };
-
-  const cellBase: React.CSSProperties = {
-    padding: "8px 12px",
-    fontSize: 13,
-    borderRight: "1px solid rgba(255,255,255,.06)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: ROW_MIN_H,
-    minWidth: 0,
-    overflow: "hidden",
-    textAlign: "center",
-  };
-
-  const rowBase: React.CSSProperties = {
-    display: "grid",
-    gridTemplateColumns: GRID_COLS,
-    gap: 0,
-    alignItems: "stretch",
-    borderBottom: "1px solid rgba(255,255,255,.08)",
-    minHeight: ROW_MIN_H,
-  };
-  
   return (
-    <div className="page">
-      <div className="pageHeadRow" style={{ gap: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <div className="pageTitle">Usuarios</div>
-          {/* ✅ Leyenda eliminada */}
+    <div style={styles.page}>
+      <div style={styles.pageInner}>
+        <div style={styles.headerWrap}>
+          <div style={styles.headerText}>
+            <h1 style={styles.title}>Usuarios</h1>
+            <p style={styles.subtitle}></p>
+          </div>
+
+          <div style={styles.headerActions}>
+            {canManageUsers ? (
+              <button className="btnSmall" onClick={startCreate} disabled={busy}>
+                + Nuevo usuario
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          {canManageUsers ? (
-            <button className="btnSmall" onClick={startCreate} disabled={busy}>
-              + Nuevo usuario
-            </button>
-          ) : null}
+        <div style={styles.filtersRow}>
+          <div style={styles.searchBox}>
+            <input
+              className="input"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar por nombre, mail o alias"
+              style={styles.searchInput}
+            />
+          </div>
+
+          <select
+            className="input"
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as any)}
+            style={styles.filterSelect}
+          >
+            <option value="">Todos los roles</option>
+            <option value="CLIENT">Cliente</option>
+            <option value="GM">Game Master</option>
+            <option value="ADMIN_GENERAL">Admin General</option>
+          </select>
+
+          <select
+            className="input"
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value as any)}
+            style={styles.filterSelect}
+          >
+            <option value="">Todas las sucursales</option>
+            {BRANCHES.map((b) => (
+              <option key={b} value={b}>
+                {b}
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
 
-      <div className="toolbarRow" style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <input
-          className="input"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por nombre / mail / alias…"
-          style={{ flex: 1, minWidth: 0 }}
-        />
+        <div style={styles.cardsGrid}>
+          <div style={styles.card}>
+            <span style={styles.cardLabel}>Usuarios visibles</span>
+            <strong style={styles.cardValue}>{totals.totalUsers}</strong>
+          </div>
 
-        <select className="input" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as any)} style={{ width: 200 }}>
-          <option value="">Todos los roles</option>
-          <option value="CLIENT">Cliente</option>
-          <option value="GM">Game Master</option>
-          <option value="ADMIN_GENERAL">Admin General</option>
-        </select>
+          <div style={styles.card}>
+            <span style={styles.cardLabel}>Usuarios activos</span>
+            <strong style={styles.cardValue}>{totals.activeUsers}</strong>
+          </div>
 
-        <select className="input" value={branchFilter} onChange={(e) => setBranchFilter(e.target.value as any)} style={{ width: 220 }}>
-          <option value="">Todas las sucursales</option>
-          {BRANCHES.map((b) => (
-            <option key={b} value={b}>
-              {b}
-            </option>
-          ))}
-        </select>
-      </div>
+          <div style={styles.card}>
+            <span style={styles.cardLabel}>Game Masters</span>
+            <strong style={styles.cardValue}>{totals.gmCount}</strong>
+          </div>
 
-      {loading ? (
-        <div className="panel" style={{ padding: 16 }}>
-          Cargando usuarios…
+          <div style={styles.card}>
+            <span style={styles.cardLabel}>Admin General</span>
+            <strong style={styles.cardValue}>{totals.adminGeneralCount}</strong>
+          </div>
         </div>
-      ) : (
-       <div
-  className="panel"
-  style={{
-    padding: 0,
-    width: "100%",
-    height: "calc(100vh - 260px)",
-    overflow: "auto",
-  }}
->
-  <div style={{ width: "100%" }}>
-    {/* ✅ Header sticky SIEMPRE (igual Notificaciones) */}
-    <div
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 5,
-        display: "grid",
-        gridTemplateColumns: GRID_COLS,
-        gap: 0,
-        alignItems: "stretch",
-        background: "rgba(0,0,0,.70)",
-        backdropFilter: "blur(6px)",
-        borderBottom: "1px solid rgba(255,255,255,.12)",
-        borderTop: "1px solid rgba(255,255,255,.08)",
-      }}
-    >
-      <div style={headerCellBase}>Nombre</div>
-      <div style={headerCellBase}>Apellido</div>
-      <div style={headerCellBase}>Alias (cliente)</div>
-      <div style={headerCellBase}>Mail</div>
-      <div style={headerCellBase}>Rol</div>
-      <div style={headerCellBase}>Sucursal (GM)</div>
-      <div style={{ ...headerCellBase, borderRight: "1px solid rgba(255,255,255,.08)" }}>Estado</div>
-      <div style={{ ...headerCellBase, borderRight: "none" }} />
-    </div>
 
-    {/* ✅ Body: filas o vacío */}
-    {filtered.length === 0 ? (
-      <div style={{ padding: 16, opacity: 0.8 }}>No hay usuarios con ese filtro.</div>
-    ) : (
-      <>
-        {filtered.map((u, idx) => {
-          const isEven = idx % 2 === 0;
-          const canShowGmCode = u._isStaff && (u.role === "GM" || u.role === "ADMIN_GENERAL");
-
-          return (
-            <div
-              key={u.id}
-              style={{
-                ...rowBase,
-                background: isEven ? "rgba(255,255,255,.02)" : "rgba(255,255,255,.00)",
-                opacity: u.active ? 1 : 0.62,
-                transition: "background .12s ease",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.05)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLDivElement).style.background = isEven
-                  ? "rgba(255,255,255,.02)"
-                  : "rgba(255,255,255,.00)";
-              }}
-            >
-              {/* Nombre */}
-<div style={{ ...cellBase, justifyContent: "center", textAlign: "center" }}>
-  <div
-    style={{
-      width: "100%",
-      textAlign: "center",   // 👈 ESTE es el problema
-      whiteSpace: "nowrap",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-      fontWeight: 650,
-    }}
-    title={u.firstName}
-  >
-    {u.firstName}
-  </div>
-</div>
-
-              {/* Apellido */}
-<div style={{ ...cellBase, justifyContent: "center" }}>
-  <div
-    style={{
-      width: "100%",
-      textAlign: "center",   // 👈 también acá
-      whiteSpace: "nowrap",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-    }}
-    title={u.lastName}
-  >
-    {u.lastName}
-  </div>
-</div>
-
-              <div style={{ ...cellBase, justifyContent: "center" }}>
-                <div
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    opacity: u.role === "CLIENT" ? 1 : 0.55,
-                  }}
-                  title={u.role === "CLIENT" ? u.alias : ""}
-                >
-                  {u.role === "CLIENT" ? u.alias : ""}
-                </div>
+        {loading ? (
+          <div style={styles.loadingPanel}>Cargando usuarios…</div>
+        ) : (
+          <div style={styles.tableOuter}>
+            <div style={styles.tableWrap}>
+              <div style={styles.tableHeader}>
+                <div style={{ ...styles.th, ...styles.colUser }}>Usuario</div>
+                <div style={{ ...styles.th, ...styles.colMail }}>Mail</div>
+                <div style={{ ...styles.thCenter, ...styles.colRole }}>Rol</div>
+                <div style={{ ...styles.thCenter, ...styles.colBranch }}>Sucursal</div>
+                <div style={{ ...styles.thCenter, ...styles.colAlias }}>Alias</div>
+                <div style={{ ...styles.thCenter, ...styles.colStatus }}>Estado</div>
+                <div style={{ ...styles.thCenter, ...styles.colAction }}>Acciones</div>
               </div>
 
-              <div style={{ ...cellBase, justifyContent: "center" }}>
-                <div
-                  style={{
-                    width: "100%",
-                    textAlign: "left",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    fontFamily:
-                      "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-                    fontSize: 12.5,
-                    opacity: 0.95,
-                  }}
-                  title={u.email}
-                >
-                  {u.email}
-                </div>
-              </div>
+              {filtered.length === 0 ? (
+                <div style={styles.emptyState}>No hay usuarios con ese filtro.</div>
+              ) : (
+                filtered.map((u) => {
+                  const canShowGmCode = u._isStaff && (u.role === "GM" || u.role === "ADMIN_GENERAL");
 
-              <div style={{ ...cellBase, justifyContent: "center" }}>
-                <div style={{ width: "100%", textAlign: "center", fontWeight: 700 }}>{roleLabelOf(u.role)}</div>
-              </div>
+                  return (
+                    <div key={u.id} style={{ ...styles.row, opacity: u.active ? 1 : 0.62 }}>
+                      <div style={{ ...styles.td, ...styles.colUser }}>
+                        <div style={styles.userCell}>
+                          <div style={styles.avatar}>
+                            {u.avatarUrl ? (
+                              <img
+                                src={u.avatarUrl}
+                                alt={[u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || "Usuario"}
+                                style={styles.avatarImg}
+                              />
+                            ) : (
+                              <span>{(u.firstName?.[0] || u.email?.[0] || "U").toUpperCase()}</span>
+                            )}
+                          </div>
 
-              <div style={{ ...cellBase, justifyContent: "center" }}>
-                <div style={{ width: "100%", textAlign: "center", opacity: u.role === "GM" ? 1 : 0.55 }}>
-                  {u.role === "GM" ? u.branch || "" : ""}
-                </div>
-              </div>
+                          <div style={styles.userTextWrap}>
+                            <div style={styles.userName}>
+                              {[u.firstName, u.lastName].filter(Boolean).join(" ") || "Sin nombre"}
+                            </div>
+                            <div style={styles.userAliasLine}>
+                              {u.role === "CLIENT" && u.alias ? `@${u.alias}` : u.email}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-              <div style={{ ...cellBase, justifyContent: "center", borderRight: "1px solid rgba(255,255,255,.06)" }}>
-                <button className={u.active ? "ghostBtn" : "btnSmall"} disabled style={{ padding: "6px 10px" }}>
-                  {u.active ? "Activo" : "Inactivo"}
-                </button>
-              </div>
+                      <div style={{ ...styles.td, ...styles.colMail }}>
+                        <div style={styles.truncate} title={u.email}>
+                          {u.email}
+                        </div>
+                      </div>
 
-              <div style={{ ...cellBase, borderRight: "none", justifyContent: "flex-end" }}>
-                <button
-                  type="button"
-                  className="ghostBtn"
-                  data-menu-btn="1"
-                  onClick={(e) => {
-                    if (!canManageUsers || busy) return;
-                    const btn = e.currentTarget as HTMLButtonElement;
-                    if (menuOpenId === u.id) {
-                      closeMenu();
-                      return;
-                    }
-                    openMenuFor(u.id, btn);
-                  }}
-                  disabled={!canManageUsers || busy}
-                  style={{
-                    padding: "6px 10px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    opacity: canManageUsers ? 1 : 0.45,
-                  }}
-                  aria-label="Opciones"
-                  title={canManageUsers ? "Opciones" : "No autorizado"}
-                >
-                  <Icon name="dots" size={16} />
-                </button>
-              </div>
+                      <div style={{ ...styles.tdCenter, ...styles.colRole }}>
+                        <span style={styles.roleBadge}>{roleLabelOf(u.role)}</span>
+                      </div>
 
-              {menuOpenId === u.id && menuPos
-                ? createPortal(
-                    <div
-                      data-menu-popup="1"
-                      style={{
-                        position: "fixed", // ✅ CLAVE: fixed (como Notificaciones)
-                        left: menuPos.left,
-                        top: menuPos.top,
-                        zIndex: 99999,
-                        width: 260,
-                        borderRadius: 12,
-                        overflow: "hidden",
-                        border: "1px solid rgba(255,255,255,.14)",
-                        background: "rgba(0,0,0,.94)",
-                        boxShadow: "0 12px 34px rgba(0,0,0,.45)",
-                      }}
-                      onMouseDown={(ev) => ev.stopPropagation()}
-                    >
-                      {(() => {
-                        const itemStyle: React.CSSProperties = {
-                          width: "100%",
-                          justifyContent: "flex-start" as any,
-                          borderRadius: 0,
-                          padding: "10px 12px",
-                          display: "flex",
-                          gap: 10,
-                          alignItems: "center",
-                        };
+                      <div style={{ ...styles.tdCenter, ...styles.colBranch }}>
+                        <div style={styles.centerText}>{u.role === "GM" ? u.branch || "-" : "-"}</div>
+                      </div>
 
-                        const iconStyle: React.CSSProperties = { opacity: 0.92 };
+                      <div style={{ ...styles.tdCenter, ...styles.colAlias }}>
+                        <div style={styles.centerText}>{u.role === "CLIENT" ? u.alias || "-" : "-"}</div>
+                      </div>
 
-                        return (
-                          <>
+                      <div style={{ ...styles.tdCenter, ...styles.colStatus }}>
+                        <span style={u.active ? styles.statusBadgeActive : styles.statusBadgeOff}>
+                          {u.active ? "Activo" : "Inactivo"}
+                        </span>
+                      </div>
+
+                      <div style={{ ...styles.tdCenter, ...styles.colAction, ...styles.actionCell }}>
+                        <button
+                          type="button"
+                          data-menu-btn="1"
+                          className="ghostBtn"
+                          onClick={() => {
+                            if (!canManageUsers || busy) return;
+                            setMenuOpenId((prev) => (prev === u.id ? null : u.id));
+                          }}
+                          disabled={!canManageUsers || busy}
+                          style={styles.actionBtn}
+                          title={canManageUsers ? "Opciones" : "No autorizado"}
+                        >
+                          Ver acciones
+                        </button>
+
+                        {menuOpenId === u.id ? (
+                          <div
+                            data-menu-popup="1"
+                            style={styles.inlineMenu}
+                            onMouseDown={(ev) => ev.stopPropagation()}
+                          >
                             {canShowGmCode ? (
                               <button
-                                className="ghostBtn"
-                                style={itemStyle}
+                                style={styles.portalItem}
                                 onClick={() => ensureAndCopyGmCode(u)}
                                 disabled={busy}
                                 title="Copiar Código GM"
+                                onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.portalItemHover)}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                               >
-                                <Icon name="key" size={16} style={iconStyle} />
+                                <Icon name="key" size={16} />
                                 Código GM
                               </button>
                             ) : null}
 
                             <button
-                              className="ghostBtn"
-                              style={itemStyle}
+                              style={styles.portalItem}
                               onClick={() => {
                                 closeMenu();
-                                setPermModal({ open: true, user: { ...u, permissions: { ...u.permissions } } });
+                                setPermModal({
+                                  open: true,
+                                  user: { ...u, permissions: { ...u.permissions } },
+                                });
                               }}
                               disabled={busy}
+                              onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.portalItemHover)}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                             >
-                              <Icon name="shield" size={16} style={iconStyle} />
+                              <Icon name="shield" size={16} />
                               Permisos
                             </button>
 
-                            <button className="ghostBtn" style={itemStyle} onClick={() => openReset(u)} disabled={busy}>
-                              <Icon name="refresh" size={16} style={iconStyle} />
+                            <button
+                              style={styles.portalItem}
+                              onClick={() => openReset(u)}
+                              disabled={busy}
+                              onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.portalItemHover)}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                            >
+                              <Icon name="refresh" size={16} />
                               Resetear contraseña
                             </button>
 
-                            <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
+                            <div style={styles.portalDivider} />
 
                             <button
-                              className="dangerBtnInline"
-                              style={{ ...itemStyle, textAlign: "left" }}
+                              style={{ ...styles.portalItem, ...styles.portalDangerItem }}
                               onClick={() => openDelete(u)}
                               disabled={busy}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "rgba(248,113,113,0.10)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "transparent";
+                              }}
                             >
-                              <Icon name="trash" size={16} style={{ opacity: 0.95 }} />
+                              <Icon name="trash" size={16} />
                               Eliminar usuario
                             </button>
-                          </>
-                        );
-                      })()}
-                    </div>,
-                    document.body
-                  )
-                : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-          );
-        })}
-      </>
-    )}
-  </div>
-</div>
-      )}
+          </div>
+        )}
 
-      {/* ✅ MODAL CREAR */}
-      <CreateUserModal
-        open={createModalOpen}
-        initialUser={createInitial}
-        canManageUsers={canManageUsers}
-        busy={busy}
-        onClose={() => {
-          setCreateModalOpen(false);
-          setCreateInitial(null);
-        }}
-        onSave={createSave}
-      />
+        <CreateUserModal
+          open={createModalOpen}
+          initialUser={createInitial}
+          canManageUsers={canManageUsers}
+          busy={busy}
+          onClose={() => {
+            setCreateModalOpen(false);
+            setCreateInitial(null);
+          }}
+          onSave={createSave}
+        />
 
-      {/* ===== PERMISOS ===== */}
-      <ModalShell open={permModal.open} title="Permisos" onClose={() => setPermModal({ open: false, user: null })}>
-        {permModal.user ? (
-          <>
-            <div style={{ marginBottom: 12, opacity: 0.8, fontSize: 13 }}>
-              Usuario: <b>{permModal.user.email}</b> — Rol: <b>{permModal.user.role}</b>
-            </div>
-
-            {permModal.user.role === "ADMIN_GENERAL" ? (
-              <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
-                Admin General: por diseño no usamos permisos finos acá (queda en defaults).
+        <ModalShell
+          open={permModal.open}
+          title="Permisos"
+          onClose={() => setPermModal({ open: false, user: null })}
+        >
+          {permModal.user ? (
+            <>
+              <div style={{ marginBottom: 12, opacity: 0.8, fontSize: 13 }}>
+                Usuario: <b>{permModal.user.email}</b> — Rol: <b>{permModal.user.role}</b>
               </div>
-            ) : (
-              <div style={{ display: "grid", gap: 10 }}>
-                {(
-                  [
-                    ["canManageRooms", "Gestionar salas"],
-                    ["canManageNews", "Gestionar novedades"],
-                    ["canManageUsers", "Gestionar usuarios"],
-                    ["canEditRankings", "Editar rankings"],
-                    ["canAwardKeys", "Otorgar llaves"],
-                    ["canResetClientPassword", "Reset pass cliente"],
-                  ] as const
-                ).map(([k, label]) => (
-                  <label key={k} style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <input type="checkbox" checked={!!permModal.user?.permissions?.[k]} onChange={(e) => patchPerm(k, e.target.checked)} />
-                    <span>{label}</span>
-                  </label>
-                ))}
-              </div>
-            )}
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-              <button className="ghostBtn" onClick={() => setPermModal({ open: false, user: null })} disabled={busy}>
-                Cancelar
-              </button>
-              <button className="btnSmall" onClick={savePerms} disabled={busy}>
-                {busy ? "Guardando…" : "Guardar"}
-              </button>
-            </div>
-          </>
-        ) : null}
-      </ModalShell>
+              {permModal.user.role === "ADMIN_GENERAL" ? (
+                <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
+                  Admin General: por diseño no usamos permisos finos acá.
+                </div>
+              ) : (
+                <div style={{ display: "grid", gap: 10 }}>
+                  {(
+                    [
+                      ["canManageRooms", "Gestionar salas"],
+                      ["canManageNews", "Gestionar novedades"],
+                      ["canManageUsers", "Gestionar usuarios"],
+                      ["canEditRankings", "Editar rankings"],
+                      ["canAwardKeys", "Otorgar llaves"],
+                      ["canResetClientPassword", "Reset pass cliente"],
+                    ] as const
+                  ).map(([k, label]) => (
+                    <label key={k} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={!!permModal.user?.permissions?.[k]}
+                        onChange={(e) => patchPerm(k, e.target.checked)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
 
-      {/* ===== RESET PASS ===== */}
-      <ModalShell
-        open={resetModal.open}
-        title="Resetear contraseña"
-        onClose={() => {
-          setShowResetPass1(false);
-          setShowResetPass2(false);
-          setResetModal({ open: false, user: null });
-        }}
-      >
-        {resetModal.user ? (
-          <>
-            <div style={{ marginBottom: 12, opacity: 0.8, fontSize: 13 }}>
-              Usuario: <b>{resetModal.user.email}</b>
-            </div>
-
-            <FieldRow label="Nueva contraseña">
-              <div style={{ position: "relative" }}>
-                <input
-                  className="input"
-                  style={{ width: "100%", minWidth: 0, paddingRight: 42 }}
-                  type={showResetPass1 ? "text" : "password"}
-                  value={resetPass1}
-                  onChange={(e) => setResetPass1(e.target.value)}
-                />
-
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
                 <button
-                  type="button"
-                  onClick={() => setShowResetPass1((v) => !v)}
-                  aria-label={showResetPass1 ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  style={{
-                    position: "absolute",
-                    right: 10,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "transparent",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    color: "#9ca3af",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#e5e7eb")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#9ca3af")}
+                  className="ghostBtn"
+                  onClick={() => setPermModal({ open: false, user: null })}
+                  disabled={busy}
                 >
-                  {showResetPass1 ? <EyeOpenIcon /> : <EyeClosedIcon />}
+                  Cancelar
+                </button>
+                <button className="btnSmall" onClick={savePerms} disabled={busy}>
+                  {busy ? "Guardando…" : "Guardar"}
                 </button>
               </div>
-            </FieldRow>
+            </>
+          ) : null}
+        </ModalShell>
 
-            <FieldRow label="Repetir contraseña">
-              <div style={{ position: "relative" }}>
-                <input
-                  className="input"
-                  style={{ width: "100%", minWidth: 0, paddingRight: 42 }}
-                  type={showResetPass2 ? "text" : "password"}
-                  value={resetPass2}
-                  onChange={(e) => setResetPass2(e.target.value)}
-                />
+        <ModalShell
+          open={resetModal.open}
+          title="Resetear contraseña"
+          onClose={() => {
+            setShowResetPass1(false);
+            setShowResetPass2(false);
+            setResetModal({ open: false, user: null });
+          }}
+        >
+          {resetModal.user ? (
+            <>
+              <div style={{ marginBottom: 12, opacity: 0.8, fontSize: 13 }}>
+                Usuario: <b>{resetModal.user.email}</b>
+              </div>
 
+              <FieldRow label="Nueva contraseña">
+                <div style={{ position: "relative" }}>
+                  <input
+                    className="input"
+                    style={{ width: "100%", minWidth: 0, paddingRight: 42 }}
+                    type={showResetPass1 ? "text" : "password"}
+                    value={resetPass1}
+                    onChange={(e) => setResetPass1(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPass1((v) => !v)}
+                    aria-label={showResetPass1 ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    style={styles.eyeButton}
+                  >
+                    {showResetPass1 ? <EyeOpenIcon /> : <EyeClosedIcon />}
+                  </button>
+                </div>
+              </FieldRow>
+
+              <FieldRow label="Repetir contraseña">
+                <div style={{ position: "relative" }}>
+                  <input
+                    className="input"
+                    style={{ width: "100%", minWidth: 0, paddingRight: 42 }}
+                    type={showResetPass2 ? "text" : "password"}
+                    value={resetPass2}
+                    onChange={(e) => setResetPass2(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPass2((v) => !v)}
+                    aria-label={showResetPass2 ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    style={styles.eyeButton}
+                  >
+                    {showResetPass2 ? <EyeOpenIcon /> : <EyeClosedIcon />}
+                  </button>
+                </div>
+              </FieldRow>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
                 <button
-                  type="button"
-                  onClick={() => setShowResetPass2((v) => !v)}
-                  aria-label={showResetPass2 ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  style={{
-                    position: "absolute",
-                    right: 10,
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    background: "transparent",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    color: "#9ca3af",
+                  className="ghostBtn"
+                  onClick={() => {
+                    setShowResetPass1(false);
+                    setShowResetPass2(false);
+                    setResetModal({ open: false, user: null });
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = "#e5e7eb")}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = "#9ca3af")}
+                  disabled={busy}
                 >
-                  {showResetPass2 ? <EyeOpenIcon /> : <EyeClosedIcon />}
+                  Cancelar
+                </button>
+                <button className="btnSmall" onClick={resetPassword} disabled={busy}>
+                  {busy ? "Reseteando…" : "Resetear"}
                 </button>
               </div>
-            </FieldRow>
+            </>
+          ) : null}
+        </ModalShell>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-              <button
-                className="ghostBtn"
-                onClick={() => {
-                  setShowResetPass1(false);
-                  setShowResetPass2(false);
-                  setResetModal({ open: false, user: null });
-                }}
-                disabled={busy}
-              >
-                Cancelar
-              </button>
-              <button className="btnSmall" onClick={resetPassword} disabled={busy}>
-                {busy ? "Reseteando…" : "Resetear"}
-              </button>
-            </div>
-          </>
-        ) : null}
-      </ModalShell>
-
-      {/* ===== DELETE ===== */}
-      <ModalShell open={deleteModal.open} title="Eliminar usuario" onClose={() => setDeleteModal({ open: false, user: null })}>
-        {deleteModal.user ? (
-          <>
-            <div className="panel" style={{ padding: 12 }}>
-              Estas seguro de querer borrar a: <b>{deleteModal.user.email}</b>
-              <div style={{ marginTop: 8, opacity: 0.85 }}>
-            
+        <ModalShell
+          open={deleteModal.open}
+          title="Eliminar usuario"
+          onClose={() => setDeleteModal({ open: false, user: null })}
+        >
+          {deleteModal.user ? (
+            <>
+              <div className="panel" style={{ padding: 12 }}>
+                Estás seguro de querer borrar a: <b>{deleteModal.user.email}</b>
               </div>
-            </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-              <button className="ghostBtn" onClick={() => setDeleteModal({ open: false, user: null })} disabled={busy}>
-                Cancelar
-              </button>
-              <button className="btnSmall danger" onClick={deleteUser} disabled={busy}>
-                {busy ? "Eliminando…" : "Eliminar"}
-              </button>
-            </div>
-          </>
-        ) : null}
-      </ModalShell>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
+                <button
+                  className="ghostBtn"
+                  onClick={() => setDeleteModal({ open: false, user: null })}
+                  disabled={busy}
+                >
+                  Cancelar
+                </button>
+                <button className="btnSmall danger" onClick={deleteUser} disabled={busy}>
+                  {busy ? "Eliminando…" : "Eliminar"}
+                </button>
+              </div>
+            </>
+          ) : null}
+        </ModalShell>
+      </div>
     </div>
   );
 }
+
+const styles: Record<string, any> = {
+  page: {
+    width: "100%",
+    minHeight: "100%",
+    height: "100%",
+    background: "#0f172a",
+    color: "#e5e7eb",
+    fontFamily:
+      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    boxSizing: "border-box",
+  },
+
+  pageInner: {
+    width: "100%",
+    maxWidth: "100%",
+    minHeight: "100%",
+    height: "100%",
+    margin: 0,
+    padding: "14px 18px 18px",
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+  },
+
+  headerWrap: {
+    display: "flex",
+    gap: 16,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+    marginBottom: 14,
+  },
+
+  headerText: {
+    flex: "1 1 420px",
+    minWidth: 280,
+  },
+
+  title: {
+    margin: 0,
+    fontSize: 32,
+    fontWeight: 800,
+    color: "#ffffff",
+    lineHeight: 1.1,
+  },
+
+  subtitle: {
+    margin: "8px 0 0 0",
+    fontSize: 14,
+    color: "#94a3b8",
+    maxWidth: 760,
+  },
+
+  headerActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  filtersRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(260px, 1.8fr) minmax(180px, 220px) minmax(200px, 240px)",
+    gap: 12,
+    marginBottom: 16,
+    alignItems: "center",
+  },
+
+  searchBox: {
+    minWidth: 0,
+  },
+
+  searchInput: {
+    width: "100%",
+    height: 48,
+    borderRadius: 14,
+    boxSizing: "border-box",
+  },
+
+  filterSelect: {
+    width: "100%",
+    height: 48,
+    borderRadius: 14,
+    boxSizing: "border-box",
+  },
+
+  cardsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 12,
+    marginBottom: 18,
+    width: "100%",
+  },
+
+  card: {
+    background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
+    border: "1px solid #1f2937",
+    borderRadius: 16,
+    padding: 14,
+    boxShadow: "0 10px 24px rgba(0,0,0,0.16)",
+    minHeight: 82,
+    boxSizing: "border-box",
+  },
+
+  cardLabel: {
+    display: "block",
+    fontSize: 12,
+    color: "#94a3b8",
+    marginBottom: 8,
+  },
+
+  cardValue: {
+    fontSize: 22,
+    fontWeight: 800,
+    color: "#ffffff",
+    lineHeight: 1,
+  },
+
+  loadingPanel: {
+    border: "1px solid #1f2937",
+    borderRadius: 18,
+    background: "#0b1220",
+    padding: 18,
+    color: "#cbd5e1",
+  },
+
+  tableOuter: {
+    width: "100%",
+    flex: 1,
+    minHeight: 0,
+    overflow: "auto",
+    borderRadius: 18,
+  },
+
+  tableWrap: {
+    width: "100%",
+    minWidth: 1200,
+    border: "1px solid #1f2937",
+    borderRadius: 18,
+    overflow: "hidden",
+    background: "#0b1220",
+    boxSizing: "border-box",
+  },
+
+  tableHeader: {
+    display: "grid",
+    gridTemplateColumns: "2.1fr 2fr 1.2fr 1.2fr 1.1fr 1fr 1.2fr",
+    gap: 12,
+    padding: "16px 18px",
+    background: "#111827",
+    borderBottom: "1px solid #1f2937",
+    boxSizing: "border-box",
+    alignItems: "center",
+    position: "sticky",
+    top: 0,
+    zIndex: 5,
+  },
+
+  row: {
+    display: "grid",
+    gridTemplateColumns: "2.1fr 2fr 1.2fr 1.2fr 1.1fr 1fr 1.2fr",
+    gap: 12,
+    padding: "16px 18px",
+    borderBottom: "1px solid #172033",
+    alignItems: "center",
+    boxSizing: "border-box",
+  },
+
+  th: {
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    color: "#94a3b8",
+    fontWeight: 700,
+    minWidth: 0,
+  },
+
+  thCenter: {
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    color: "#94a3b8",
+    fontWeight: 700,
+    textAlign: "center",
+    minWidth: 0,
+  },
+
+  td: {
+    fontSize: 14,
+    color: "#e5e7eb",
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+
+  tdCenter: {
+    fontSize: 14,
+    color: "#e5e7eb",
+    textAlign: "center",
+    minWidth: 0,
+  },
+
+  colUser: { minWidth: 220 },
+  colMail: { minWidth: 230 },
+  colRole: { minWidth: 150 },
+  colBranch: { minWidth: 150 },
+  colAlias: { minWidth: 140 },
+  colStatus: { minWidth: 120 },
+  colAction: { minWidth: 160 },
+
+  userCell: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    minWidth: 0,
+  },
+
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    background: "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#fff",
+    fontWeight: 800,
+    fontSize: 16,
+    flexShrink: 0,
+    overflow: "hidden",
+  },
+
+  avatarImg: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover" as const,
+    borderRadius: "50%",
+    display: "block",
+  },
+
+  userTextWrap: {
+    minWidth: 0,
+    overflow: "hidden",
+  },
+
+  userName: {
+    fontWeight: 700,
+    color: "#fff",
+    marginBottom: 2,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
+  userAliasLine: {
+    fontSize: 13,
+    color: "#94a3b8",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
+  truncate: {
+    width: "100%",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
+  centerText: {
+    width: "100%",
+    textAlign: "center" as const,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+
+  roleBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 30,
+    padding: "0 12px",
+    borderRadius: 999,
+    background: "#1e293b",
+    border: "1px solid #334155",
+    fontWeight: 700,
+    fontSize: 12,
+    whiteSpace: "nowrap",
+  },
+
+  statusBadgeActive: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 30,
+    padding: "0 12px",
+    borderRadius: 999,
+    background: "rgba(34,197,94,0.12)",
+    color: "#4ade80",
+    border: "1px solid rgba(34,197,94,0.3)",
+    fontSize: 12,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+  },
+
+  statusBadgeOff: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 30,
+    padding: "0 12px",
+    borderRadius: 999,
+    background: "rgba(248,113,113,0.12)",
+    color: "#fca5a5",
+    border: "1px solid rgba(248,113,113,0.28)",
+    fontSize: 12,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+  },
+
+  actionCell: {
+    position: "relative",
+    overflow: "visible",
+  },
+
+  inlineMenu: {
+    position: "absolute",
+    top: "50%",
+    right: "calc(100% + 10px)",
+    transform: "translateY(-50%)",
+    zIndex: 30,
+    width: 270,
+    borderRadius: 16,
+    overflow: "hidden",
+    border: "1px solid #1f2937",
+    background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
+    boxShadow: "0 20px 40px rgba(0,0,0,0.28)",
+  },
+
+  actionBtn: {
+    border: "1px solid rgba(249,115,22,0.35)",
+    borderRadius: 12,
+    background: "linear-gradient(180deg, rgba(249,115,22,0.22) 0%, rgba(249,115,22,0.12) 100%)",
+    color: "#fff",
+    fontWeight: 700,
+    padding: "10px 12px",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    width: "100%",
+    maxWidth: 150,
+    boxShadow: "0 8px 18px rgba(0,0,0,0.18)",
+  },
+
+  emptyState: {
+    padding: 28,
+    textAlign: "center" as const,
+    color: "#94a3b8",
+    fontSize: 15,
+  },
+
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(2,6,23,0.72)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    zIndex: 1000,
+    boxSizing: "border-box",
+  },
+
+  modal: {
+    width: "100%",
+    maxWidth: 980,
+    maxHeight: "92vh",
+    overflowY: "auto" as const,
+    borderRadius: 22,
+    background: "#0b1220",
+    border: "1px solid #1f2937",
+    boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
+    boxSizing: "border-box",
+  },
+
+  modalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 16,
+    alignItems: "center",
+    padding: "22px 22px 0",
+  },
+
+  modalTitle: {
+    margin: 0,
+    fontSize: 24,
+    fontWeight: 800,
+    color: "#fff",
+  },
+
+  portalItem: {
+    width: "100%",
+    justifyContent: "flex-start",
+    borderRadius: 0,
+    padding: "12px 14px",
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    background: "transparent",
+    color: "#e5e7eb",
+    border: "none",
+    fontWeight: 600,
+    fontSize: 14,
+    cursor: "pointer",
+  },
+
+  portalDivider: {
+    height: 1,
+    background: "#1f2937",
+  },
+
+  portalItemHover: {
+    background: "rgba(255,255,255,0.05)",
+  },
+
+  portalDangerItem: {
+    color: "#fca5a5",
+  },
+
+  eyeButton: {
+    position: "absolute",
+    right: 10,
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "transparent",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    color: "#9ca3af",
+  },
+};

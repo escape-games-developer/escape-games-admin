@@ -11,7 +11,16 @@
 }
 
 *{ box-sizing:border-box; }
-html,body{ height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+
+html,
+body,
+#root{
+  height:100%;
+  min-height:100%;
+  margin:0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+
 a{ color:inherit; text-decoration:none; }
 
 /* ✅ Fondo global */
@@ -25,57 +34,118 @@ body{
   background-attachment: fixed;
 }
 
-.shell{
-  height: 100vh;
-  overflow: hidden;
+/* =========================
+   SCROLL GLOBAL FINO
+========================= */
+*{
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.18) transparent;
 }
 
-/* ✅ contenedor principal: tiene que ser FLEX para que el hijo pueda scrollear */
-.main{
-  padding-top:72px;
-  height: calc(100vh - 72px);
-  overflow: hidden;
+*::-webkit-scrollbar{
+  width: 4px;
+  height: 4px;
+}
+
+*::-webkit-scrollbar-track{
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.14);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover{
+  background: rgba(255,106,0,.55);
+}
+
+/* =========================
+   LAYOUT BASE
+========================= */
+.shell{
+  width: 100%;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 
-/* ✅ este contenedor también debe poder “encoger” */
+.main{
+  padding-top: 84px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+}
+
 .content{
-  padding:18px;
+  padding: 18px;
   max-width: 1180px;
   margin: 0 auto;
   width: 100%;
-
-  height: 100%;
-  min-height: 0;
-
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: calc(100vh - 84px);
+  min-width: 0;
 }
 
-/* ✅ página: flex column y que deje al scroll tomar altura */
 .page{
   display:flex;
   flex-direction:column;
   gap:10px;
-
   flex: 1;
-  min-height: 0;
+  min-height: 100%;
+  min-width: 0;
 }
 
-/* ✅ SCROLL SOLO DE CARDS */
-.roomsScroll{
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 6px;
+.pageTitle{ font-size:22px; font-weight:900; }
+.pageSub{ color: var(--mut); font-size:13px; }
+
+/* =========================
+   FULL WIDTH páginas anchas
+========================= */
+body.adminWide .main{
+  width: 100%;
+}
+body.news-fullwidth {
+  background: #0f172a !important;
 }
 
-/* ✅ Header fijo */
+body.rooms-fullwidth {
+  background: #0f172a !important;
+}
+
+body.adminWide .content{
+  max-width: none !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  min-width: 0;
+  flex: 1;
+  min-height: calc(100vh - 84px);
+}
+
+body.adminWide .page{
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  min-height: 100%;
+}
+
+/* =========================
+   HEADER
+========================= */
 .header{
-  position:fixed; top:0; left:0; right:0; height:84px;
-  display:flex; align-items:center; justify-content:space-between;
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  height:84px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
   padding: 0 14px;
   background: rgba(10,10,14,.62);
   border-bottom: 1px solid var(--line);
@@ -83,18 +153,16 @@ body{
   z-index: 50;
 }
 
-/* ✅ Logo centrado (sin texto) */
 .headerCenter{
   position:absolute;
   left:50%;
   transform: translateX(-50%);
   display:flex;
   align-items:center;
-  justify-content:auto-center;
+  justify-content:center;
   height:72px;
 }
 
-/* FIX definitivo del tamaño */
 .headerLogo{
   height: 80px !important;
   max-height: 80px !important;
@@ -104,18 +172,21 @@ body{
   object-fit: contain !important;
 }
 
-/* ✅ FIX: estaba roto el background */
 .statusPill{
-  font-size:12px; color: var(--accent);
+  font-size:12px;
+  color: var(--accent);
   border:1px solid rgba(255,106,0,.35);
   background: rgba(255,106,0,.10);
   padding:6px 10px;
   border-radius:999px;
 }
 
-/* Botones */
+/* =========================
+   BOTONES GENERALES
+========================= */
 .iconBtn{
-  width:44px; height:44px;
+  width:44px;
+  height:44px;
   border-radius:12px;
   border:1px solid rgba(255,255,255,.14);
   background: rgba(255,255,255,.05);
@@ -127,219 +198,17 @@ body{
 }
 .iconBtn:hover{ border-color: rgba(255,106,0,.35); }
 
-.burger{ display:flex; flex-direction:column; gap:5px; }
+.burger{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
 .burger i{
   display:block;
   width:18px;
   height:2px;
   background: var(--txt);
   opacity:.9;
-}
-
-/* Backdrop */
-.backdrop{
-  position:fixed; inset:0;
-  background: rgba(0,0,0,.55);
-  opacity:0;
-  pointer-events:none;
-  transition: opacity .18s ease;
-  z-index: 60;
-}
-.backdrop.show{ opacity:1; pointer-events:auto; }
-
-/* ✅ Drawer oscuro */
-.drawer{
-  position:fixed;
-  top:0; left:0;
-  height:100vh;
-  width: 270px;
-  background: rgba(28, 28, 34, 0.92);
-  color: var(--txt);
-  border-right: 1px solid rgba(255,255,255,.10);
-  transform: translateX(-102%);
-  transition: transform .20s ease;
-  z-index: 70;
-  display:flex;
-  flex-direction:column;
-}
-.drawer.open{ transform: translateX(0); }
-
-.drawerHeader{
-  position: relative;
-  height:72px;
-  display:flex;
-  align-items:center;
-  justify-content:flex-end;
-  padding: 0 12px;
-  border-bottom: 1px solid rgba(255,255,255,.10);
-}
-
-/* logo del drawer centrado */
-.drawerHeaderCenter{
-  position:absolute;
-  left:50%;
-  transform: translateX(-50%);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  height:72px;
-}
-
-/* FIX definitivo del tamaño */
-.drawerLogoOnly{
-  height: 40px !important;
-  max-height: 40px !important;
-  width: auto !important;
-  max-width: 200px !important;
-  display:block !important;
-  object-fit: contain !important;
-}
-
-.drawerCloseBtn{
-  border-color: rgba(255,255,255,.14) !important;
-  background: rgba(255,255,255,.06) !important;
-  color: var(--txt) !important;
-}
-.drawerCloseBtn:hover{
-  border-color: rgba(255,106,0,.45) !important;
-}
-
-.drawerSection{ padding:12px; }
-.drawerSectionTitle{
-  color: rgba(255,255,255,.70);
-  font-size:12px;
-  letter-spacing:.4px;
-  text-transform: uppercase;
-  margin-bottom:10px;
-}
-
-/* Perfil */
-.profileCard{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:12px;
-  border-radius:16px;
-  background: rgba(255,255,255,.06);
-  border:1px solid rgba(255,255,255,.10);
-}
-.avatarCircle{
-  width:38px; height:38px;
-  border-radius:999px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-weight:900;
-  background: rgba(255,106,0,.18);
-  border:1px solid rgba(255,106,0,.35);
-}
-.profileName{ font-weight:900; }
-.profileRole{
-  font-size: 11px;
-  opacity: .78;
-}
-
-/* Secciones */
-.drawerNav{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-.navItem{
-  padding:12px 12px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.06);
-  color: rgba(255, 255, 255, 0.478);
-}
-.navItem:hover{
-  border-color: rgba(255,106,0,.35);
-}
-.navItem.active{
-  background: rgba(120, 200, 255, 0.20);
-  border-color: rgba(120, 200, 255, 0.40);
-  color: var(--txt);
-}
-
-.drawerFooter{
-  margin-top:auto;
-  padding:12px;
-  border-top: 1px solid rgba(255,255,255,.10);
-}
-
-/* ✅ cerrar sesión: rojizo, más chico */
-.logoutBtn{
-  width:100%;
-  padding: 10px 12px;
-  border-radius:14px;
-  cursor:pointer;
-  font-weight:800;
-  background: rgba(255, 60, 60, 0.18);
-  border: 1px solid rgba(255, 60, 60, 0.40);
-  color: rgba(255,255,255,.92);
-}
-.logoutBtn:hover{
-  background: rgba(255, 60, 60, 0.24);
-  border-color: rgba(255, 60, 60, 0.55);
-}
-
-/* ✅ Neutraliza cualquier img global que te rompa los logos */
-.header img, .drawer img{
-  width: auto !important;
-}
-
-/* ===== Páginas / paneles ===== */
-.page{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-
-  height: 100%;
-  min-height: 0;
-}
-.pageTitle{ font-size:22px; font-weight:900; }
-.pageSub{ color: var(--mut); font-size:13px; }
-
-.panel,
-.roomCard,
-.authCard,
-.modalBox{
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.72);
-  backdrop-filter: blur(8px);
-  border-radius:18px;
-  box-shadow: var(--shadow);
-}
-
-.authWrap{
-  min-height:100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:18px;
-}
-.authCard{
-  width:min(420px, 92vw);
-  padding:16px;
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-}
-
-.field{ display:flex; flex-direction:column; gap:6px; }
-.label{ color: var(--mut); font-size:12px; }
-.input{
-  width:100%;
-  padding:10px 12px;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,.14);
-  background: rgba(0,0,0,.25);
-  color: var(--txt);
-  outline:none;
-}
-.input:focus{
-  border-color: rgba(255,106,0,.45);
-  box-shadow: 0 0 0 3px rgba(255,106,0,.10);
 }
 
 .btnSmall{
@@ -374,14 +243,239 @@ body{
   color: var(--txt);
 }
 
-/* ===== Salas grid ===== */
+.logoutBtn{
+  width:100%;
+  padding: 10px 12px;
+  border-radius:14px;
+  cursor:pointer;
+  font-weight:800;
+  background: rgba(255, 60, 60, 0.18);
+  border: 1px solid rgba(255, 60, 60, 0.40);
+  color: rgba(255,255,255,.92);
+}
+.logoutBtn:hover{
+  background: rgba(255, 60, 60, 0.24);
+  border-color: rgba(255, 60, 60, 0.55);
+}
+
+/* =========================
+   BACKDROP + DRAWER
+========================= */
+.backdrop{
+  position:fixed;
+  inset:0;
+  background: rgba(0,0,0,.55);
+  opacity:0;
+  pointer-events:none;
+  transition: opacity .18s ease;
+  z-index: 60;
+}
+.backdrop.show{
+  opacity:1;
+  pointer-events:auto;
+}
+
+.drawer{
+  position:fixed;
+  top:0;
+  left:0;
+  height:100vh;
+  width: 270px;
+  background: rgba(28, 28, 34, 0.92);
+  color: var(--txt);
+  border-right: 1px solid rgba(255,255,255,.10);
+  transform: translateX(-102%);
+  transition: transform .20s ease;
+  z-index: 70;
+  display:flex;
+  flex-direction:column;
+}
+.drawer.open{ transform: translateX(0); }
+
+.drawerHeader{
+  position: relative;
+  height:72px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+.drawerHeaderCenter{
+  position:absolute;
+  left:50%;
+  transform: translateX(-50%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:72px;
+}
+
+.drawerLogoOnly{
+  height: 40px !important;
+  max-height: 40px !important;
+  width: auto !important;
+  max-width: 200px !important;
+  display:block !important;
+  object-fit: contain !important;
+}
+
+.drawerCloseBtn{
+  border-color: rgba(255,255,255,.14) !important;
+  background: rgba(255,255,255,.06) !important;
+  color: var(--txt) !important;
+}
+.drawerCloseBtn:hover{
+  border-color: rgba(255,106,0,.45) !important;
+}
+
+.drawerSection{ padding:12px; }
+.drawerSectionTitle{
+  color: rgba(255,255,255,.70);
+  font-size:12px;
+  letter-spacing:.4px;
+  text-transform: uppercase;
+  margin-bottom:10px;
+}
+
+.profileCard{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:12px;
+  border-radius:16px;
+  background: rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.10);
+}
+.avatarCircle{
+  width:38px;
+  height:38px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:900;
+  background: rgba(255,106,0,.18);
+  border:1px solid rgba(255,106,0,.35);
+}
+.profileName{ font-weight:900; }
+.profileRole{
+  font-size: 11px;
+  opacity: .78;
+}
+
+.drawerNav{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.navItem{
+  padding:12px 12px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.06);
+  color: rgba(255, 255, 255, 0.478);
+}
+.navItem:hover{
+  border-color: rgba(255,106,0,.35);
+}
+.navItem.active{
+  background: rgba(120, 200, 255, 0.20);
+  border-color: rgba(120, 200, 255, 0.40);
+  color: var(--txt);
+}
+
+.drawerFooter{
+  margin-top:auto;
+  padding:12px;
+  border-top: 1px solid rgba(255,255,255,.10);
+}
+
+/* ✅ Neutraliza imágenes en header y drawer */
+.header img,
+.drawer img{
+  width: auto !important;
+}
+
+/* =========================
+   PANELES GENERALES
+========================= */
+.panel,
+.roomCard,
+.authCard,
+.modalBox{
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.72);
+  backdrop-filter: blur(8px);
+  border-radius:18px;
+  box-shadow: var(--shadow);
+}
+
+/* =========================
+   AUTH
+========================= */
+.authWrap{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+.authCard{
+  width:min(420px, 92vw);
+  padding:16px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.field{ display:flex; flex-direction:column; gap:6px; }
+.label{ color: var(--mut); font-size:12px; }
+.input{
+  width:100%;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.25);
+  color: var(--txt);
+  outline:none;
+}
+.input:focus{
+  border-color: rgba(255,106,0,.45);
+  box-shadow: 0 0 0 3px rgba(255,106,0,.10);
+}
+
+select.input option {
+  background-color: #1a1a1f !important;
+  color: #ffffff !important;
+}
+select.input option:checked {
+  background-color: rgba(36, 36, 39, 0.315) !important;
+  color: #000 !important;
+}
+
+/* =========================
+   SALAS
+========================= */
+.roomsScroll{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
 .pageHeadRow{
   display:flex;
   justify-content:space-between;
   align-items:flex-start;
   gap:14px;
 }
-.toolbarRow{ display:flex; gap:10px; margin-top:6px; }
+.toolbarRow{
+  display:flex;
+  gap:10px;
+  margin-top:6px;
+}
 
 .roomsGrid{
   display:grid;
@@ -390,7 +484,6 @@ body{
   margin-top:14px;
 }
 
-/* ✅ Cards iguales + acciones abajo */
 .roomCard{
   overflow:hidden;
   display:flex;
@@ -430,16 +523,39 @@ body{
   flex: 1;
   min-height: 0;
 }
-.roomTitle{ font-weight:900; margin-bottom:8px; }
+.roomTitle{
+  font-weight:900;
+  margin-bottom:8px;
+}
 
-.roomMeta{ display:flex; flex-direction:column; gap:10px; }
-.metaRow{ display:flex; align-items:center; gap:10px; }
-.metaLabel{ color: var(--mut); font-size:12px; width:74px; }
-.metaValue{ color: var(--mut); font-size:12px; }
+.roomMeta{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.metaRow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.metaLabel{
+  color: var(--mut);
+  font-size:12px;
+  width:74px;
+}
+.metaValue{
+  color: var(--mut);
+  font-size:12px;
+}
 
-.dots{ display:flex; gap:4px; flex:1; }
+.dots{
+  display:flex;
+  gap:4px;
+  flex:1;
+}
 .dot{
-  width:10px; height:10px;
+  width:10px;
+  height:10px;
   border-radius:999px;
   background: rgba(255,255,255,.12);
   border:1px solid rgba(255,255,255,.12);
@@ -464,11 +580,12 @@ body{
   gap:10px;
   margin-top:auto;
   align-items:center;
-
-  padding-top: 9px;     /* ✅ los baja 1mm */
+  padding-top: 9px;
 }
 
-/* ===== MODAL RESPONSIVO (scroll, no tapa botones) ===== */
+/* =========================
+   MODAL
+========================= */
 .modalCenter{
   position:fixed;
   inset:0;
@@ -510,7 +627,6 @@ body{
   display:flex;
   justify-content:flex-end;
   gap:10px;
-
   position: sticky;
   bottom: 0;
   background: rgba(12,12,16,.92);
@@ -526,25 +642,9 @@ body{
   .formGrid2{ grid-template-columns: 1fr; }
 }
 
-/* ✅ color opciones del select */
-select.input option {
-  background-color: #1a1a1f !important;
-  color: #ffffff !important;
-}
-select.input option:checked {
-  background-color: rgba(36, 36, 39, 0.315) !important;
-  color: #000 !important;
-}
-
-/* scrollbar suave */
-.roomsScroll::-webkit-scrollbar{ width: 10px; }
-.roomsScroll::-webkit-scrollbar-thumb{
-  background: rgba(255,255,255,.12);
-  border-radius: 999px;
-  border: 2px solid rgba(0,0,0,.2);
-}
-
-/* ===== MultiSelect (temáticas hasta 4) ===== */
+/* =========================
+   MULTISELECT
+========================= */
 .multiSelectBtn{
   display:flex;
   align-items:center;
@@ -613,15 +713,12 @@ select.input option:checked {
   background: rgba(255,255,255,.04);
   cursor:pointer;
 }
-
 .multiSelectItem:hover{
   border-color: rgba(255,106,0,.25);
 }
-
 .multiSelectItem input{
   accent-color: var(--accent);
 }
-
 .multiSelectItem.disabled{
   opacity:.45;
   cursor:not-allowed;
@@ -635,21 +732,17 @@ select.input option:checked {
 }
 
 /* =========================
-   ✅ NUEVO: descripción 2 líneas + QR al lado
+   DESCRIPCIÓN + QR
 ========================= */
 .descClamp2{
   display:-webkit-box;
   -webkit-line-clamp:2;
-
-  line-clamp: 2;              /* ✅ estándar para compatibilidad */
-
+  line-clamp: 2;
   -webkit-box-orient:vertical;
   overflow:hidden;
   cursor:pointer;
 }
 
-
-/* ✅ bloque QR SI O SI en 2 columnas: QR + acciones (al lado) */
 .qrBlock{
   display:grid;
   grid-template-columns: auto 1fr;
@@ -673,7 +766,6 @@ select.input option:checked {
   gap:8px;
   align-items:flex-start;
 }
-
 .qrActions .ghostBtn{
   padding: 8px 12px;
   width: 120px;
@@ -691,8 +783,9 @@ select.input option:checked {
     width:auto;
   }
 }
+
 /* =========================
-   USERS (Panel de usuarios)
+   USERS - tarjetas / edición
 ========================= */
 .usersScroll{
   flex: 1;
@@ -702,17 +795,32 @@ select.input option:checked {
   margin-top: 12px;
 }
 
-.usersScroll::-webkit-scrollbar{ width: 10px; }
-.usersScroll::-webkit-scrollbar-thumb{
-  background: rgba(255,255,255,.12);
-  border-radius: 999px;
-  border: 2px solid rgba(0,0,0,.2);
+.usersGrid{
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap:14px;
+  margin-top:14px;
 }
 
 .usersList{
-  display: grid;
-  gap: 12px;
-  margin-top: 12px;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  margin-top:14px;
+}
+
+.userCard{
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(12,12,16,.72);
+  backdrop-filter: blur(8px);
+  border-radius:18px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display:flex;
+  flex-direction:column;
+}
+.userCard.isOff{
+  opacity: .85;
 }
 
 .userRow{
@@ -724,7 +832,6 @@ select.input option:checked {
   border: 1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.04);
 }
-
 .userRow.off{
   opacity: .62;
 }
@@ -735,6 +842,10 @@ select.input option:checked {
   gap: 10px;
 }
 
+.userTop{
+  padding: 12px;
+}
+
 .userTopLine{
   display: flex;
   align-items: center;
@@ -742,20 +853,39 @@ select.input option:checked {
   flex-wrap: wrap;
 }
 
+.userTitleRow{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom: 10px;
+}
+
+.userTitle,
 .userName{
   font-weight: 900;
+}
+.userName{
   font-size: 14px;
 }
 
-.userPill{
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(0,0,0,.35);
+.userBadges{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
 }
 
-.userPill.off{
+.userBadge,
+.userPill{
+  font-size:12px;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(0,0,0,.45);
+}
+.userPill.off,
+.userBadge.off{
   background: rgba(255,45,85,.18);
   border-color: rgba(255,45,85,.35);
 }
@@ -785,15 +915,11 @@ select.input option:checked {
   gap: 10px;
 }
 
-@media (max-width: 900px){
-  .userFields{ grid-template-columns: 1fr; }
-  .userEditGrid{ grid-template-columns: 1fr; }
-}
-
 .uf{
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width:0;
 }
 
 .ufLabel{
@@ -802,6 +928,7 @@ select.input option:checked {
 }
 
 .ufInput{
+  width:100%;
   padding: 10px 12px;
   border-radius: 12px;
 }
@@ -813,161 +940,6 @@ select.input option:checked {
   margin-top: 6px;
 }
 
-/* 3 dots */
-.userMenuCol{
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-}
-
-.kebabBtn{
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.05);
-  color: var(--txt);
-  cursor: pointer;
-  font-size: 22px;
-  line-height: 0;
-}
-
-.kebabBtn:hover{
-  border-color: rgba(255,106,0,.30);
-}
-
-.kebabMenu{
-  position: absolute;
-  top: 48px;
-  right: 0;
-  width: 210px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.94);
-  backdrop-filter: blur(10px);
-  box-shadow: var(--shadow);
-  padding: 8px;
-  z-index: 40;
-}
-
-.kebabItem{
-  width: 100%;
-  text-align: left;
-  padding: 10px 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
-  color: var(--txt);
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.kebabItem:hover{
-  border-color: rgba(255,106,0,.25);
-}
-
-.kebabItem:disabled{
-  opacity: .45;
-  cursor: not-allowed;
-}
-
-.kebabItem.danger{
-  border-color: rgba(255,45,85,.25);
-  background: rgba(255,45,85,.10);
-}
-
-.kebabDivider{
-  height: 1px;
-  margin: 8px 0;
-  background: rgba(255,255,255,.10);
-}
-/* =========================
-   USERS
-========================= */
-
-.usersScroll{
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 6px;
-}
-
-/* scrollbar suave */
-.usersScroll::-webkit-scrollbar{ width: 10px; }
-.usersScroll::-webkit-scrollbar-thumb{
-  background: rgba(255,255,255,.12);
-  border-radius: 999px;
-  border: 2px solid rgba(0,0,0,.2);
-}
-
-.usersGrid{
-  display:grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap:14px;
-  margin-top:14px;
-}
-
-.usersList{
-  display:flex;
-  flex-direction:column;
-  gap:14px;
-  margin-top:14px;
-}
-
-/* card usuarios, mismo look que panel/roomCard */
-.userCard{
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.72);
-  backdrop-filter: blur(8px);
-  border-radius:18px;
-  box-shadow: var(--shadow);
-  overflow: hidden;
-
-  display:flex;
-  flex-direction:column;
-}
-
-.userCard.isOff{
-  opacity: .85;
-}
-
-.userTop{
-  padding: 12px;
-}
-
-.userTitleRow{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:10px;
-  margin-bottom: 10px;
-}
-
-.userTitle{
-  font-weight: 900;
-}
-
-.userBadges{
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
-  justify-content:flex-end;
-}
-
-.userBadge{
-  font-size:12px;
-  padding:6px 10px;
-  border-radius:999px;
-  background: rgba(0,0,0,.45);
-  border:1px solid rgba(255,255,255,.12);
-}
-
-.userBadge.off{
-  background: rgba(255,45,85,.25);
-  border-color: rgba(255,45,85,.45);
-}
-
-/* ✅ todo en el mismo renglón */
 .userOneRow{
   display:grid;
   grid-template-columns: repeat(6, minmax(160px, 1fr));
@@ -975,25 +947,11 @@ select.input option:checked {
   align-items:end;
 }
 
-.uf{ display:flex; flex-direction:column; gap:6px; min-width:0; }
-.ufLabel{ color: var(--mut); font-size:12px; }
-.ufInput{ width:100%; }
-
-/* columnas “fantasma” para que quede alineado cuando no hay alias/sucursal */
 .ghostCol{
   opacity:0;
   pointer-events:none;
 }
 
-/* responsive */
-@media (max-width: 1200px){
-  .userOneRow{ grid-template-columns: repeat(3, minmax(200px, 1fr)); }
-}
-@media (max-width: 760px){
-  .userOneRow{ grid-template-columns: 1fr; }
-}
-
-/* pie de card: botones alineados */
 .userFoot{
   margin-top: 2px;
   padding: 12px;
@@ -1002,8 +960,6 @@ select.input option:checked {
   align-items:center;
   justify-content:space-between;
   gap:10px;
-
-  /* ✅ “bajarlos 1 milímetro” sin romper nada */
   transform: translateY(1px);
 }
 
@@ -1020,30 +976,56 @@ select.input option:checked {
   justify-content:flex-end;
 }
 
-/* botón ⋯ */
-.dotsBtn{
-  width:44px;
-  height:44px;
-  border-radius:14px;
-  cursor:pointer;
-  border:1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.06);
+@media (max-width: 1200px){
+  .userOneRow{ grid-template-columns: repeat(3, minmax(200px, 1fr)); }
+}
+@media (max-width: 900px){
+  .userFields{ grid-template-columns: 1fr; }
+  .userEditGrid{ grid-template-columns: 1fr; }
+  .permGrid{ grid-template-columns: 1fr; }
+}
+@media (max-width: 760px){
+  .userOneRow{ grid-template-columns: 1fr; }
+}
+
+/* =========================
+   MENÚS KEBAB / DOTS
+========================= */
+.userMenuCol{
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+
+.kebabBtn,
+.dotsBtn,
+.sheetDots{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.05);
   color: var(--txt);
-  font-size:20px;
+  cursor: pointer;
+  font-size: 20px;
   line-height: 1;
 }
-.dotsBtn:hover{
+.kebabBtn{ font-size: 22px; line-height: 0; }
+
+.kebabBtn:hover,
+.dotsBtn:hover,
+.sheetDots:hover{
   border-color: rgba(255,106,0,.35);
 }
 
-/* dropdown */
-.dotsMenu{
+.kebabMenu,
+.dotsMenu,
+.sheetMenu{
   position:absolute;
   right:0;
   top:48px;
   min-width: 220px;
-  z-index: 20;
-
+  z-index: 9999;
   border-radius:14px;
   border:1px solid rgba(255,255,255,.12);
   background: rgba(12,12,16,.94);
@@ -1052,7 +1034,43 @@ select.input option:checked {
   overflow:hidden;
 }
 
-.dotsItem{
+.kebabMenu{
+  width: 210px;
+  padding: 8px;
+  z-index: 40;
+}
+
+.kebabItem{
+  width: 100%;
+  text-align: left;
+  padding: 10px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  color: var(--txt);
+  cursor: pointer;
+  font-weight: 700;
+}
+.kebabItem:hover{
+  border-color: rgba(255,106,0,.25);
+}
+.kebabItem:disabled{
+  opacity: .45;
+  cursor: not-allowed;
+}
+.kebabItem.danger{
+  border-color: rgba(255,45,85,.25);
+  background: rgba(255,45,85,.10);
+}
+
+.kebabDivider{
+  height: 1px;
+  margin: 8px 0;
+  background: rgba(255,255,255,.10);
+}
+
+.dotsItem,
+.sheetMenuItem{
   width:100%;
   text-align:left;
   padding:12px 12px;
@@ -1061,25 +1079,26 @@ select.input option:checked {
   border:0;
   color: var(--txt);
 }
-.dotsItem:hover{
+.dotsItem:hover,
+.sheetMenuItem:hover{
   background: rgba(255,255,255,.06);
 }
-.dotsItem.danger{
-  color: rgba(255,255,255,.92);
+.dotsItem.danger,
+.sheetMenuItem.danger{
   background: rgba(255,45,85,.10);
 }
-.dotsItem.danger:hover{
+.dotsItem.danger:hover,
+.sheetMenuItem.danger:hover{
   background: rgba(255,45,85,.18);
 }
 
-/* permisos */
+/* =========================
+   PERMISOS
+========================= */
 .permGrid{
   display:grid;
   grid-template-columns: 1fr 1fr;
   gap:10px;
-}
-@media (max-width: 900px){
-  .permGrid{ grid-template-columns: 1fr; }
 }
 
 .permItem{
@@ -1095,316 +1114,54 @@ select.input option:checked {
   accent-color: var(--accent);
 }
 
-/* ⚠️ si en algún lugar usás line-clamp, evitá warning:
-   -webkit-line-clamp + line-clamp (standard) */
+/* =========================
+   HELPERS
+========================= */
 .lineClamp2{
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-
-  line-clamp: 2; /* ✅ standard (compatibilidad) */
-
+  line-clamp: 2;
   overflow: hidden;
 }
+
 /* =========================
    USERS - EXCEL GRID
 ========================= */
-
 .usersGridScroll{
   flex: 1;
   min-height: 0;
-  overflow: auto; /* ✅ scroll horizontal + vertical */
+  overflow: auto;
   padding-right: 6px;
 }
 
-.usersGridScroll::-webkit-scrollbar{ height: 10px; width: 10px; }
+/* ✅ Scroll fino solo contenedores principales */
+.roomsScroll::-webkit-scrollbar,
+.usersScroll::-webkit-scrollbar,
+.usersGridScroll::-webkit-scrollbar{
+  width: 4px;
+  height: 4px;
+}
+
+.roomsScroll::-webkit-scrollbar-track,
+.usersScroll::-webkit-scrollbar-track,
+.usersGridScroll::-webkit-scrollbar-track{
+  background: transparent;
+}
+
+.roomsScroll::-webkit-scrollbar-thumb,
+.usersScroll::-webkit-scrollbar-thumb,
 .usersGridScroll::-webkit-scrollbar-thumb{
-  background: rgba(255,255,255,.12);
+  background: rgba(255,255,255,.14);
   border-radius: 999px;
-  border: 2px solid rgba(0,0,0,.2);
 }
 
-/* contenedor estilo planilla */
-.usersSheet{
-  min-width: 1120px; /* ✅ fuerza a que sea tipo excel si pantalla chica */
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.72);
-  backdrop-filter: blur(8px);
-  border-radius: 18px;
-  box-shadow: var(--shadow);
-  overflow: hidden;
+.roomsScroll::-webkit-scrollbar-thumb:hover,
+.usersScroll::-webkit-scrollbar-thumb:hover,
+.usersGridScroll::-webkit-scrollbar-thumb:hover{
+  background: rgba(255,106,0,.55);
 }
 
-/* filas */
-.usersRow{
-  display:grid;
-  grid-template-columns:
-    180px   /* Nombre */
-    180px   /* Apellido */
-    180px   /* Alias */
-    320px   /* Mail */
-    160px   /* Rol */
-    200px   /* Sucursal */
-    130px   /* Estado */
-    60px;   /* ⋯ */
-  align-items:center;
-  border-bottom: 1px solid rgba(255,255,255,.10);
-}
-
-.usersRow:last-child{ border-bottom: 0; }
-
-.usersHeader{
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: rgba(10,10,14,.85);
-  backdrop-filter: blur(10px);
-}
-
-.usersCell{
-  padding: 10px 10px;
-  min-width: 0;
-  border-right: 1px solid rgba(255,255,255,.08);
-}
-
-.usersCell:last-child{ border-right: 0; }
-
-.usersHeader .usersCell{
-  font-size: 12px;
-  color: rgba(255,255,255,.75);
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: .3px;
-}
-
-/* fila inactiva */
-.usersRow.isOff{
-  opacity: .75;
-}
-
-/* inputs dentro de la planilla */
-.sheetInput,
-.sheetSelect{
-  width:100%;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(0,0,0,.18);
-  color: var(--txt);
-  padding: 10px 10px;
-  outline: none;
-}
-
-.sheetInput:focus,
-.sheetSelect:focus{
-  border-color: rgba(255,106,0,.45);
-  box-shadow: 0 0 0 3px rgba(255,106,0,.10);
-}
-
-/* botón estado adaptado */
-.sheetBtn{
-  width:100%;
-  padding: 10px 10px !important;
-  border-radius: 12px !important;
-}
-
-/* ⋯ y menú */
-.sheetActions{ position: relative; display:flex; justify-content:center; }
-.sheetDots{
-  width:44px;
-  height:44px;
-  border-radius:14px;
-  cursor:pointer;
-  border:1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.06);
-  color: var(--txt);
-  font-size:20px;
-  line-height:1;
-}
-.sheetDots:hover{ border-color: rgba(255,106,0,.35); }
-
-.sheetMenu{
-  position:absolute;
-  right: 0;
-  top: 48px;
-  min-width: 220px;
-  z-index: 30;
-
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.94);
-  backdrop-filter: blur(10px);
-  box-shadow: var(--shadow);
-  overflow:hidden;
-}
-
-.sheetMenuItem{
-  width:100%;
-  text-align:left;
-  padding:12px 12px;
-  cursor:pointer;
-  background: transparent;
-  border:0;
-  color: var(--txt);
-}
-.sheetMenuItem:hover{ background: rgba(255,255,255,.06); }
-.sheetMenuItem.danger{
-  background: rgba(255,45,85,.10);
-}
-.sheetMenuItem.danger:hover{
-  background: rgba(255,45,85,.18);
-}
-/* =========================================
-   USERS: FULL WIDTH SOLO EN /usuarios
-   (No rompe el resto del panel)
-========================================= */
-body.users-fullwidth .content{
-  max-width: none !important;
-  width: 100% !important;
-}
-
-/* que el scroll de la planilla use mejor el alto */
-body.users-fullwidth .page{
-  width: 100%;
-}
-
-/* =========================================
-   USERS - EXCEL GRID FIX (MENU ⋯ visible)
-========================================= */
-.usersGridScroll{
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding-right: 6px;
-}
-
-/* ✅ antes lo tenías con overflow hidden y te recortaba el menú */
-.usersSheet{
-  min-width: 1120px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.72);
-  backdrop-filter: blur(8px);
-  border-radius: 18px;
-  box-shadow: var(--shadow);
-
-  overflow: visible; /* ✅ clave: no recortar popups */
-  position: relative;
-}
-
-.usersRow{
-  display:grid;
-  grid-template-columns:
-    180px
-    180px
-    180px
-    320px
-    160px
-    200px
-    130px
-    60px;
-  align-items:center;
-  border-bottom: 1px solid rgba(255,255,255,.10);
-}
-
-.usersHeader{
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: rgba(10,10,14,.85);
-  backdrop-filter: blur(10px);
-}
-
-.usersCell{
-  padding: 10px 10px;
-  min-width: 0;
-  border-right: 1px solid rgba(255,255,255,.08);
-}
-.usersCell:last-child{ border-right: 0; }
-
-/* inputs planilla */
-.sheetInput,
-.sheetSelect{
-  width:100%;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(0,0,0,.18);
-  color: var(--txt);
-  padding: 10px 10px;
-  outline: none;
-}
-.sheetInput:focus,
-.sheetSelect:focus{
-  border-color: rgba(255,106,0,.45);
-  box-shadow: 0 0 0 3px rgba(255,106,0,.10);
-}
-
-.sheetBtn{
-  width:100%;
-  padding: 10px 10px !important;
-  border-radius: 12px !important;
-}
-
-/* menú ⋯ */
-.sheetActions{
-  position: relative;
-  display:flex;
-  justify-content:center;
-}
-
-.sheetDots{
-  width:44px;
-  height:44px;
-  border-radius:14px;
-  cursor:pointer;
-  border:1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.06);
-  color: var(--txt);
-  font-size:20px;
-  line-height:1;
-}
-.sheetDots:hover{ border-color: rgba(255,106,0,.35); }
-
-.sheetMenu{
-  position:absolute;
-  right: 0;
-  top: 48px;
-  min-width: 220px;
-
-  z-index: 9999; /* ✅ arriba de todo */
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.94);
-  backdrop-filter: blur(10px);
-  box-shadow: var(--shadow);
-  overflow:hidden;
-}
-
-.sheetMenuItem{
-  width:100%;
-  text-align:left;
-  padding:12px 12px;
-  cursor:pointer;
-  background: transparent;
-  border:0;
-  color: var(--txt);
-}
-.sheetMenuItem:hover{ background: rgba(255,255,255,.06); }
-.sheetMenuItem.danger{ background: rgba(255,45,85,.10); }
-.sheetMenuItem.danger:hover{ background: rgba(255,45,85,.18); }
-/* ===== USERS: full width SOLO /usuarios ===== */
-body.users-fullwidth .content{
-  max-width: none !important;
-  width: 100% !important;
-}
-
-/* Scroll de grilla */
-.usersGridScroll{
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding-right: 6px;
-}
-
-/* Grilla (sin columna de acciones) */
 .usersSheet{
   min-width: 1120px;
   border: 1px solid rgba(255,255,255,.12);
@@ -1416,7 +1173,14 @@ body.users-fullwidth .content{
   position: relative;
 }
 
-/* ✅ ahora son 7 columnas (se fue la de acciones) */
+.usersHeader{
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: rgba(10,10,14,.85);
+  backdrop-filter: blur(10px);
+}
+
 .usersRow{
   display:grid;
   grid-template-columns:
@@ -1429,19 +1193,11 @@ body.users-fullwidth .content{
     130px;
   align-items:center;
   border-bottom: 1px solid rgba(255,255,255,.10);
-
-  /* espacio a la derecha para el ⋯ sin tapar contenido */
   padding-right: 62px;
   position: relative;
 }
-
-.usersHeader{
-  position: sticky;
-  top: 0;
-  z-index: 5;
-  background: rgba(10,10,14,.85);
-  backdrop-filter: blur(10px);
-}
+.usersRow:last-child{ border-bottom: 0; }
+.usersRow.isOff{ opacity: .75; }
 
 .usersCell{
   padding: 10px 10px;
@@ -1449,6 +1205,14 @@ body.users-fullwidth .content{
   border-right: 1px solid rgba(255,255,255,.08);
 }
 .usersCell:last-child{ border-right: 0; }
+
+.usersHeader .usersCell{
+  font-size: 12px;
+  color: rgba(255,255,255,.75);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
 
 .sheetInput,
 .sheetSelect{
@@ -1472,7 +1236,6 @@ body.users-fullwidth .content{
   border-radius: 12px !important;
 }
 
-/* ✅ ⋯ pegado al costado, NO columna */
 .sheetActions{
   position:absolute;
   right: 10px;
@@ -1483,47 +1246,6 @@ body.users-fullwidth .content{
   z-index: 20;
 }
 
-.sheetDots{
-  width:44px;
-  height:44px;
-  border-radius:14px;
-  cursor:pointer;
-  border:1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.06);
-  color: var(--txt);
-  font-size:20px;
-  line-height:1;
-}
-.sheetDots:hover{ border-color: rgba(255,106,0,.35); }
-
 .sheetMenu{
-  position:absolute;
-  right: 0;
   top: 50px;
-  min-width: 220px;
-  z-index: 9999;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.94);
-  backdrop-filter: blur(10px);
-  box-shadow: var(--shadow);
-  overflow:hidden;
-}
-
-.sheetMenuItem{
-  width:100%;
-  text-align:left;
-  padding:12px 12px;
-  cursor:pointer;
-  background: transparent;
-  border:0;
-  color: var(--txt);
-}
-.sheetMenuItem:hover{ background: rgba(255,255,255,.06); }
-.sheetMenuItem.danger{ background: rgba(255,45,85,.10); }
-.sheetMenuItem.danger:hover{ background: rgba(255,45,85,.18); }
-/* ✅ Full width SOLO en /salas /novedades /usuarios */
-body.adminWide .content{
-  max-width: none !important;
-  width: 100% !important;
 }

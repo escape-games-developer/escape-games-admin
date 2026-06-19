@@ -21,6 +21,7 @@ export default function AdminLayout() {
 
     const boot = async () => {
       const { data } = await supabase.auth.getSession();
+
       if (!data.session) {
         nav("/login", { replace: true });
         return;
@@ -60,12 +61,12 @@ export default function AdminLayout() {
     setDrawerOpen(false);
   }, [loc.pathname]);
 
-  // ✅ FULL WIDTH solo en ciertas páginas
   useEffect(() => {
-    const widePaths = ["/salas", "/novedades", "/usuarios", "/notificaciones"];
+    const widePaths = ["/salas", "/novedades", "/usuarios", "/usuarios/progreso"];
     const isWide = widePaths.includes(loc.pathname);
 
     const cls = "adminWide";
+
     if (isWide) document.body.classList.add(cls);
     else document.body.classList.remove(cls);
 
@@ -80,14 +81,11 @@ export default function AdminLayout() {
     <div className="shell">
       <Header onOpenMenu={() => setDrawerOpen(true)} />
 
-      {/* ✅ Pasamos pathname para que el Drawer marque activo sin ocultar items */}
-      {/* ✅ Key estable para que no se remonte raro */}
       <Drawer
         key="admin-drawer"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         userName={admin.userName}
-      
       />
 
       <main className="main">

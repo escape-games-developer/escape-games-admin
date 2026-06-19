@@ -655,7 +655,11 @@ const [cropTarget, setCropTarget] = useState<"card" | "banner" | null>(null);
 
   const canCreateRoom = me.isSuper || me.perms.canManageRooms;
   const canManageRoomFull = me.isSuper || me.perms.canManageRooms;
-  const canEditRankings = me.isSuper || me.perms.canEditRankings;
+
+const canEditRankings =
+  me.isSuper ||
+  me.perms.canEditRankings ||
+  me.isGM; // 👈 CLAVE
 
   const myBranchName = me.branchId ? branchesById.get(me.branchId) || "" : "";
 
@@ -697,6 +701,60 @@ const [cropTarget, setCropTarget] = useState<"card" | "banner" | null>(null);
     );
   };
 
+  const portalMenuStyle: React.CSSProperties = {
+  position: "fixed",
+  zIndex: 9999,
+  width: 270,
+  borderRadius: 16,
+  overflow: "hidden",
+  border: "1px solid #1f2937",
+  background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
+  boxShadow: "0 20px 40px rgba(0,0,0,0.28)",
+};
+
+const portalItemStyle: React.CSSProperties = {
+  width: "100%",
+  justifyContent: "flex-start",
+  borderRadius: 0,
+  padding: "12px 14px",
+  display: "flex",
+  gap: 10,
+  alignItems: "center",
+  background: "transparent",
+  color: "#e5e7eb",
+  border: "none",
+  fontWeight: 400,
+  fontSize: 14,
+  cursor: "pointer",
+  textAlign: "left",
+};
+
+const portalDividerStyle: React.CSSProperties = {
+  height: 1,
+  background: "#1f2937",
+};
+
+const portalDangerItemStyle: React.CSSProperties = {
+  ...portalItemStyle,
+  color: "#fca5a5",
+};
+
+const menuItemHoverOn = (el: HTMLButtonElement) => {
+  el.style.background = "rgba(255,255,255,0.05)";
+};
+
+const menuItemHoverOff = (el: HTMLButtonElement) => {
+  el.style.background = "transparent";
+};
+
+const menuDangerHoverOn = (el: HTMLButtonElement) => {
+  el.style.background = "rgba(248,113,113,0.10)";
+};
+
+const menuDangerHoverOff = (el: HTMLButtonElement) => {
+  el.style.background = "transparent";
+};
+
   const computeMenuPosFromAnchor = () => {
     const btn = menuAnchorRef.current;
     if (!btn) return null;
@@ -734,6 +792,11 @@ const [cropTarget, setCropTarget] = useState<"card" | "banner" | null>(null);
     setMenuPos(null);
     menuAnchorRef.current = null;
   };
+
+  useEffect(() => {
+    document.body.classList.add("rooms-fullwidth");
+    return () => document.body.classList.remove("rooms-fullwidth");
+  }, []);
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -939,6 +1002,13 @@ const [cropTarget, setCropTarget] = useState<"card" | "banner" | null>(null);
       return okSearch && okBranch && okScoped;
     });
   }, [items, q, branchFilter, me.isBranchScoped, me.branchId, branchesById]);
+
+  const totals = useMemo(() => ({
+    totalRooms: filtered.length,
+    activeRooms: filtered.filter((r) => r.active).length,
+    inactiveRooms: filtered.filter((r) => !r.active).length,
+    bombCards: 1,
+  }), [filtered]);
 
   const toggleTheme = (t: string) => {
     if (!editing) return;
@@ -1760,20 +1830,9 @@ const scrollerStyle: React.CSSProperties = {
   overflowX: "hidden",
   borderRadius: 16,
   border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(0,0,0,0.25)",
+  background: "transparent",
 };
 
-const tableWrapStyle: React.CSSProperties = {
-  borderRadius: 16,
-  overflow: "hidden",
-  border: "1px solid rgba(255,255,255,0.12)",
-  background: "rgba(0,0,0,0.25)",
-  flex: "1 1 auto",
-  minHeight: 0,
-  minWidth: 0,
-  display: "flex",
-  flexDirection: "column",
-};
 
 const tableStyle: React.CSSProperties = {
   width: "100%",
@@ -1810,83 +1869,151 @@ const tdBase: React.CSSProperties = {
   };
 
 return (
- <div
-  className="page"
-  style={{
-    height: "100%",
-    minHeight: 0,
-    flex: 1,
-    width: "100%",
-    minWidth: 0,
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-    padding: 0,
-    margin: 0,
-    boxSizing: "border-box",
-  }}
-
+  <div
+    style={{
+      width: "100%",
+      minHeight: "100vh",
+      background: "#0f172a",
+      color: "#e5e7eb",
+      boxSizing: "border-box",
+    }}
   >
-      <div className="pageHeadRow" style={{ gap: 12, flex: "0 0 auto" }}>
+    <div
+      style={{
+        width: "100%",
+        maxWidth: "100%",
+        minHeight: "100vh",
+        margin: 0,
+        padding: "14px 18px 18px",
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 14,
+          flexWrap: "wrap",
+        }}
+      >
         <div>
-          <div className="pageTitle">Salas</div>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 28,
+              lineHeight: 1.1,
+              fontWeight: 900,
+              color: "#fff",
+            }}
+          >
+            Salas
+          </h1>
+          <p style={{ margin: "6px 0 0", color: "rgba(255,255,255,0.65)", fontSize: 13 }}></p>
         </div>
 
-        {canCreateRoom ? (
-          <button className="btnSmall" onClick={startCreate}>
-            + Nueva sala
-          </button>
-        ) : null}
+        <div>
+          {canCreateRoom ? (
+            <button className="btnSmall" onClick={startCreate}>
+              + Nueva sala
+            </button>
+          ) : null}
+        </div>
       </div>
 
-<div
-  className="toolbarRow"
-  style={{
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    flexWrap: "wrap",
-    flex: "0 0 auto",
-  }}
->
-  <input
-    className="input"
-    value={q}
-    onChange={(e) => setQ(e.target.value)}
-    placeholder="Buscar por nombre o sucursal…"
-    style={{ flex: 1, minWidth: 240 }}
-  />
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: !me.isBranchScoped ? "minmax(260px, 1fr) 240px" : "minmax(260px, 1fr) 240px",
+          gap: 10,
+          marginBottom: 14,
+          alignItems: "stretch",
+        }}
+      >
+        <div>
+          <input
+            className="input"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar por nombre o sucursal…"
+            style={{ width: "100%" }}
+          />
+        </div>
 
-  {!me.isBranchScoped ? (
-    <select
-      className="input"
-      value={branchFilter}
-      onChange={(e) => setBranchFilter(e.target.value)}
-      style={{ width: 240 }}
-    >
-      <option value="">Todas las sucursales</option>
-      {branches.map((b) => (
-        <option key={b.id} value={b.name}>
-          {b.name}
-        </option>
-      ))}
-    </select>
-  ) : (
-    <div className="input" style={{ width: 240, opacity: 0.85, display: "flex", alignItems: "center" }}>
-      {myBranchName ? `Sucursal: ${myBranchName}` : "Sucursal: sin asignar"}
-    </div>
-  )}
-</div>
-<div
-  style={{
-    flex: 1,
-    minHeight: 0,
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-    paddingTop: 12,
-  }}
->
+        {!me.isBranchScoped ? (
+          <select
+            className="input"
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            style={{ width: "100%" }}
+          >
+            <option value="">Todas las sucursales</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.name}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <div
+            className="input"
+            style={{ width: "100%", opacity: 0.85, display: "flex", alignItems: "center" }}
+          >
+            {myBranchName ? `Sucursal: ${myBranchName}` : "Sucursal: sin asignar"}
+          </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(180px, 1fr))",
+          gap: 12,
+          marginBottom: 14,
+        }}
+      >
+        {[
+          ["Salas visibles", totals.totalRooms],
+          ["Salas activas", totals.activeRooms],
+          ["Salas inactivas", totals.inactiveRooms],
+          ["Bomb Ticket", totals.bombCards],
+        ].map(([label, value]) => (
+          <div
+            key={String(label)}
+            style={{
+              border: "1px solid #1f2937",
+              borderRadius: 18,
+              background: "#0b1220",
+              padding: 18,
+              color: "#cbd5e1",
+              minHeight: 92,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+            }}
+          >
+            <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 700 }}>{label}</span>
+            <strong style={{ fontSize: 22, fontWeight: 800, color: "#fff", lineHeight: 1 }}>
+              {String(value)}
+            </strong>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          width: "100%",
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+          borderRadius: 18,
+          background: "#0b1220",
+          border: "1px solid rgba(255,255,255,0.08)",
+        }}
+      >
   <div style={scrollerStyle}>
     <table style={tableStyle}>
             <thead>
@@ -1991,84 +2118,65 @@ return (
                   </button>
 
                   {menuOpenId === BOMB_ROW_ID && menuPos
-                    ? createPortal(
-                        <div
-                          data-menu-popup="1"
-                          style={{
-                            position: "fixed",
-                            left: menuPos.left,
-                            top: menuPos.top,
-                            zIndex: 99999,
-                            width: 270,
-                            borderRadius: 12,
-                            overflow: "hidden",
-                            border: "1px solid rgba(255,255,255,.14)",
-                            background: "rgba(0,0,0,.94)",
-                            boxShadow: "0 12px 34px rgba(0,0,0,.45)",
-                          }}
-                          onMouseDown={(ev) => ev.stopPropagation()}
-                        >
-                          {(() => {
-                            const itemStyle: React.CSSProperties = {
-                              width: "100%",
-                              justifyContent: "flex-start" as any,
-                              borderRadius: 0,
-                              padding: "10px 12px",
-                              display: "flex",
-                              gap: 10,
-                              alignItems: "center",
-                            };
-                            const iconStyle: React.CSSProperties = { opacity: 0.92 };
+  ? createPortal(
+      <div
+        data-menu-popup="1"
+        style={{
+          ...portalMenuStyle,
+          top: menuPos.top,
+          left: menuPos.left,
+        }}
+        onMouseDown={(ev) => ev.stopPropagation()}
+      >
+        <button
+          type="button"
+          style={portalItemStyle}
+          onClick={() => {
+            closeMenu();
+            openQr(bomb.title || "Bomb Ticket", BOMB_TICKET_QR);
+          }}
+          onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
+          onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
+        >
+          <Icon name="qr" size={16} />
+          Ver QR (copiar / imprimir)
+        </button>
 
-                            return (
-                              <>
-                                <button
-                                  className="ghostBtn"
-                                  style={itemStyle}
-                                  onClick={() => {
-                                    closeMenu();
-                                    openQr(bomb.title || "Bomb Ticket", BOMB_TICKET_QR);
-                                  }}
-                                >
-                                  <Icon name="qr" size={16} style={iconStyle} />
-                                  Ver QR (copiar / imprimir)
-                                </button>
+        <button
+          type="button"
+          style={portalItemStyle}
+          onClick={async () => {
+            closeMenu();
+            await copy(BOMB_TICKET_QR);
+          }}
+          onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
+          onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
+        >
+          <Icon name="copy" size={16} />
+          Copiar valor QR
+        </button>
 
-                                <button
-                                  className="ghostBtn"
-                                  style={itemStyle}
-                                  onClick={async () => {
-                                    closeMenu();
-                                    await copy(BOMB_TICKET_QR);
-                                  }}
-                                >
-                                  <Icon name="qr" size={16} style={iconStyle} />
-                                  Copiar valor QR
-                                </button>
+        {canEditBomb ? <div style={portalDividerStyle} /> : null}
 
-                                {canEditBomb ? (
-                                  <>
-                                    <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
-                                    <button
-                                      className="ghostBtn"
-                                      style={itemStyle}
-                                      onClick={() => {
-                                        closeMenu();
-                                        setBombEditing(true);
-                                      }}
-                                    >
-                                      <Icon name="edit" size={16} style={iconStyle} />
-                                      Editar Bomb Ticket
-                                    </button>
-                                  </>
-                                ) : null}
-                              </>
-                            );
-                          })()}
-                        </div>,
-                        document.body
-                      )
-                    : null}
+        {canEditBomb ? (
+          <button
+            type="button"
+            style={portalItemStyle}
+            onClick={() => {
+              closeMenu();
+              setBombEditing(true);
+            }}
+            onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
+            onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
+          >
+            <Icon name="edit" size={16} />
+            Editar Bomb Ticket
+          </button>
+        ) : null}
+      </div>,
+      document.body
+    )
+  : null}
                 </td>
               </tr>
 
@@ -2226,151 +2334,156 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                         </button>
 
                         {menuOpenId === r.id && menuPos
-                          ? createPortal(
-                              <div
-                                data-menu-popup="1"
-                                style={{
-                                  position: "fixed",
-                                  left: menuPos.left,
-                                  top: menuPos.top,
-                                  zIndex: 99999,
-                                  width: 270,
-                                  borderRadius: 12,
-                                  overflow: "hidden",
-                                  border: "1px solid rgba(255,255,255,.14)",
-                                  background: "rgba(0,0,0,.94)",
-                                  boxShadow: "0 12px 34px rgba(0,0,0,.45)",
-                                }}
-                                onMouseDown={(ev) => ev.stopPropagation()}
-                              >
-                                {(() => {
-                                  const itemStyle: React.CSSProperties = {
-                                    width: "100%",
-                                    justifyContent: "flex-start" as any,
-                                    borderRadius: 0,
-                                    padding: "10px 12px",
-                                    display: "flex",
-                                    gap: 10,
-                                    alignItems: "center",
-                                  };
-                                  const iconStyle: React.CSSProperties = { opacity: 0.92 };
-                                  const canTouchRoom = !me.isBranchScoped || !me.branchId || r.branch_id === me.branchId;
+  ? createPortal(
+      <div
+        data-menu-popup="1"
+        style={{
+          ...portalMenuStyle,
+          top: menuPos.top,
+          left: menuPos.left,
+        }}
+        onMouseDown={(ev) => ev.stopPropagation()}
+      >
+        {(() => {
+          const canTouchRoom =
+            !me.isBranchScoped || !me.branchId || r.branch_id === me.branchId;
 
-                                  return (
-                                    <>
-                                      <button
-                                        className="ghostBtn"
-                                        style={itemStyle}
-                                        onClick={() => {
-                                          closeMenu();
-                                          if (!canManageRoomFull) return;
-                                          if (!canTouchRoom) return alert("No podés editar salas de otra sucursal.");
-                                          startEditFull(r);
-                                        }}
-                                        disabled={saving || !canManageRoomFull}
-                                        title={!canManageRoomFull ? "Sin permiso" : undefined}
-                                      >
-                                        <Icon name="edit" size={16} style={iconStyle} />
-                                        Editar
-                                      </button>
+          const qrValue = (r.qrCode || "").trim() || makeRoomQr(r.id);
 
-                                      <button
-                                        className="ghostBtn"
-                                        style={itemStyle}
-                                        onClick={() => {
-                                          closeMenu();
-                                          if (!r.description) return;
-                                          setDescModal({ title: r.name || "Descripción", text: r.description });
-                                        }}
-                                        disabled={!r.description}
-                                      >
-                                        <Icon name="eye" size={16} style={iconStyle} />
-                                        Ver descripción
-                                      </button>
+          return (
+            <>
+              {canManageRoomFull ? (
+                <button
+                  type="button"
+                  style={portalItemStyle}
+                  onClick={() => {
+                    closeMenu();
+                    if (!canTouchRoom) return alert("No podés editar salas de otra sucursal.");
+                    startEditFull(r);
+                  }}
+                  disabled={saving}
+                  onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
+                  onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
+                >
+                  <Icon name="edit" size={16} />
+                  Editar
+                </button>
+              ) : null}
 
-                                      <button
-                                        className="ghostBtn"
-                                        style={itemStyle}
-                                        onClick={() => {
-                                          closeMenu();
-                                          openQr(r.name || "QR Sala", qrValue);
-                                        }}
-                                      >
-                                        <Icon name="qr" size={16} style={iconStyle} />
-                                        Ver QR (copiar / imprimir)
-                                      </button>
+              {canManageRoomFull ? (
+                <button
+                  type="button"
+                  style={portalItemStyle}
+                  onClick={() => {
+                    closeMenu();
+                    if (!r.description) return;
+                    setDescModal({
+                      title: r.name || "Descripción",
+                      text: r.description,
+                    });
+                  }}
+                  disabled={!r.description}
+                  onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
+                  onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
+                >
+                  <Icon name="eye" size={16} />
+                  Ver descripción
+                </button>
+              ) : null}
 
-                                      <button
-                                        className="ghostBtn"
-                                        style={itemStyle}
-                                        onClick={() => {
-                                          closeMenu();
-                                          if (!r.reserveUrl) return;
-                                          window.open(r.reserveUrl, "_blank", "noopener,noreferrer");
-                                        }}
-                                        disabled={!r.reserveUrl}
-                                      >
-                                        <Icon name="link" size={16} style={iconStyle} />
-                                        Abrir link reserva
-                                      </button>
+              <button
+                type="button"
+                style={portalItemStyle}
+                onClick={() => {
+                  closeMenu();
+                  openQr(r.name || "QR Sala", qrValue);
+                }}
+                onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
+                onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
+              >
+                <Icon name="qr" size={16} />
+                Ver QR (copiar / imprimir)
+              </button>
 
-                                      <button
-                                        className="ghostBtn"
-                                        style={itemStyle}
-                                        onClick={() => {
-                                          closeMenu();
-                                          if (!canEditRankings) return alert("No tenés permiso para editar récords.");
-                                          if (!canTouchRoom) return alert("No podés editar salas de otra sucursal.");
-                                          openRecordsEditor(r);
-                                        }}
-                                        disabled={!canEditRankings}
-                                        title={!canEditRankings ? "Sin permiso" : undefined}
-                                      >
-                                        <Icon name="records" size={16} style={iconStyle} />
-                                        Editar récords
-                                      </button>
+              {canManageRoomFull ? (
+                <button
+                  type="button"
+                  style={portalItemStyle}
+                  onClick={() => {
+                    closeMenu();
+                    if (!r.reserveUrl) return;
+                    window.open(r.reserveUrl, "_blank", "noopener,noreferrer");
+                  }}
+                  disabled={!r.reserveUrl}
+                  onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
+                  onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
+                >
+                  <Icon name="link" size={16} />
+                  Abrir link reserva
+                </button>
+              ) : null}
 
-                                      <button
-                                        className="ghostBtn"
-                                        style={itemStyle}
-                                        onClick={() => {
-                                          closeMenu();
-                                          if (!canManageRoomFull) return alert("No tenés permiso.");
-                                          if (!canTouchRoom) return alert("No podés cambiar estado de otra sucursal.");
-                                          toggleActive(r.id);
-                                        }}
-                                        disabled={saving || !canManageRoomFull}
-                                        title={!canManageRoomFull ? "Sin permiso" : undefined}
-                                      >
-                                        <Icon name="toggle" size={16} style={iconStyle} />
-                                        {r.active ? "Desactivar" : "Activar"}
-                                      </button>
+              {canEditRankings ? (
+                <button
+                  type="button"
+                  style={portalItemStyle}
+                  onClick={() => {
+                    closeMenu();
+                    if (!canTouchRoom) return alert("No podés editar salas de otra sucursal.");
+                    openRecordsEditor(r);
+                  }}
+                  onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
+                  onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
+                >
+                  <Icon name="records" size={16} />
+                  Editar récords
+                </button>
+              ) : null}
 
-                                      <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
+              {canManageRoomFull ? <div style={portalDividerStyle} /> : null}
 
-                                      <button
-                                        className="dangerBtnInline"
-                                        style={{ ...itemStyle, textAlign: "left" }}
-                                        onClick={() => {
-                                          closeMenu();
-                                          if (!canManageRoomFull) return alert("No tenés permiso.");
-                                          if (me.isBranchScoped && me.branchId && r.branch_id !== me.branchId) {
-                                            return alert("No podés borrar salas de otra sucursal.");
-                                          }
-                                          deleteRoom(r);
-                                        }}
-                                        disabled={saving || !canManageRoomFull}
-                                      >
-                                        <Icon name="trash" size={16} style={{ opacity: 0.95 }} />
-                                        Borrar
-                                      </button>
-                                    </>
-                                  );
-                                })()}
-                              </div>,
-                              document.body
-                            )
-                          : null}
+              {canManageRoomFull ? (
+                <button
+                  type="button"
+                  style={portalItemStyle}
+                  onClick={() => {
+                    closeMenu();
+                    if (!canTouchRoom) return alert("No podés cambiar estado de otra sucursal.");
+                    toggleActive(r.id);
+                  }}
+                  disabled={saving}
+                  onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
+                  onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
+                >
+                  <Icon name="toggle" size={16} />
+                  {r.active ? "Desactivar" : "Activar"}
+                </button>
+              ) : null}
+
+              {canManageRoomFull ? (
+                <button
+                  type="button"
+                  style={portalDangerItemStyle}
+                  onClick={() => {
+                    closeMenu();
+                    if (!canTouchRoom) return alert("No podés borrar salas de otra sucursal.");
+                    deleteRoom(r);
+                  }}
+                  disabled={saving}
+                  onMouseEnter={(e) => menuDangerHoverOn(e.currentTarget)}
+                  onMouseLeave={(e) => menuDangerHoverOff(e.currentTarget)}
+                >
+                  <Icon name="trash" size={16} />
+                  Borrar
+                </button>
+              ) : null}
+            </>
+          );
+        })()}
+      </div>,
+      document.body
+    )
+  : null}
                       </td>
                     </tr>
                   );
@@ -2589,475 +2702,702 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
 
 {open && editing ? (
   <>
-    <div className="backdrop show" onMouseDown={closeModal} />
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,.55)",
+        backdropFilter: "blur(4px)",
+        zIndex: 9998,
+      }}
+      onMouseDown={closeModal}
+    />
 
-    <div className="modalCenter" onMouseDown={closeModal}>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+      }}
+      onMouseDown={closeModal}
+    >
       <div
-        className="modalBox"
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           width: "min(1180px, calc(100vw - 32px))",
           maxWidth: "1180px",
+          maxHeight: "88vh",
+          overflow: "hidden",
+          borderRadius: 22,
+          border: "1px solid rgba(255,255,255,0.10)",
+          background: "#0b1220",
+          boxShadow: "0 18px 50px rgba(0,0,0,.45)",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        <div className="modalHead">
-          <div className="modalTitle">
-            {items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}
+        <div
+          style={{
+            padding: "18px 22px",
+            borderBottom: "1px solid rgba(255,255,255,.08)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 22,
+                fontWeight: 900,
+                color: "#fff",
+              }}
+            >
+              {items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}
+            </h2>
+            <div style={{ marginTop: 4, fontSize: 13, color: "#94a3b8" }}>
+              Configuración general de la sala
+            </div>
           </div>
-          <button className="iconBtn" onClick={closeModal} aria-label="Cerrar">
+
+          <button
+            type="button"
+            className="ghostBtn"
+            onClick={closeModal}
+            aria-label="Cerrar"
+            style={{
+              width: 40,
+              height: 40,
+              minWidth: 40,
+              borderRadius: 12,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             ✕
           </button>
         </div>
 
         <div
-          className="modalBody roomsFormScroll"
           style={{
-            maxHeight: "min(78vh, 820px)",
+            padding: 22,
             overflowY: "auto",
             overflowX: "hidden",
-            scrollbarWidth: "thin",
-            scrollbarColor: "rgba(180,180,180,.7) transparent",
-            paddingRight: 8,
+            display: "flex",
+            flexDirection: "column",
+            gap: 16,
           }}
         >
-          <style>
-            {`
-              .roomsFormScroll::-webkit-scrollbar { width: 6px; }
-              .roomsFormScroll::-webkit-scrollbar-track { background: transparent; }
-              .roomsFormScroll::-webkit-scrollbar-thumb {
-                background: rgba(160,160,160,.55);
-                border-radius: 999px;
-              }
-              .roomsFormScroll::-webkit-scrollbar-thumb:hover {
-                background: rgba(190,190,190,.8);
-              }
-              @media (max-width: 980px) {
-                .rooms-row-3 { grid-template-columns: 1fr !important; }
-                .rooms-row-2 { grid-template-columns: 1fr !important; }
-              }
-            `}
-          </style>
+          <input
+            ref={cardFileRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={onFileChange}
+          />
+          <input
+            ref={bannerFileRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={onFileChange}
+          />
 
-<input ref={cardFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFileChange} />
-<input ref={bannerFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFileChange} />
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Nombre</span>
-                <input className="input" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
-              </label>
-
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Categoría</span>
-                <select className="input" value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value as RoomCategory })}>
-                  <option value="WOW">WOW</option>
-                  <option value="CLASICO">Clásico (20%)</option>
-                  <option value="DESPEDIDA">Despedida</option>
-                </select>
-              </label>
-
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Sucursal</span>
-                <select
-                  className="input"
-                  value={editing.branch}
-                  onChange={(e) => {
-                    const name = e.target.value;
-                    const bid = branchesByName.get(name) || null;
-                    setEditing({ ...editing, branch: name, branch_id: bid });
-                  }}
-                  disabled={me.isBranchScoped}
-                >
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.name}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Teléfono</span>
-                <input
-                  className="input"
-                  value={editing.whatsappPhone}
-                  onChange={(e) => setEditing({ ...editing, whatsappPhone: e.target.value })}
-                  placeholder="Ej: +54911XXXXXXXX"
-                  inputMode="tel"
-                />
-              </label>
-
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Link de reserva</span>
-                <input
-                  className="input"
-                  value={editing.reserveUrl}
-                  onChange={(e) => setEditing({ ...editing, reserveUrl: e.target.value })}
-                  placeholder="https://..."
-                  inputMode="url"
-                />
-              </label>
-
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">QR único</span>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8, alignItems: "center" }}>
-                  <input
-                    className="input"
-                    value={editing.qrCode || ""}
-                    onChange={(e) => setEditing({ ...editing, qrCode: e.target.value })}
-                    placeholder={`Ej: ${makeRoomQr(editing.id)}`}
-                    style={{ minWidth: 0, fontFamily: "monospace" }}
-                  />
-
-                  <button
-                    type="button"
-                    className="ghostBtn"
-                    onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}
-                    title="Regenerar QR"
-                    aria-label="Regenerar QR"
-                    style={{ width: 42, minWidth: 42, height: 42, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                  >
-                    <Icon name="refresh" size={18} />
-                  </button>
-
-                  <button
-                    type="button"
-                    className="ghostBtn"
-                    onClick={() => editing.qrCode && copy(editing.qrCode)}
-                    disabled={!editing.qrCode}
-                    title="Copiar QR"
-                    aria-label="Copiar QR"
-                    style={{ width: 42, minWidth: 42, height: 42, padding: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
-                  >
-                    <Icon name="copy" size={18} />
-                  </button>
-                </div>
-              </label>
-            </div>
-
-            <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Récord 1</span>
-                <input className="input" value={editing.record1} onChange={(e) => setEditing({ ...editing, record1: e.target.value })} placeholder="12:34" />
-              </label>
-
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Récord 2</span>
-                <input className="input" value={editing.record2} onChange={(e) => setEditing({ ...editing, record2: e.target.value })} placeholder="14:10" />
-              </label>
-
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Puntaje</span>
-                <select className="input" value={String(editing.points ?? 1)} onChange={(e) => setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })}>
-                  {[1, 2, 3].map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="rooms-row-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}>
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Jugadores mín</span>
-                <input className="input" value={String(editing.playersMin ?? 1)} onChange={(e) => setEditing({ ...editing, playersMin: Number(e.target.value) })} inputMode="numeric" />
-              </label>
-
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Jugadores máx</span>
-                <input className="input" value={String(editing.playersMax ?? 6)} onChange={(e) => setEditing({ ...editing, playersMax: Number(e.target.value) })} inputMode="numeric" />
-              </label>
-
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Nivel</span>
-                <select className="input" value={editing.level} onChange={(e) => setEditing({ ...editing, level: e.target.value as RoomLevel })}>
-                  <option value="FACIL">Fácil</option>
-                  <option value="INTERMEDIO">Intermedio</option>
-                  <option value="AVANZADO">Avanzado</option>
-                </select>
-              </label>
-            </div>
-            <div
-              className="rooms-row-3"
-              style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(220px, 1fr))", gap: 12 }}
-            >
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Dificultad</span>
-                <select
-                  className="input"
-                  value={String(editing.difficulty ?? 5)}
-                  onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}
-                >
-                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Factor sorpresa</span>
-                <select
-                  className="input"
-                  value={String(editing.surprise ?? 5)}
-                  onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}
-                >
-                  {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div
-              className="rooms-row-2"
-              style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(280px, 1fr))", gap: 12 }}
-            >
-              <div className="field" style={{ minWidth: 0 }}>
-                <span className="label">Imagen card</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className="btnSmall"
-                    onClick={onPickCardImage}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                  >
-                    <Icon name="image" size={16} />
-                    Elegir
-                  </button>
-
-                  {editing.cardPhoto ? (
-                    <button type="button" className="ghostBtn" onClick={removeCardImage}>
-                      Quitar
-                    </button>
-                  ) : (
-                    <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="field" style={{ minWidth: 0 }}>
-                <span className="label">Imagen banner</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className="btnSmall"
-                    onClick={onPickBannerImage}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                  >
-                    <Icon name="image" size={16} />
-                    Elegir
-                  </button>
-
-                  {editing.bannerPhoto ? (
-                    <button type="button" className="ghostBtn" onClick={removeBannerImage}>
-                      Quitar
-                    </button>
-                  ) : (
-                    <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div
-              className="rooms-row-2"
-              style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(280px, 1fr))", gap: 12 }}
-            >
-              <div className="field" ref={themesWrapRef} style={{ minWidth: 0 }}>
-                <span className="label">Temática</span>
-                <button
-                  type="button"
-                  className="input multiSelectBtn"
-                  onClick={() => setThemesOpen((v) => !v)}
-                  aria-expanded={themesOpen}
-                >
-                  {selectedThemes.length ? (
-                    <span className="multiSelectValue">
-                      {selectedThemes.map((t) => (
-                        <span key={t} className="tagChip">
-                          {t}
-                        </span>
-                      ))}
-                    </span>
-                  ) : (
-                    <span style={{ opacity: 0.75 }}>Elegí hasta 4…</span>
-                  )}
-                  <span className="multiSelectCaret">▾</span>
-                </button>
-
-                {themesOpen && (
-                  <div className="multiSelectPanel">
-                    <div className="multiSelectTop">
-                      <div style={{ opacity: 0.85, fontSize: 12 }}>
-                        Seleccionadas: <b>{selectedThemes.length}</b>/4
-                      </div>
-                      <button type="button" className="ghostBtn" onClick={clearThemes} disabled={!selectedThemes.length}>
-                        Limpiar
-                      </button>
-                    </div>
-
-                    <div className="multiSelectList">
-                      {ROOM_THEMES_MULTI.map((t) => {
-                        const checked = selectedThemes.includes(t);
-                        const disabled = !checked && atThemesLimit;
-
-                        return (
-                          <label key={t} className={`multiSelectItem ${disabled ? "disabled" : ""}`}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              disabled={disabled}
-                              onChange={() => toggleTheme(t)}
-                            />
-                            <span>{t}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-
-                    {atThemesLimit ? (
-                      <div className="multiSelectHint">Llegaste al máximo de 4 temáticas.</div>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-
-              <label className="field" style={{ minWidth: 0 }}>
-                <span className="label">Estado</span>
-                <select
-                  className="input"
-                  value={editing.active ? "1" : "0"}
-                  onChange={(e) => setEditing({ ...editing, active: e.target.value === "1" })}
-                >
-                  <option value="1">Activa</option>
-                  <option value="0">Inactiva</option>
-                </select>
-              </label>
-            </div>
-
-            <label className="field" style={{ minWidth: 0 }}>
-              <span className="label">Descripción</span>
-              <textarea
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(220px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Nombre</span>
+              <input
                 className="input"
-                value={editing.description}
-                onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                rows={3}
-                style={{ resize: "vertical" }}
+                value={editing.name}
+                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
               />
             </label>
 
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Categoría</span>
+              <select
+                className="input"
+                value={editing.category}
+                onChange={(e) => setEditing({ ...editing, category: e.target.value as RoomCategory })}
+              >
+                <option value="WOW">WOW</option>
+                <option value="CLASICO">Clásico (20%)</option>
+                <option value="DESPEDIDA">Despedida</option>
+              </select>
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Sucursal</span>
+              <select
+                className="input"
+                value={editing.branch}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  const bid = branchesByName.get(name) || null;
+                  setEditing({ ...editing, branch: name, branch_id: bid });
+                }}
+                disabled={me.isBranchScoped}
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={b.name}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(220px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Teléfono</span>
+              <input
+                className="input"
+                value={editing.whatsappPhone}
+                onChange={(e) => setEditing({ ...editing, whatsappPhone: e.target.value })}
+                placeholder="Ej: +54911XXXXXXXX"
+                inputMode="tel"
+              />
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Link de reserva</span>
+              <input
+                className="input"
+                value={editing.reserveUrl}
+                onChange={(e) => setEditing({ ...editing, reserveUrl: e.target.value })}
+                placeholder="https://..."
+                inputMode="url"
+              />
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>QR único</span>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8 }}>
+                <input
+                  className="input"
+                  value={editing.qrCode || ""}
+                  onChange={(e) => setEditing({ ...editing, qrCode: e.target.value })}
+                  placeholder={`Ej: ${makeRoomQr(editing.id)}`}
+                  style={{ minWidth: 0, fontFamily: "monospace" }}
+                />
+
+                <button
+                  type="button"
+                  className="ghostBtn"
+                  onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}
+                  title="Regenerar QR"
+                  style={{
+                    width: 42,
+                    minWidth: 42,
+                    height: 42,
+                    padding: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 12,
+                  }}
+                >
+                  <Icon name="refresh" size={18} />
+                </button>
+
+                <button
+                  type="button"
+                  className="ghostBtn"
+                  onClick={() => editing.qrCode && copy(editing.qrCode)}
+                  disabled={!editing.qrCode}
+                  title="Copiar QR"
+                  style={{
+                    width: 42,
+                    minWidth: 42,
+                    height: 42,
+                    padding: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 12,
+                  }}
+                >
+                  <Icon name="copy" size={18} />
+                </button>
+              </div>
+            </label>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(220px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Récord 1</span>
+              <input
+                className="input"
+                value={editing.record1}
+                onChange={(e) => setEditing({ ...editing, record1: e.target.value })}
+                placeholder="12:34"
+              />
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Récord 2</span>
+              <input
+                className="input"
+                value={editing.record2}
+                onChange={(e) => setEditing({ ...editing, record2: e.target.value })}
+                placeholder="14:10"
+              />
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Puntaje</span>
+              <select
+                className="input"
+                value={String(editing.points ?? 1)}
+                onChange={(e) =>
+                  setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })
+                }
+              >
+                {[1, 2, 3].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(220px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Jugadores mín</span>
+              <input
+                className="input"
+                value={String(editing.playersMin ?? 1)}
+                onChange={(e) => setEditing({ ...editing, playersMin: Number(e.target.value) })}
+                inputMode="numeric"
+              />
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Jugadores máx</span>
+              <input
+                className="input"
+                value={String(editing.playersMax ?? 6)}
+                onChange={(e) => setEditing({ ...editing, playersMax: Number(e.target.value) })}
+                inputMode="numeric"
+              />
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Nivel</span>
+              <select
+                className="input"
+                value={editing.level}
+                onChange={(e) => setEditing({ ...editing, level: e.target.value as RoomLevel })}
+              >
+                <option value="FACIL">Fácil</option>
+                <option value="INTERMEDIO">Intermedio</option>
+                <option value="AVANZADO">Avanzado</option>
+              </select>
+            </label>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(220px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Dificultad</span>
+              <select
+                className="input"
+                value={String(editing.difficulty ?? 5)}
+                onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}
+              >
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Factor sorpresa</span>
+              <select
+                className="input"
+                value={String(editing.surprise ?? 5)}
+                onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}
+              >
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(280px, 1fr))",
+              gap: 14,
+            }}
+          >
             <div
-              style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(280px, 1fr))", gap: 12 }}
+              style={{
+                border: "1px solid rgba(255,255,255,.08)",
+                borderRadius: 18,
+                background: "rgba(255,255,255,.03)",
+                padding: 16,
+                minWidth: 0,
+              }}
             >
-              <div className="field" style={{ minWidth: 0 }}>
-                <span className="label">Previa card</span>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
+                Imagen card
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btnSmall"
+                  onClick={onPickCardImage}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                >
+                  <Icon name="image" size={16} />
+                  Elegir
+                </button>
 
                 {editing.cardPhoto ? (
-                  <div
-                    style={{
-                      borderRadius: 16,
-                      overflow: "hidden",
-                      border: "1px solid rgba(255,255,255,.12)",
-                      background: "rgba(0,0,0,.25)",
-                    }}
-                  >
-                    <img
-                      src={editing.cardPhoto}
-                      alt="Preview card"
-                      style={{
-                        width: "100%",
-                        height: "clamp(220px, 34vh, 360px)",
-                        objectFit: "contain",
-                        display: "block",
-                        background: "#000",
-                      }}
-                    />
-                  </div>
+                  <button type="button" className="ghostBtn" onClick={removeCardImage}>
+                    Quitar
+                  </button>
                 ) : (
-                  <div
-                    style={{
-                      minHeight: 180,
-                      borderRadius: 16,
-                      border: "1px dashed rgba(255,255,255,.18)",
-                      background: "rgba(255,255,255,.03)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      padding: 20,
-                      opacity: 0.75,
-                    }}
-                  >
-                    Acá se va a ver la previa de la imagen card.
-                  </div>
-                )}
-              </div>
-
-              <div className="field" style={{ minWidth: 0 }}>
-                <span className="label">Previa banner</span>
-
-                {editing.bannerPhoto ? (
-                  <div
-                    ref={previewWrapRef}
-                    onMouseDown={onPreviewMouseDown}
-                    onMouseMove={onPreviewMouseMove}
-                    onMouseUp={endDrag}
-                    onMouseLeave={endDrag}
-                    style={{
-                      borderRadius: 16,
-                      overflow: "hidden",
-                      border: "1px solid rgba(255,255,255,.12)",
-                      background: "rgba(0,0,0,.25)",
-                      cursor: "grab",
-                      userSelect: "none",
-                    }}
-                    title="Ajuste vertical fino"
-                  >
-                    <img
-                      src={editing.bannerPhoto}
-                      alt="Preview banner"
-                      style={{
-                        width: "100%",
-                        height: "clamp(220px, 34vh, 360px)",
-                        objectFit: "cover",
-                        objectPosition: `50% ${editing.photoPosition}%`,
-                        display: "block",
-                        pointerEvents: "none",
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      minHeight: 180,
-                      borderRadius: 16,
-                      border: "1px dashed rgba(255,255,255,.18)",
-                      background: "rgba(255,255,255,.03)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      padding: 20,
-                      opacity: 0.75,
-                    }}
-                  >
-                    Acá se va a ver la previa de la imagen banner.
-                  </div>
+                  <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
                 )}
               </div>
             </div>
-       </div>
+
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,.08)",
+                borderRadius: 18,
+                background: "rgba(255,255,255,.03)",
+                padding: 16,
+                minWidth: 0,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
+                Imagen banner
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btnSmall"
+                  onClick={onPickBannerImage}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                >
+                  <Icon name="image" size={16} />
+                  Elegir
+                </button>
+
+                {editing.bannerPhoto ? (
+                  <button type="button" className="ghostBtn" onClick={removeBannerImage}>
+                    Quitar
+                  </button>
+                ) : (
+                  <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(280px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <div
+              ref={themesWrapRef}
+              style={{
+                position: "relative",
+                border: "1px solid rgba(255,255,255,.08)",
+                borderRadius: 18,
+                background: "rgba(255,255,255,.03)",
+                padding: 16,
+                minWidth: 0,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
+                Temática
+              </div>
+
+              <button
+                type="button"
+                className="input multiSelectBtn"
+                onClick={() => setThemesOpen((v) => !v)}
+                aria-expanded={themesOpen}
+              >
+                {selectedThemes.length ? (
+                  <span className="multiSelectValue">
+                    {selectedThemes.map((t) => (
+                      <span key={t} className="tagChip">
+                        {t}
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  <span style={{ opacity: 0.75 }}>Elegí hasta 4…</span>
+                )}
+                <span className="multiSelectCaret">▾</span>
+              </button>
+
+              {themesOpen && (
+                <div className="multiSelectPanel">
+                  <div className="multiSelectTop">
+                    <div style={{ opacity: 0.85, fontSize: 12 }}>
+                      Seleccionadas: <b>{selectedThemes.length}</b>/4
+                    </div>
+                    <button
+                      type="button"
+                      className="ghostBtn"
+                      onClick={clearThemes}
+                      disabled={!selectedThemes.length}
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+
+                  <div className="multiSelectList">
+                    {ROOM_THEMES_MULTI.map((t) => {
+                      const checked = selectedThemes.includes(t);
+                      const disabled = !checked && atThemesLimit;
+
+                      return (
+                        <label
+                          key={t}
+                          className={`multiSelectItem ${disabled ? "disabled" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={() => toggleTheme(t)}
+                          />
+                          <span>{t}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {atThemesLimit ? (
+                    <div className="multiSelectHint">
+                      Llegaste al máximo de 4 temáticas.
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,.08)",
+                borderRadius: 18,
+                background: "rgba(255,255,255,.03)",
+                padding: 16,
+                minWidth: 0,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
+                Estado
+              </div>
+              <select
+                className="input"
+                value={editing.active ? "1" : "0"}
+                onChange={(e) => setEditing({ ...editing, active: e.target.value === "1" })}
+              >
+                <option value="1">Activa</option>
+                <option value="0">Inactiva</option>
+              </select>
+            </div>
+          </div>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Descripción</span>
+            <textarea
+              className="input"
+              value={editing.description}
+              onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+              rows={4}
+              style={{ resize: "vertical" }}
+            />
+          </label>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(280px, 1fr))",
+              gap: 14,
+            }}
+          >
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,.08)",
+                borderRadius: 18,
+                background: "rgba(255,255,255,.03)",
+                padding: 16,
+                minWidth: 0,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
+                Previa card
+              </div>
+
+              {editing.cardPhoto ? (
+                <div
+                  style={{
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    border: "1px solid rgba(255,255,255,.12)",
+                    background: "rgba(0,0,0,.25)",
+                  }}
+                >
+                  <img
+                    src={editing.cardPhoto}
+                    alt="Preview card"
+                    style={{
+                      width: "100%",
+                      height: "clamp(220px, 34vh, 360px)",
+                      objectFit: "contain",
+                      display: "block",
+                      background: "#000",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div
+                  style={{
+                    minHeight: 180,
+                    borderRadius: 16,
+                    border: "1px dashed rgba(255,255,255,.18)",
+                    background: "rgba(255,255,255,.03)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
+                    padding: 20,
+                    opacity: 0.75,
+                  }}
+                >
+                  Acá se va a ver la previa de la imagen card.
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,.08)",
+                borderRadius: 18,
+                background: "rgba(255,255,255,.03)",
+                padding: 16,
+                minWidth: 0,
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
+                Previa banner
+              </div>
+
+              {editing.bannerPhoto ? (
+                <div
+                  ref={previewWrapRef}
+                  onMouseDown={onPreviewMouseDown}
+                  onMouseMove={onPreviewMouseMove}
+                  onMouseUp={endDrag}
+                  onMouseLeave={endDrag}
+                  style={{
+                    borderRadius: 16,
+                    overflow: "hidden",
+                    border: "1px solid rgba(255,255,255,.12)",
+                    background: "rgba(0,0,0,.25)",
+                    cursor: "grab",
+                    userSelect: "none",
+                  }}
+                  title="Ajuste vertical fino"
+                >
+                  <img
+                    src={editing.bannerPhoto}
+                    alt="Preview banner"
+                    style={{
+                      width: "100%",
+                      height: "clamp(220px, 34vh, 360px)",
+                      objectFit: "cover",
+                      objectPosition: `50% ${editing.photoPosition}%`,
+                      display: "block",
+                      pointerEvents: "none",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div
+                  style={{
+                    minHeight: 180,
+                    borderRadius: 16,
+                    border: "1px dashed rgba(255,255,255,.18)",
+                    background: "rgba(255,255,255,.03)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
+                    padding: 20,
+                    opacity: 0.75,
+                  }}
+                >
+                  Acá se va a ver la previa de la imagen banner.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="modalFoot">
+        <div
+          style={{
+            padding: "18px 22px",
+            borderTop: "1px solid rgba(255,255,255,.08)",
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 10,
+          }}
+        >
           <button className="ghostBtn" onClick={closeModal} disabled={saving}>
             Cancelar
           </button>
@@ -3170,5 +3510,6 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
 ) : null}
 
     </div>
+  </div>
   );
 }

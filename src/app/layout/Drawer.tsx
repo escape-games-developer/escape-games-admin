@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { NavLink } from "react-router-dom";
 import logo from "../../assets/escape-logo.png";
 import { supabase } from "../../lib/supabase";
 
@@ -39,33 +39,30 @@ function safeJsonParse<T>(raw: string | null): T | null {
 }
 
 export default function Drawer({ open, onClose, userName }: Props) {
-  const nav = useNavigate();
+  const [role, setRole] = useState<UserRole | null>(null);
+  const [branchLabel, setBranchLabel] = useState("");
+  const [perms, setPerms] = useState<UserPermissions | null>(null);
+  const [gmCode, setGmCode] = useState("");
+  const [loadingRole, setLoadingRole] = useState(true);
 
-  const [role, setRole] = useState<UserRole>("ADMIN");
-  const [branchLabel, setBranchLabel] = useState<string>("");
-  const [perms, setPerms] = useState<UserPermissions>(defaultPerms);
-  const [gmCode, setGmCode] = useState<string>("");
-
-  // ✅ fallback (por si venís de una versión vieja con demo_session)
   const demoSession = useMemo(() => {
     const parsed = safeJsonParse<any>(localStorage.getItem("admin_demo_session"));
-    const r = (parsed?.role as UserRole) || "ADMIN";
-    const b = parsed?.branch ? String(parsed.branch) : "";
-    return { role: r, branch: b };
+    const sessionRole = (parsed?.role as UserRole) || "CLIENT";
+    const sessionBranch = parsed?.branch ? String(parsed.branch) : "";
+    return { role: sessionRole, branch: sessionBranch };
   }, []);
 
-  // ✅ fallback NUEVO: lo que setea el Login actual
   const lsRole = useMemo(() => {
-    const r = localStorage.getItem("eg_admin_role") as UserRole | null;
-    return r || null;
+    const storedRole = localStorage.getItem("eg_admin_role") as UserRole | null;
+    return storedRole || null;
   }, []);
 
-  // ✅ branch: prioriza nombre si existe, si no cae al id
   const lsBranch = useMemo(() => {
     const name = localStorage.getItem("eg_admin_branch_name");
     if (name && name.trim() !== "") return name;
-    const b = localStorage.getItem("eg_admin_branch_id");
-    return b && b.trim() !== "" ? `Sucursal #${b}` : "";
+
+    const branchId = localStorage.getItem("eg_admin_branch_id");
+    return branchId && branchId.trim() !== "" ? `Sucursal #${branchId}` : "";
   }, []);
 
   const lsPerms = useMemo(() => {
@@ -75,81 +72,108 @@ export default function Drawer({ open, onClose, userName }: Props) {
   }, []);
 
   const lsGmCode = useMemo(() => {
-    const c = localStorage.getItem("eg_admin_gm_code");
-    return c && c.trim() !== "" ? c : "";
+    const code = localStorage.getItem("eg_admin_gm_code");
+    return code && code.trim() !== "" ? code : "";
   }, []);
 
   useEffect(() => {
     let mounted = true;
 
     const loadRole = async () => {
-      const { data } = await supabase.auth.getSession();
-      const uid = data.session?.user?.id;
-      if (!uid) return;
+      try {
+        setLoadingRole(true);
 
-      const { data: adminRow, error: adminErr } = await supabase
-        .from("admins")
-        .select("branch_id, mail, gm_code, is_super, permissions")
-        .eq("user_id", uid)
-        .maybeSingle();
+        const { data } = await supabase.auth.getSession();
+        const uid = data.session?.user?.id;
 
-      if (adminErr) {
-        console.error(adminErr);
-        return;
-      }
+        if (!uid) {
+          if (!mounted) return;
+          setRole("CLIENT");
+          setBranchLabel("");
+          setPerms(defaultPerms);
+          setGmCode("");
+          setLoadingRole(false);
+          return;
+        }
 
-      if (!mounted) return;
-
-      if (!adminRow) {
-        setRole("CLIENT");
-        setBranchLabel("");
-        setPerms(defaultPerms);
-        setGmCode("");
-        return;
-      }
-
-      let computed: UserRole;
-      if (adminRow.is_super) computed = "ADMIN_GENERAL";
-      else if (adminRow.gm_code) computed = "GM";
-      else computed = "ADMIN";
-
-      setRole(computed);
-
-      const mergedPerms: UserPermissions = { ...defaultPerms, ...(adminRow.permissions || {}) };
-      setPerms(mergedPerms);
-
-      const code = adminRow.gm_code ? String(adminRow.gm_code) : "";
-      setGmCode(code);
-
-      let branchLbl = adminRow.branch_id ? `Sucursal #${adminRow.branch_id}` : "";
-      let branchName = "";
-
-      if (adminRow.branch_id && !adminRow.is_super) {
-        const { data: br, error: brErr } = await supabase
-          .from("branches")
-          .select("name")
-          .eq("id", adminRow.branch_id)
+        const { data: adminRow, error: adminErr } = await supabase
+          .from("admins")
+          .select("branch_id, mail, gm_code, is_super, permissions")
+          .eq("user_id", uid)
           .maybeSingle();
 
-        if (!brErr && br?.name) {
-          branchName = String(br.name);
-          branchLbl = branchName;
-        } else if (brErr) {
-          console.warn("No pude leer branches.name, dejo fallback:", brErr);
+        if (adminErr) {
+          console.error(adminErr);
+          if (!mounted) return;
+          setRole("CLIENT");
+          setBranchLabel("");
+          setPerms(defaultPerms);
+          setGmCode("");
+          setLoadingRole(false);
+          return;
         }
+
+        if (!mounted) return;
+
+        if (!adminRow) {
+          setRole("CLIENT");
+          setBranchLabel("");
+          setPerms(defaultPerms);
+          setGmCode("");
+          setLoadingRole(false);
+          return;
+        }
+
+        let computedRole: UserRole;
+        if (adminRow.is_super) {
+          computedRole = "ADMIN_GENERAL";
+        } else if (adminRow.gm_code) {
+          computedRole = "GM";
+        } else {
+          computedRole = "ADMIN";
+        }
+
+        setRole(computedRole);
+
+        const mergedPerms: UserPermissions = {
+          ...defaultPerms,
+          ...(adminRow.permissions || {}),
+        };
+        setPerms(mergedPerms);
+
+        const nextGmCode = adminRow.gm_code ? String(adminRow.gm_code) : "";
+        setGmCode(nextGmCode);
+
+        let nextBranchLabel = adminRow.branch_id ? `Sucursal #${adminRow.branch_id}` : "";
+        let nextBranchName = "";
+
+        if (adminRow.branch_id && !adminRow.is_super) {
+          const { data: branchRow, error: branchErr } = await supabase
+            .from("branches")
+            .select("name")
+            .eq("id", adminRow.branch_id)
+            .maybeSingle();
+
+          if (!branchErr && branchRow?.name) {
+            nextBranchName = String(branchRow.name);
+            nextBranchLabel = nextBranchName;
+          }
+        }
+
+        if (!mounted) return;
+
+        setBranchLabel(nextBranchLabel);
+
+        localStorage.setItem("eg_admin_role", computedRole);
+        localStorage.setItem("eg_admin_mail", adminRow.mail ?? "");
+        localStorage.setItem("eg_admin_branch_id", String(adminRow.branch_id ?? ""));
+        localStorage.setItem("eg_admin_branch_name", nextBranchName);
+        localStorage.setItem("eg_admin_is_super", adminRow.is_super ? "true" : "false");
+        localStorage.setItem("eg_admin_permissions", JSON.stringify(adminRow.permissions || {}));
+        localStorage.setItem("eg_admin_gm_code", nextGmCode);
+      } finally {
+        if (mounted) setLoadingRole(false);
       }
-
-      if (!mounted) return;
-
-      setBranchLabel(branchLbl);
-
-      localStorage.setItem("eg_admin_role", computed);
-      localStorage.setItem("eg_admin_mail", adminRow.mail ?? "");
-      localStorage.setItem("eg_admin_branch_id", String(adminRow.branch_id ?? ""));
-      localStorage.setItem("eg_admin_branch_name", branchName);
-      localStorage.setItem("eg_admin_is_super", adminRow.is_super ? "true" : "false");
-      localStorage.setItem("eg_admin_permissions", JSON.stringify(adminRow.permissions || {}));
-      localStorage.setItem("eg_admin_gm_code", code);
     };
 
     loadRole();
@@ -164,25 +188,24 @@ export default function Drawer({ open, onClose, userName }: Props) {
     };
   }, []);
 
-  // prioridad: DB role -> localStorage -> demoSession
-  const roleToUse: UserRole = role || lsRole || demoSession.role;
+  const roleToUse: UserRole = role ?? lsRole ?? demoSession.role ?? "CLIENT";
   const branchToUse = branchLabel || lsBranch || demoSession.branch;
-
-  const permsToUse: UserPermissions = perms || lsPerms || defaultPerms;
+  const permsToUse: UserPermissions = perms ?? lsPerms ?? defaultPerms;
   const gmCodeToUse = gmCode || lsGmCode;
 
   const roleLabel =
     roleToUse === "ADMIN_GENERAL"
       ? "Admin General"
       : roleToUse === "ADMIN"
-      ? "Administrador"
-      : roleToUse === "GM"
-      ? "Game Master"
-      : "Cliente";
+        ? "Administrador"
+        : roleToUse === "GM"
+          ? "Game Master"
+          : "Cliente";
 
   const isSuper = roleToUse === "ADMIN_GENERAL";
+  const isAdmin = roleToUse === "ADMIN_GENERAL" || roleToUse === "ADMIN";
+  const isGM = roleToUse === "GM";
 
-  // ✅ permisos efectivos: super lo puede todo
   const effectivePerms: UserPermissions = isSuper
     ? {
         canManageRooms: true,
@@ -194,57 +217,45 @@ export default function Drawer({ open, onClose, userName }: Props) {
       }
     : permsToUse;
 
-  // ✅ qué secciones mostrar (por permisos)
-  // 🔥 CAMBIO: "Salas" se muestra SIEMPRE. El permiso define si navega o queda disabled.
-  const canAccessRooms = effectivePerms.canManageRooms || effectivePerms.canEditRankings;
+  const canAccessRooms =
+    isGM || effectivePerms.canManageRooms || effectivePerms.canEditRankings;
 
   const canSeeNews = effectivePerms.canManageNews;
   const canSeeUsers = effectivePerms.canManageUsers;
-
-  // ✅ Notificaciones SOLO ADMIN_GENERAL
-  const canSeeNotifications = isSuper;
+  const canSeeUserProgress = !loadingRole && isAdmin;
 
   const logout = async () => {
+    const keysToRemove = [
+      "admin_demo_session",
+      "eg_admin_role",
+      "eg_admin_mail",
+      "eg_admin_branch_id",
+      "eg_admin_branch_name",
+      "eg_admin_is_super",
+      "eg_admin_permissions",
+      "eg_admin_gm_code",
+    ];
+
+    const supabaseKeys = Object.keys(localStorage).filter((key) =>
+      key.startsWith("sb-")
+    );
+
+    const allKeys = [...keysToRemove, ...supabaseKeys];
+
     try {
-      localStorage.removeItem("admin_demo_session");
-      localStorage.removeItem("eg_admin_role");
-      localStorage.removeItem("eg_admin_mail");
-      localStorage.removeItem("eg_admin_branch_id");
-      localStorage.removeItem("eg_admin_branch_name");
-      localStorage.removeItem("eg_admin_is_super");
-      localStorage.removeItem("eg_admin_permissions");
-      localStorage.removeItem("eg_admin_gm_code");
+      const { error } = await supabase.auth.signOut({ scope: "local" });
 
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-
-      nav("/login", { replace: true });
-    } catch (err: any) {
-      console.error(err);
-      alert(err?.message || "No pude cerrar sesión. Probá de nuevo.");
+      if (error && error.name !== "AuthSessionMissingError") {
+        throw error;
+      }
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+    } finally {
+      allKeys.forEach((key) => localStorage.removeItem(key));
+      sessionStorage.clear();
+      window.location.replace("/login");
     }
   };
-
-  // ✅ helper para item disabled (se ve siempre, pero no navega)
-  const DisabledNavItem = ({ children, title }: { children: React.ReactNode; title?: string }) => (
-    <div
-      className="navItem disabled"
-      title={title || "Sin permiso"}
-      role="link"
-      aria-disabled="true"
-      style={{
-        opacity: 0.55,
-        cursor: "not-allowed",
-        userSelect: "none",
-      }}
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-    >
-      {children}
-    </div>
-  );
 
   return (
     <>
@@ -256,8 +267,13 @@ export default function Drawer({ open, onClose, userName }: Props) {
             <img className="drawerLogoOnly" src={logo} alt="Escape Games" />
           </div>
 
-          <button className="iconBtn drawerCloseBtn" onClick={onClose} aria-label="Cerrar menú">
-            ✕
+          <button
+            className="iconBtn drawerCloseBtn"
+            onClick={onClose}
+            aria-label="Cerrar menú"
+            type="button"
+          >
+            ×
           </button>
         </div>
 
@@ -266,19 +282,25 @@ export default function Drawer({ open, onClose, userName }: Props) {
 
           <div className="profileCard">
             <div className="avatarCircle">{(userName?.[0] || "A").toUpperCase()}</div>
+
             <div className="profileInfo">
               <div className="profileName">{userName}</div>
               <div className="profileRole">{roleLabel}</div>
 
-              {roleToUse !== "CLIENT" ? (
+              {roleToUse !== "CLIENT" && (
                 <>
-                  {!isSuper ? <div className="profileBranch">Sucursal: {branchToUse || "sin asignar"}</div> : null}
+                  {!isSuper && (
+                    <div className="profileBranch">
+                      Sucursal: {branchToUse || "sin asignar"}
+                    </div>
+                  )}
 
                   <div className="profileGmCode">
-                    <span style={{ opacity: 0.7 }}>Código GM:</span> <b>{gmCodeToUse || "sin código"}</b>
+                    <span style={{ opacity: 0.7 }}>Código GM:</span>{" "}
+                    <b>{gmCodeToUse || "sin código"}</b>
                   </div>
                 </>
-              ) : null}
+              )}
             </div>
           </div>
         </div>
@@ -287,8 +309,7 @@ export default function Drawer({ open, onClose, userName }: Props) {
           <div className="drawerSectionTitle">Secciones</div>
 
           <nav className="drawerNav">
-            {/* ✅ SALAS: SIEMPRE visible */}
-            {canAccessRooms ? (
+            {canAccessRooms && (
               <NavLink
                 to="/salas"
                 onClick={onClose}
@@ -296,11 +317,9 @@ export default function Drawer({ open, onClose, userName }: Props) {
               >
                 Salas
               </NavLink>
-            ) : (
-              <DisabledNavItem title="Sin permiso para Salas">Salas</DisabledNavItem>
             )}
 
-            {canSeeNews ? (
+            {canSeeNews && (
               <NavLink
                 to="/novedades"
                 onClick={onClose}
@@ -308,32 +327,33 @@ export default function Drawer({ open, onClose, userName }: Props) {
               >
                 Novedades
               </NavLink>
-            ) : null}
+            )}
 
-            {canSeeUsers ? (
+            {canSeeUsers && (
               <NavLink
                 to="/usuarios"
+                end
                 onClick={onClose}
                 className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
               >
                 Usuarios
               </NavLink>
-            ) : null}
+            )}
 
-            {canSeeNotifications ? (
+            {canSeeUserProgress && (
               <NavLink
-                to="/notificaciones"
+                to="/usuarios/progreso"
                 onClick={onClose}
                 className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
               >
-                Notificaciones
+                Progreso de usuarios
               </NavLink>
-            ) : null}
+            )}
           </nav>
         </div>
 
         <div className="drawerFooter">
-          <button className="logoutBtn" onClick={logout}>
+          <button className="logoutBtn" onClick={logout} type="button">
             Cerrar sesión
           </button>
         </div>

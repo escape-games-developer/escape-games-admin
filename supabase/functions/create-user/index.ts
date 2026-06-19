@@ -290,13 +290,14 @@ Deno.serve(async (req: Request) => {
     // ✅ admins upsert si es staff
     if (role === "GM" || role === "ADMIN_GENERAL") {
       const adminPayload: any = {
-        user_id: userId,
-        mail,
-        branch_id: role === "GM" ? branchId : null,
-        is_super: role === "ADMIN_GENERAL",
-        permissions: {}, // ✅ jsonb NOT NULL
-        created_at: existed ? undefined : new Date().toISOString(),
-      };
+  user_id: userId,
+  mail,
+  branch_id: role === "GM" ? branchId : null,
+  gm_code: role === "GM" ? "GM" : null,
+  is_super: role === "ADMIN_GENERAL",
+  permissions: {},
+  created_at: existed ? undefined : new Date().toISOString(),
+};
       Object.keys(adminPayload).forEach((k) => adminPayload[k] === undefined && delete adminPayload[k]);
 
       const { error: admErr } = await supabaseAdmin

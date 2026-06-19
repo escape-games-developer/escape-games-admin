@@ -7,7 +7,7 @@ import Login from ".././pages/Login";
 import Rooms from ".././pages/Rooms";
 import News from ".././pages/News";
 import Users from ".././pages/Users";
-import Notifications from ".././pages/Notifications"; // ✅ NUEVO
+import UserProgressPage from ".././pages/UserProgressPage";
 
 type UserRole = "CLIENT" | "GM" | "ADMIN" | "ADMIN_GENERAL";
 
@@ -20,7 +20,6 @@ type UserPermissions = {
   canResetClientPassword: boolean;
 };
 
-/** ✅ Fuente de verdad: lo que ya persistís desde DB en Drawer/Login */
 function getRole(): UserRole {
   const r = localStorage.getItem("eg_admin_role") as UserRole | null;
   return r || "CLIENT";
@@ -42,7 +41,6 @@ function isSuper(): boolean {
   );
 }
 
-/** ✅ Guard por rol */
 function RequireRole({
   allow,
   children,
@@ -55,7 +53,6 @@ function RequireRole({
   return <>{children}</>;
 }
 
-/** ✅ Guard por permiso (ADMIN_GENERAL siempre pasa) */
 function RequirePerm({
   permKey,
   children,
@@ -66,7 +63,6 @@ function RequirePerm({
   if (isSuper()) return <>{children}</>;
 
   const role = getRole();
-  // solo staff puede tener permisos (GM/ADMIN). CLIENT no.
   if (role !== "GM" && role !== "ADMIN") return <Navigate to="/salas" replace />;
 
   const perms = getPerms();
@@ -84,7 +80,6 @@ export default function AppRoutes() {
       <Route element={<AdminLayout />}>
         <Route path="/" element={<Navigate to="/salas" replace />} />
 
-        {/* ✅ GM puede ver salas (pero después filtrás por sucursal en Rooms) */}
         <Route
           path="/salas"
           element={
@@ -94,9 +89,6 @@ export default function AppRoutes() {
           }
         />
 
-        {/* ✅ Novedades:
-            - ADMIN_GENERAL siempre
-            - GM/ADMIN solo si canManageNews */}
         <Route
           path="/novedades"
           element={
@@ -106,9 +98,6 @@ export default function AppRoutes() {
           }
         />
 
-        {/* ✅ Usuarios:
-            - ADMIN_GENERAL siempre
-            - GM/ADMIN solo si canManageUsers */}
         <Route
           path="/usuarios"
           element={
@@ -118,12 +107,11 @@ export default function AppRoutes() {
           }
         />
 
-        {/* ✅ NUEVO: Notificaciones (SOLO ADMIN_GENERAL) */}
         <Route
-          path="/notificaciones"
+          path="/usuarios/progreso"
           element={
-            <RequireRole allow={["ADMIN_GENERAL"]}>
-              <Notifications />
+            <RequireRole allow={["ADMIN_GENERAL", "ADMIN"]}>
+              <UserProgressPage />
             </RequireRole>
           }
         />
