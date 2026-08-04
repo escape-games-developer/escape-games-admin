@@ -1,6 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
+import GoldenTicketReviewModal from "../components/GoldenTicketReviewModal";
+import { ToastStack, useToasts } from "../components/Toast";
+import {
+  fetchGoldenTicketInfo,
+  formatDateDDMMYYYY,
+  revokeGoldenTicket,
+  type GoldenTicketInfo,
+  type PendingRequest,
+} from "../lib/goldenTickets";
+
 /** ✅ mismas sucursales que Rooms */
 const BRANCHES = [
   "Nuñez",
@@ -474,6 +484,21 @@ export default function Users() {
     user: null,
   });
 
+  /* ---------- Golden Ticket ---------- */
+
+  const { toasts, toast, dismiss } = useToasts();
+
+  const [goldenModal, setGoldenModal] = useState<{ open: boolean; user: User | null }>({
+    open: false,
+    user: null,
+  });
+  const [goldenInfo, setGoldenInfo] = useState<GoldenTicketInfo | null>(null);
+  const [goldenLoading, setGoldenLoading] = useState(false);
+  const [goldenErr, setGoldenErr] = useState("");
+  const [goldenBusy, setGoldenBusy] = useState(false);
+  const [goldenConfirmRevoke, setGoldenConfirmRevoke] = useState(false);
+  const [reviewRequest, setReviewRequest] = useState<PendingRequest | null>(null);
+
   const [resetPass1, setResetPass1] = useState("");
   const [resetPass2, setResetPass2] = useState("");
   const [showResetPass1, setShowResetPass1] = useState(false);
@@ -788,6 +813,76 @@ export default function Users() {
   const openDelete = (u: User) => {
     closeMenu();
     setDeleteModal({ open: true, user: { ...u } });
+  };
+
+  /* ---------- Golden Ticket ---------- */
+
+  const loadGoldenInfo = async (userId: string) => {
+    setGoldenLoading(true);
+    setGoldenErr("");
+
+    try {
+      const info = await fetchGoldenTicketInfo(userId);
+      setGoldenInfo(info);
+    } catch (err: any) {
+      console.error(err);
+      setGoldenErr(err?.message || "No pude leer el Golden Ticket.");
+      setGoldenInfo(null);
+    } finally {
+      setGoldenLoading(false);
+    }
+  };
+
+  const openGolden = (u: User) => {
+    closeMenu();
+    setGoldenInfo(null);
+    setGoldenErr("");
+    setGoldenConfirmRevoke(false);
+    setGoldenModal({ open: true, user: { ...u } });
+    loadGoldenInfo(u.id);
+  };
+
+  const closeGolden = () => {
+    setGoldenModal({ open: false, user: null });
+    setGoldenInfo(null);
+    setGoldenErr("");
+    setGoldenConfirmRevoke(false);
+  };
+
+  const doRevokeGolden = async () => {
+    const u = goldenModal.user;
+    if (!u || goldenBusy) return;
+
+    setGoldenBusy(true);
+
+    try {
+      await revokeGoldenTicket(u.id);
+      toast("success", "Golden Ticket deshabilitado");
+      setGoldenConfirmRevoke(false);
+      await loadGoldenInfo(u.id);
+    } catch (err: any) {
+      console.error(err);
+      toast("error", err?.message || "No pude deshabilitar el Golden Ticket.");
+    } finally {
+      setGoldenBusy(false);
+    }
+  };
+
+  /** Abre el viewer de la Tarea 2 reusando los datos ya cargados. */
+  const openPendingReview = () => {
+    const u = goldenModal.user;
+    if (!u || !goldenInfo) return;
+
+    setReviewRequest({
+      id: u.id,
+      alias: u.alias || null,
+      nombre: u.firstName || null,
+      apellido: u.lastName || null,
+      mail: u.email || null,
+      photo_url: u.avatarUrl || null,
+      rating_screenshot_url: goldenInfo.screenshotUrl,
+      rating_screenshot_uploaded_at: goldenInfo.screenshotUploadedAt,
+    });
   };
 
   const patchPerm = (key: keyof UserPermissions, value: boolean) => {
@@ -1132,6 +1227,19 @@ export default function Users() {
                               Resetear contraseña
                             </button>
 
+                            {u.role === "CLIENT" ? (
+                              <button
+                                style={styles.portalItem}
+                                onClick={() => openGolden(u)}
+                                disabled={busy}
+                                onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.portalItemHover)}
+                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                              >
+                                <Icon name="key" size={16} />
+                                Golden Ticket
+                              </button>
+                            ) : null}
+
                             <div style={styles.portalDivider} />
 
                             <button
@@ -1170,6 +1278,126 @@ export default function Users() {
           }}
           onSave={createSave}
         />
+
+        <ModalShell open={goldenModal.open} title="Golden Ticket" onClose={closeGolden}>
+          {goldenModal.user ? (
+            <>
+              <div style={{ marginBottom: 14, opacity: 0.8, fontSize: 13 }}>
+                Usuario: <b>{goldenModal.user.email || goldenModal.user.alias}</b>
+              </div>
+
+              {goldenLoading ? (
+                <div className="panel" style={{ padding: 12 }}>
+                  Cargando…
+                </div>
+              ) : goldenErr ? (
+                <div className="panel" style={{ padding: 12, color: "#f87171" }}>
+                  {goldenErr}
+                </div>
+              ) : goldenInfo?.active ? (
+                <>
+                  <div style={goldenStyles.activeBox}>
+                    <div style={goldenStyles.activeTitle}>
+                      Golden Ticket #{goldenInfo.number ?? "—"}
+                    </div>
+
+                    <div style={goldenStyles.activeMeta}>
+                      Otorgado el {formatDateDDMMYYYY(goldenInfo.grantedAt) || "—"}
+                    </div>
+                    <div style={goldenStyles.activeMeta}>
+                      Vence: {formatDateDDMMYYYY(goldenInfo.expiresAt) || "—"}
+                    </div>
+                    <div style={goldenStyles.activeMeta}>
+                      Redimido:{" "}
+                      {goldenInfo.redeemedAt
+                        ? formatDateDDMMYYYY(goldenInfo.redeemedAt)
+                        : "No"}
+                    </div>
+                  </div>
+
+                  {goldenConfirmRevoke ? (
+                    <div style={goldenStyles.confirmBox}>
+                      <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+                        ¿Deshabilitar el Golden Ticket de este usuario? Va a dejar de
+                        verlo en la app.
+                      </div>
+
+                      <div style={goldenStyles.actions}>
+                        <button
+                          type="button"
+                          className="ghostBtn"
+                          onClick={() => setGoldenConfirmRevoke(false)}
+                          disabled={goldenBusy}
+                        >
+                          Cancelar
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={doRevokeGolden}
+                          disabled={goldenBusy}
+                          style={goldenStyles.dangerBtn}
+                        >
+                          {goldenBusy ? "Deshabilitando…" : "Confirmar"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={goldenStyles.actions}>
+                      <button
+                        type="button"
+                        onClick={() => setGoldenConfirmRevoke(true)}
+                        disabled={goldenBusy}
+                        style={goldenStyles.dangerBtn}
+                      >
+                        Deshabilitar
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : goldenInfo?.screenshotStatus === "REJECTED" ? (
+                <div style={goldenStyles.rejectedBox}>
+                  <div style={{ fontWeight: 800, marginBottom: 6 }}>
+                    Última captura rechazada
+                  </div>
+                  <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
+                    Motivo: {goldenInfo.rejectionReason || "sin motivo registrado"}
+                  </div>
+                </div>
+              ) : goldenInfo?.screenshotStatus === "PENDING" ? (
+                <div className="panel" style={{ padding: 12 }}>
+                  <div style={{ marginBottom: 10, fontSize: 13.5 }}>
+                    Este usuario tiene una captura esperando revisión.
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={openPendingReview}
+                    style={goldenStyles.linkBtn}
+                  >
+                    Revisar captura pendiente →
+                  </button>
+                </div>
+              ) : (
+                <div className="panel" style={{ padding: 12 }}>
+                  Sin Golden Ticket.
+                </div>
+              )}
+            </>
+          ) : null}
+        </ModalShell>
+
+        <GoldenTicketReviewModal
+          open={!!reviewRequest}
+          request={reviewRequest}
+          onClose={() => setReviewRequest(null)}
+          onDone={() => {
+            if (goldenModal.user) loadGoldenInfo(goldenModal.user.id);
+          }}
+          toast={toast}
+        />
+
+        <ToastStack toasts={toasts} onDismiss={dismiss} />
 
         <ModalShell
           open={permModal.open}
@@ -1331,6 +1559,74 @@ export default function Users() {
     </div>
   );
 }
+
+const goldenStyles: Record<string, any> = {
+  activeBox: {
+    border: "1px solid #a16207",
+    background: "rgba(161,98,7,0.12)",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+  },
+
+  activeTitle: {
+    fontSize: 17,
+    fontWeight: 800,
+    color: "#fbbf24",
+    marginBottom: 8,
+  },
+
+  activeMeta: {
+    fontSize: 13.5,
+    color: "#cbd5e1",
+    lineHeight: 1.7,
+  },
+
+  rejectedBox: {
+    border: "1px solid #991b1b",
+    background: "rgba(153,27,27,0.12)",
+    borderRadius: 14,
+    padding: 14,
+    color: "#fecaca",
+  },
+
+  confirmBox: {
+    border: "1px solid #334155",
+    borderRadius: 14,
+    padding: 14,
+    color: "#e5e7eb",
+  },
+
+  actions: {
+    display: "flex",
+    gap: 10,
+    justifyContent: "flex-end",
+    flexWrap: "wrap",
+    marginTop: 14,
+  },
+
+  dangerBtn: {
+    minHeight: 42,
+    padding: "0 18px",
+    borderRadius: 12,
+    border: "1px solid #b91c1c",
+    background: "#dc2626",
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+  },
+
+  linkBtn: {
+    background: "transparent",
+    border: "none",
+    color: "#93c5fd",
+    fontSize: 13.5,
+    fontWeight: 700,
+    cursor: "pointer",
+    padding: 0,
+  },
+};
 
 const styles: Record<string, any> = {
   page: {

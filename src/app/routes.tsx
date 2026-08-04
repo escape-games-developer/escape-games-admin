@@ -8,6 +8,7 @@ import Rooms from ".././pages/Rooms";
 import News from ".././pages/News";
 import Users from ".././pages/Users";
 import UserProgressPage from ".././pages/UserProgressPage";
+import GoldenTickets from ".././pages/GoldenTickets";
 
 type UserRole = "CLIENT" | "GM" | "ADMIN" | "ADMIN_GENERAL";
 
@@ -113,6 +114,15 @@ export default function AppRoutes() {
             <RequireRole allow={["ADMIN_GENERAL", "ADMIN"]}>
               <UserProgressPage />
             </RequireRole>
+          }
+        />
+
+        <Route
+          path="/golden-tickets"
+          element={
+            <RequirePerm permKey="canManageUsers">
+              <GoldenTickets />
+            </RequirePerm>
           }
         />
       </Route>

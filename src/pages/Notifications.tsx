@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 
 type TargetMode = "TEST" | "ALL";
 type Status = "DRAFT" | "SENT";
-type Channel = "APP" | "MAIL" | "SMS";
+type Channel = "PUSH" | "MAIL" | "SMS";
 
 type NotificationRow = {
   id: string;
@@ -25,6 +25,17 @@ type Category = "PROMO" | "DESCUENTO" | "NOVEDAD";
 type SortKey = "date" | "time" | "title" | "category" | "status";
 type SortDir = "asc" | "desc";
 type SortState = { key: SortKey; dir: SortDir };
+
+/**
+ * Las filas creadas antes del cambio guardaron send_via = 'APP'.
+ * Se muestran/editan como PUSH para no romper el histórico.
+ */
+function normalizeChannel(raw: any): Channel {
+  const v = String(raw ?? "").trim().toUpperCase();
+  if (v === "MAIL") return "MAIL";
+  if (v === "SMS") return "SMS";
+  return "PUSH"; // incluye el legacy 'APP'
+}
 
 function genId() {
   try {
@@ -574,7 +585,7 @@ export default function Notifications() {
     target: "TEST",
     test_email: "",
     test_phone: "",
-    send_via: "APP",
+    send_via: "PUSH",
     created_at: new Date().toISOString(),
     sent_at: null,
     image_url: null,
@@ -973,7 +984,7 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
               <div style={{ ...cellBase, opacity: 0.9, textAlign: "center" }}>{cat}</div>
 
               <div style={{ ...cellBase, opacity: 0.9, textAlign: "center" }}>
-  {n.send_via === "APP" ? "APP" : n.send_via === "MAIL" ? "MAIL" : "SMS"}
+  {normalizeChannel(n.send_via)}
 </div>
 
               <div style={{ ...cellBase, opacity: 0.95, textAlign: "center" }}>
@@ -1473,7 +1484,7 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
   <span className="label">Canal</span>
   <select
     className="input"
-    value={editing.send_via}
+    value={normalizeChannel(editing.send_via)}
     onChange={(e) => {
       const v = e.target.value as any; // Channel
       setEditing((p) =>
@@ -1489,7 +1500,7 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
       );
     }}
   >
-    <option value="APP">App</option>
+    <option value="PUSH">Push</option>
     <option value="MAIL">Mail</option>
     <option value="SMS">SMS</option>
   </select>
@@ -1533,9 +1544,9 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
   </label>
 ) : null}
 
-{editing.target === "TEST" && editing.send_via === "APP" ? (
+{editing.target === "TEST" && normalizeChannel(editing.send_via) === "PUSH" ? (
   <div style={{ gridColumn: "1 / -1", opacity: 0.75, fontSize: 12 }}>
-    En TEST + APP: por ahora no pide destino. Después lo enchufamos a device/user.
+    En TEST + PUSH: por ahora no pide destino. Después lo enchufamos a device/user.
   </div>
 ) : null}
 

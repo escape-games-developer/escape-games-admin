@@ -349,6 +349,16 @@ export default function Drawer({ open, onClose, userName }: Props) {
                 Progreso de usuarios
               </NavLink>
             )}
+
+            {canSeeUsers && (
+              <NavLink
+                to="/golden-tickets"
+                onClick={onClose}
+                className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
+              >
+                Golden Tickets
+              </NavLink>
+            )}
           </nav>
         </div>
 
