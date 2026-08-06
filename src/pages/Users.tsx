@@ -4,10 +4,13 @@ import { supabase } from "../lib/supabase";
 import GoldenTicketReviewModal from "../components/GoldenTicketReviewModal";
 import { ToastStack, useToasts } from "../components/Toast";
 import {
+  describeGoldenTicketSource,
   fetchGoldenTicketInfo,
   formatDateDDMMYYYY,
+  normalizeGoldenTicketSource,
   revokeGoldenTicket,
   type GoldenTicketInfo,
+  type GoldenTicketSource,
   type PendingRequest,
 } from "../lib/goldenTickets";
 
@@ -49,6 +52,8 @@ type User = {
   branch: Branch | "";
   active: boolean;
   permissions: UserPermissions;
+  goldenActive: boolean;
+  goldenSource: GoldenTicketSource;
   _isStaff: boolean;
 };
 
@@ -116,6 +121,8 @@ function newUserTemplate(): User {
     branch: "",
     active: true,
     permissions: defaultPerms(),
+    goldenActive: false,
+    goldenSource: null,
     _isStaff: false,
   };
 }
@@ -563,7 +570,9 @@ export default function Users() {
     try {
       const { data: profs, error: e1 } = await supabase
         .from("profiles")
-        .select("id,nombre,apellido,alias,mail,role,is_active,created_at,photo_url")
+        .select(
+          "id,nombre,apellido,alias,mail,role,is_active,created_at,photo_url,golden_ticket_active,golden_ticket_source"
+        )
         .order("created_at", { ascending: false });
       if (e1) throw e1;
 
@@ -600,6 +609,8 @@ export default function Users() {
           branch: (branchName as Branch) || "",
           active: p?.is_active ?? true,
           permissions: { ...defaultPerms(), ...(a.permissions || {}) },
+          goldenActive: p?.golden_ticket_active === true,
+          goldenSource: normalizeGoldenTicketSource(p?.golden_ticket_source),
           _isStaff: true,
         };
       });
@@ -617,6 +628,8 @@ export default function Users() {
           branch: "",
           active: p?.is_active ?? true,
           permissions: defaultPerms(),
+          goldenActive: p?.golden_ticket_active === true,
+          goldenSource: normalizeGoldenTicketSource(p?.golden_ticket_source),
           _isStaff: false,
         }));
 
@@ -1100,6 +1113,7 @@ export default function Users() {
                 <div style={{ ...styles.th, ...styles.colUser }}>Usuario</div>
                 <div style={{ ...styles.th, ...styles.colMail }}>Mail</div>
                 <div style={{ ...styles.thCenter, ...styles.colRole }}>Rol</div>
+                <div style={{ ...styles.thCenter, ...styles.colGolden }}>Golden Ticket</div>
                 <div style={{ ...styles.thCenter, ...styles.colBranch }}>Sucursal</div>
                 <div style={{ ...styles.thCenter, ...styles.colAlias }}>Alias</div>
                 <div style={{ ...styles.thCenter, ...styles.colStatus }}>Estado</div>
@@ -1147,6 +1161,32 @@ export default function Users() {
 
                       <div style={{ ...styles.tdCenter, ...styles.colRole }}>
                         <span style={styles.roleBadge}>{roleLabelOf(u.role)}</span>
+                      </div>
+
+                      {/* Sólo informativo: el checkbox no se puede tocar. */}
+                      <div style={{ ...styles.tdCenter, ...styles.colGolden }}>
+                        <span
+                          style={styles.goldenCell}
+                          title={
+                            u.goldenActive
+                              ? `Golden Ticket activo · Origen: ${describeGoldenTicketSource(
+                                  u.goldenSource
+                                )}`
+                              : "Sin Golden Ticket"
+                          }
+                        >
+                          <input
+                            type="checkbox"
+                            checked={u.goldenActive}
+                            readOnly
+                            tabIndex={-1}
+                            aria-readonly="true"
+                            aria-label={
+                              u.goldenActive ? "Con Golden Ticket" : "Sin Golden Ticket"
+                            }
+                            style={styles.goldenCheckbox}
+                          />
+                        </span>
                       </div>
 
                       <div style={{ ...styles.tdCenter, ...styles.colBranch }}>
@@ -1301,6 +1341,9 @@ export default function Users() {
                       Golden Ticket #{goldenInfo.number ?? "—"}
                     </div>
 
+                    <div style={goldenStyles.activeMeta}>
+                      Origen: {describeGoldenTicketSource(goldenInfo.source)}
+                    </div>
                     <div style={goldenStyles.activeMeta}>
                       Otorgado el {formatDateDDMMYYYY(goldenInfo.grantedAt) || "—"}
                     </div>
@@ -1773,7 +1816,7 @@ const styles: Record<string, any> = {
 
   tableHeader: {
     display: "grid",
-    gridTemplateColumns: "2.1fr 2fr 1.2fr 1.2fr 1.1fr 1fr 1.2fr",
+    gridTemplateColumns: "2.1fr 2fr 1.2fr 1fr 1.2fr 1.1fr 1fr 1.2fr",
     gap: 12,
     padding: "16px 18px",
     background: "#111827",
@@ -1787,7 +1830,7 @@ const styles: Record<string, any> = {
 
   row: {
     display: "grid",
-    gridTemplateColumns: "2.1fr 2fr 1.2fr 1.2fr 1.1fr 1fr 1.2fr",
+    gridTemplateColumns: "2.1fr 2fr 1.2fr 1fr 1.2fr 1.1fr 1fr 1.2fr",
     gap: 12,
     padding: "16px 18px",
     borderBottom: "1px solid #172033",
@@ -1833,10 +1876,28 @@ const styles: Record<string, any> = {
   colUser: { minWidth: 220 },
   colMail: { minWidth: 230 },
   colRole: { minWidth: 150 },
+  colGolden: { minWidth: 120 },
   colBranch: { minWidth: 150 },
   colAlias: { minWidth: 140 },
   colStatus: { minWidth: 120 },
   colAction: { minWidth: 160 },
+
+  // El span lleva el tooltip; el input queda inerte (pointerEvents: none), así
+  // el click cae en la fila y no toca el estado del ticket.
+  goldenCell: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "default",
+  },
+
+  goldenCheckbox: {
+    width: 17,
+    height: 17,
+    accentColor: "#f59e0b",
+    pointerEvents: "none",
+    margin: 0,
+  },
 
   userCell: {
     display: "flex",

@@ -9,6 +9,7 @@ import News from ".././pages/News";
 import Users from ".././pages/Users";
 import UserProgressPage from ".././pages/UserProgressPage";
 import GoldenTickets from ".././pages/GoldenTickets";
+import Config from ".././pages/Config";
 
 type UserRole = "CLIENT" | "GM" | "ADMIN" | "ADMIN_GENERAL";
 
@@ -122,6 +123,15 @@ export default function AppRoutes() {
           element={
             <RequirePerm permKey="canManageUsers">
               <GoldenTickets />
+            </RequirePerm>
+          }
+        />
+
+        <Route
+          path="/configuracion"
+          element={
+            <RequirePerm permKey="canManageUsers">
+              <Config />
             </RequirePerm>
           }
         />

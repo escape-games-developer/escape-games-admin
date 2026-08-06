@@ -17,6 +17,21 @@ export const SIGNED_URL_TTL_SECONDS = 3600;
 
 export type RatingScreenshotStatus = "NONE" | "PENDING" | "APPROVED" | "REJECTED";
 
+/** Cómo obtuvo el usuario el Golden Ticket. Lo setea el backend. */
+export type GoldenTicketSource = "RATING_APPROVAL" | "IN_ROOM_QR" | null;
+
+export function normalizeGoldenTicketSource(raw: any): GoldenTicketSource {
+  const v = String(raw ?? "").trim().toUpperCase();
+  if (v === "RATING_APPROVAL" || v === "IN_ROOM_QR") return v;
+  return null;
+}
+
+export function describeGoldenTicketSource(source: GoldenTicketSource): string {
+  if (source === "RATING_APPROVAL") return "Aprobación admin";
+  if (source === "IN_ROOM_QR") return "QR en sala";
+  return "—";
+}
+
 export type PendingRequest = {
   id: string;
   alias: string | null;
@@ -31,6 +46,7 @@ export type PendingRequest = {
 export type GoldenTicketInfo = {
   active: boolean;
   number: number | null;
+  source: GoldenTicketSource;
   grantedAt: string | null;
   expiresAt: string | null;
   redeemedAt: string | null;
@@ -132,7 +148,7 @@ export async function fetchGoldenTicketInfo(
   const { data, error } = await supabase
     .from("profiles")
     .select(
-      "golden_ticket_active, golden_ticket_number, golden_ticket_granted_at, golden_ticket_expires_at, golden_ticket_redeemed_at, rating_screenshot_status, rating_screenshot_rejection_reason, rating_screenshot_url, rating_screenshot_uploaded_at"
+      "golden_ticket_active, golden_ticket_number, golden_ticket_source, golden_ticket_granted_at, golden_ticket_expires_at, golden_ticket_redeemed_at, rating_screenshot_status, rating_screenshot_rejection_reason, rating_screenshot_url, rating_screenshot_uploaded_at"
     )
     .eq("id", userId)
     .maybeSingle();
@@ -146,6 +162,7 @@ export async function fetchGoldenTicketInfo(
     active: row.golden_ticket_active === true,
     number:
       typeof row.golden_ticket_number === "number" ? row.golden_ticket_number : null,
+    source: normalizeGoldenTicketSource(row.golden_ticket_source),
     grantedAt: row.golden_ticket_granted_at ?? null,
     expiresAt: row.golden_ticket_expires_at ?? null,
     redeemedAt: row.golden_ticket_redeemed_at ?? null,
