@@ -13,6 +13,11 @@ const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export const RATING_SCREENSHOTS_BUCKET = "rating_screenshots";
 export const GOLDEN_TICKET_LIMIT = 100;
+
+/** Arte del ticket. Lo usan el modal de gestión y la fila fija de Salas. */
+export const GOLDEN_TICKET_IMAGE_URL =
+  "https://ajabxbciugxjommeyiyi.supabase.co/storage/v1/object/public/public-assets/golden-ticket.png";
+
 export const SIGNED_URL_TTL_SECONDS = 3600;
 
 export type RatingScreenshotStatus = "NONE" | "PENDING" | "APPROVED" | "REJECTED";

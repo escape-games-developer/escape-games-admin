@@ -91,6 +91,17 @@ body{
   min-width: 0;
 }
 
+/*
+  El div raíz que devuelve cada página es un flex item de .content con
+  flex-grow: 0, así que se quedaba del alto de su contenido y abajo asomaba el
+  fondo estrellado del body (visible en Golden Tickets sin pendientes).
+  Con grow: 1 llena el alto disponible; shrink: 0 para no comprimirlo cuando el
+  contenido excede la altura y tiene que scrollear.
+*/
+.content > *{
+  flex: 1 0 auto;
+}
+
 .page{
   display:flex;
   flex-direction:column;
@@ -1248,4 +1259,49 @@ select.input option:checked {
 
 .sheetMenu{
   top: 50px;
+}
+
+/* =========================
+   SPINNER + ACORDEÓN
+========================= */
+
+/* Spinner chico para botones en estado "trabajando" (hereda el color del botón). */
+@keyframes egSpin{ to { transform: rotate(360deg); } }
+
+.egSpinner{
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: .85;
+  flex: 0 0 auto;
+  animation: egSpin .7s linear infinite;
+}
+
+/* El contenido de cada sección se monta/desmonta, así que la transición va en
+   la entrada en vez de animar el alto. */
+@keyframes egSectionIn{
+  from{ opacity: 0; transform: translateY(-4px); }
+  to{ opacity: 1; transform: translateY(0); }
+}
+
+.egSectionBody{
+  animation: egSectionIn .18s ease;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .egSpinner{ animation: none; }
+  .egSectionBody{ animation: none; }
+}
+
+/* Sliders de dificultad / factor sorpresa del form de sala. */
+.rangeInput{
+  width: 100%;
+  height: 42px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  accent-color: #ff6a00;
+  cursor: pointer;
 }

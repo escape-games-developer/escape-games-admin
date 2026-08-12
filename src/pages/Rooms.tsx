@@ -2,8 +2,23 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "../lib/supabase";
 import { QRCodeCanvas } from "qrcode.react";
+import { TEMPLATE_URLS } from "../lib/imageTemplates";
+import { readImageSize, aspectMatches } from "../lib/imageAspect";
+import { useToasts, ToastStack } from "../components/Toast";
+import GoldenTicketManagementModal from "../components/GoldenTicketManagementModal";
+import {
+  fetchGrantedCount,
+  GOLDEN_TICKET_IMAGE_URL,
+  GOLDEN_TICKET_LIMIT,
+} from "../lib/goldenTickets";
 
 type RoomCategory = "WOW" | "CLASICO" | "DESPEDIDA";
+
+const ROOM_CATEGORY_LABEL: Record<RoomCategory, string> = {
+  WOW: "WOW",
+  CLASICO: "Clásico",
+  DESPEDIDA: "Despedida",
+};
 type RoomLevel = "FACIL" | "INTERMEDIO" | "AVANZADO";
 
 type BranchRow = { id: string; name: string };
@@ -13,8 +28,7 @@ type Room = {
   branch_id?: string | null;
 
   cardPhoto: string;
-bannerPhoto: string;
-photoPosition: number;
+  bannerPhoto: string;
 
   name: string;
   slug?: string;
@@ -46,6 +60,7 @@ photoPosition: number;
 type StaffPerms = {
   canManageRooms: boolean;
   canEditRankings: boolean;
+  canManageUsers: boolean;
 };
 
 type MyAuth = {
@@ -89,10 +104,7 @@ const ROOM_THEMES_MULTI = [
   "policial",
 ] as const;
 
-const BOMB_TICKET_QR = "EG-BOMB-2026-NUÑEZ";
-const BOMB_ROW_ID = "__BOMB_ROW__";
-
-const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
+const clamp =(n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const isMMSS = (v: string) => /^\d{2}:\d{2}$/.test(v);
 
 const uniq = (arr: string[]) => Array.from(new Set(arr));
@@ -128,8 +140,7 @@ function fromDb(row: any): Room {
     branch_id: row.branch_id ?? null,
 
     cardPhoto: String(row.card_photo_url || row.photo_url || ""),
-bannerPhoto: String(row.banner_photo_url || row.photo_url || ""),
-photoPosition: typeof row.photo_position === "number" ? Math.round(row.photo_position) : 50,
+    bannerPhoto: String(row.banner_photo_url || row.photo_url || ""),
 
     name: row.name || "",
     slug: row.slug || "",
@@ -192,9 +203,15 @@ function toDb(room: Room) {
     points: clamp(Number(room.points ?? 1), 1, 3),
 
     photo_url: room.bannerPhoto || room.cardPhoto || null,
-card_photo_url: room.cardPhoto || null,
-banner_photo_url: room.bannerPhoto || null,
-photo_position: Math.round(clamp(room.photoPosition ?? 50, 0, 100)),
+    card_photo_url: room.cardPhoto || null,
+    banner_photo_url: room.bannerPhoto || null,
+
+    /* photo_position / photo_zoom son placebo: la app lee photo_position pero
+       nunca la aplica al render, y photo_zoom no la lee nunca. No se pueden
+       mandar en null porque ambas son NOT NULL en rooms_v2, así que se
+       normalizan al default para limpiar valores viejos. */
+    photo_position: 50,
+    photo_zoom: 1,
 
     qr_code: room.qrCode ? room.qrCode.trim() : null,
 
@@ -219,24 +236,145 @@ async function uploadRoomImage(file: File, roomId: string, kind: "card" | "banne
   return data.publicUrl;
 }
 
-function downloadPngFromCanvas(canvasId: string, filename: string) {
-  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
-  if (!canvas) return alert("No encontré el QR (canvas) para exportar.");
+/* =========================
+   QR DE SALA: HOJA PNG + IMPRESIÓN
+   ========================================================================
+   Tanto el PNG como la impresión salen del mismo layout: título arriba, QR
+   grande al medio y código + metadata abajo. El canvas visible del modal es
+   de 320px, así que para exportar se usa uno oculto de 480 y no se escala.
+========================= */
 
-  const dataUrl = canvas.toDataURL("image/png");
-  const a = document.createElement("a");
-  a.href = dataUrl;
-  a.download = filename.endsWith(".png") ? filename : `${filename}.png`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+type RoomQrMeta = {
+  name: string;
+  code: string;
+  branch: string;
+  category: string;
+};
+
+const QR_SHEET_W = 600;
+const QR_SHEET_H = 720;
+const QR_SHEET_PAD = 40;
+const QR_SHEET_QR = 480;
+
+/** Tamaño del canvas oculto que se usa para exportar/imprimir. */
+const QR_EXPORT_SIZE = 480;
+/** Tamaño del QR que se ve en pantalla. */
+const QR_VIEW_SIZE = 320;
+
+const QR_TITLE_FONT = (px: number) =>
+  `800 ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+const QR_MONO_FONT = (px: number) =>
+  `600 ${px}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+const QR_BODY_FONT = (px: number) =>
+  `400 ${px}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+
+const slugify = (s: string) =>
+  String(s || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "qr-sala";
+
+const roomQrMetaLine = (meta: RoomQrMeta) =>
+  [meta.branch, meta.category]
+    .map((x) => String(x || "").trim())
+    .filter(Boolean)
+    .join(" · ");
+
+const escapeHtml = (s: string) =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+/** Baja el tamaño de fuente hasta que el texto entre en el ancho útil. */
+function fitFont(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxW: number,
+  startPx: number,
+  minPx: number,
+  font: (px: number) => string
+) {
+  let px = startPx;
+  ctx.font = font(px);
+
+  while (px > minPx && ctx.measureText(text).width > maxW) {
+    px -= 1;
+    ctx.font = font(px);
+  }
 }
 
-function printPngFromCanvas(canvasId: string, title: string) {
+function downloadRoomQrPng(canvasId: string, meta: RoomQrMeta) {
+  const src = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!src) return alert("No encontré el QR (canvas) para exportar.");
+
+  const out = document.createElement("canvas");
+  out.width = QR_SHEET_W;
+  out.height = QR_SHEET_H;
+
+  const ctx = out.getContext("2d");
+  if (!ctx) return alert("No pude preparar el canvas de exportación.");
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, QR_SHEET_W, QR_SHEET_H);
+
+  const cx = QR_SHEET_W / 2;
+  const usable = QR_SHEET_W - QR_SHEET_PAD * 2;
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+
+  // Título
+  const name = String(meta.name || "Sala").trim();
+  fitFont(ctx, name, usable, 32, 16, QR_TITLE_FONT);
+  ctx.fillStyle = "#0f172a";
+
+  const titleBaseline = QR_SHEET_PAD + 32;
+  ctx.fillText(name, cx, titleBaseline);
+
+  // QR (sin suavizado: los módulos tienen que quedar duros)
+  const qrY = titleBaseline + 24;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(src, cx - QR_SHEET_QR / 2, qrY, QR_SHEET_QR, QR_SHEET_QR);
+
+  // Código
+  let y = qrY + QR_SHEET_QR + 44;
+  fitFont(ctx, meta.code, usable, 20, 10, QR_MONO_FONT);
+  ctx.fillStyle = "#0f172a";
+  ctx.fillText(meta.code, cx, y);
+
+  // Sucursal · categoría
+  const metaLine = roomQrMetaLine(meta);
+  if (metaLine) {
+    y += 30;
+    fitFont(ctx, metaLine, usable, 16, 10, QR_BODY_FONT);
+    ctx.fillStyle = "#475569";
+    ctx.fillText(metaLine, cx, y);
+  }
+
+  out.toBlob((blob) => {
+    if (!blob) return alert("No pude generar el PNG.");
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${slugify(meta.name)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
+function printRoomQrSheet(canvasId: string, meta: RoomQrMeta) {
   const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
   if (!canvas) return alert("No encontré el QR (canvas) para imprimir.");
 
   const dataUrl = canvas.toDataURL("image/png");
+  const metaLine = roomQrMetaLine(meta);
 
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
@@ -254,28 +392,69 @@ function printPngFromCanvas(canvasId: string, title: string) {
     return alert("No pude abrir el frame de impresión.");
   }
 
-  const safeTitle = String(title || "").replace(/[<>]/g, "");
-
   doc.open();
   doc.write(`
     <!doctype html>
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>${safeTitle}</title>
+        <title>${escapeHtml(meta.name)}</title>
         <style>
-          body { font-family: system-ui; padding: 24px; }
-          .wrap { display:flex; flex-direction:column; gap:12px; align-items:flex-start; }
-          img { width: 320px; height: 320px; image-rendering: pixelated; }
-          h2 { margin: 0; }
-          .hint { opacity:.7; font-size:12px; }
+          @page { margin: 12mm; }
+
+          html, body { margin:0; padding:0; background:#fff; }
+
+          body {
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            color:#0f172a;
+          }
+
+          .sheet {
+            width:${QR_SHEET_W}px;
+            max-width:100%;
+            margin:0 auto;
+            padding:${QR_SHEET_PAD}px;
+            box-sizing:border-box;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            text-align:center;
+          }
+
+          h1 { margin:0 0 16px 0; font-size:32px; font-weight:800; line-height:1.15; }
+
+          img.qr {
+            width:${QR_SHEET_QR}px;
+            height:${QR_SHEET_QR}px;
+            max-width:100%;
+            image-rendering: pixelated;
+            display:block;
+          }
+
+          .code {
+            margin-top:24px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size:20px;
+            font-weight:600;
+            word-break:break-all;
+          }
+
+          .meta { margin-top:10px; font-size:16px; color:#475569; }
+
+          /* El iframe sólo tiene esta hoja, pero se deja explícito para que no
+             se cuele nada del user-agent stylesheet al imprimir. */
+          @media print {
+            .sheet { padding:0; page-break-inside: avoid; }
+            img.qr { image-rendering: pixelated; }
+          }
         </style>
       </head>
       <body>
-        <div class="wrap">
-          <h2>${safeTitle}</h2>
-          <img id="qrimg" src="${dataUrl}" />
-          <div class="hint">Imprimí al 100% (sin “ajustar a página”) para mejor lectura.</div>
+        <div class="sheet">
+          <h1>${escapeHtml(meta.name)}</h1>
+          <img class="qr" id="qrimg" src="${dataUrl}" alt="" />
+          <div class="code">${escapeHtml(meta.code)}</div>
+          ${metaLine ? `<div class="meta">${escapeHtml(metaLine)}</div>` : ""}
         </div>
         <script>
           const img = document.getElementById("qrimg");
@@ -289,45 +468,154 @@ function printPngFromCanvas(canvasId: string, title: string) {
   const remove = () => {
     try {
       document.body.removeChild(iframe);
-    } catch {}
+    } catch {
+      // ya se sacó
+    }
   };
+
   iframe.contentWindow?.addEventListener("afterprint", remove);
   setTimeout(remove, 15000);
-}
-
-type BombCardState = { title: string; description: string; imageUrl: string };
-const BOMB_STORAGE_KEY = "eg_admin_bomb_card_v1";
-
-function loadBombCard(): BombCardState {
-  try {
-    const raw = localStorage.getItem(BOMB_STORAGE_KEY);
-    if (!raw) throw new Error("no data");
-    const parsed = JSON.parse(raw);
-    return {
-      title: String(parsed.title || "Bomb Ticket (50% OFF)"),
-      description: String(parsed.description || "QR para imprimir y entregar al cliente."),
-      imageUrl: String(parsed.imageUrl || ""),
-    };
-  } catch {
-    return {
-      title: "Bomb Ticket (50% OFF)",
-      description: "QR para imprimir y entregar al cliente.",
-      imageUrl: "",
-    };
-  }
-}
-
-function saveBombCard(next: BombCardState) {
-  try {
-    localStorage.setItem(BOMB_STORAGE_KEY, JSON.stringify(next));
-  } catch {}
 }
 
 /* =========================
    CROP POPUP (SALAS)
 ========================= */
 
-const ROOM_CARD_ASPECT = 900 / 520;
+/* Aspects reales que usa la app cliente.
+   card   -> rooms_v2.card_photo_url   (listado + salas realizadas, caja 1:1)
+   banner -> rooms_v2.banner_photo_url (vista previa de sala, caja 2.4:1) */
+const ROOM_CARD_ASPECT = 1;
+const ROOM_BANNER_ASPECT = 2.4;
+
+type ImageSlot = "card" | "banner";
+
+const ROOM_IMAGE_SPECS: Record<
+  ImageSlot,
+  { aspect: number; ratioLabel: string; sizeLabel: string; w: number; h: number; templateUrl: string }
+> = {
+  card: {
+    aspect: ROOM_CARD_ASPECT,
+    ratioLabel: "1:1",
+    sizeLabel: "1200 × 1200 px (cuadrado)",
+    w: 1200,
+    h: 1200,
+    templateUrl: TEMPLATE_URLS.roomCard,
+  },
+  banner: {
+    aspect: ROOM_BANNER_ASPECT,
+    ratioLabel: "2.4:1",
+    sizeLabel: "1440 × 600 px (aspect 2.4:1)",
+    w: 1440,
+    h: 600,
+    templateUrl: TEMPLATE_URLS.roomBanner,
+  },
+};
+
+/**
+ * Previa del recorte final: caja con el aspect exacto de la app y un overlay
+ * punteado marcando los bordes de esa caja. Lo que se ve acá es lo que se ve
+ * en la app (el crop siempre es centrado, no hay reencuadre del lado cliente).
+ */
+function CropPreview({ slot, src }: { slot: ImageSlot; src: string }) {
+  const spec = ROOM_IMAGE_SPECS[slot];
+  const title = slot === "banner" ? "Banner (vista previa de sala)" : "Card (listado)";
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, opacity: 0.72, marginBottom: 6 }}>
+        {title} — {spec.ratioLabel}
+      </div>
+
+      <div
+        style={{
+          position: "relative",
+          width: "100%",
+          aspectRatio: String(spec.aspect),
+          borderRadius: 16,
+          overflow: "hidden",
+          border: "1px solid rgba(255,255,255,.12)",
+          background: "rgba(0,0,0,.25)",
+        }}
+      >
+        {src ? (
+          <img
+            src={src}
+            alt={`Previa ${slot}`}
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        ) : (
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              padding: 16,
+              fontSize: 12,
+              opacity: 0.7,
+            }}
+          >
+            Sin imagen {slot === "banner" ? "de banner" : "de card"}.
+          </div>
+        )}
+
+        {/* Bordes de la caja esperada */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            border: "1px dashed rgba(125,211,252,.55)",
+            borderRadius: 16,
+            pointerEvents: "none",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Helper text + link de plantilla + aviso de aspect, por slot. */
+function ImageSpecHelp({ slot, warning }: { slot: ImageSlot; warning?: string }) {
+  const spec = ROOM_IMAGE_SPECS[slot];
+
+  return (
+    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ fontSize: 12, opacity: 0.78 }}>
+        Medidas requeridas: <b>{spec.sizeLabel}</b>
+      </div>
+
+      {spec.templateUrl ? (
+        <a
+          href={spec.templateUrl}
+          download
+          target="_blank"
+          rel="noreferrer"
+          style={{ fontSize: 12, color: "#7dd3fc", textDecoration: "none", width: "fit-content" }}
+        >
+          📐 Descargar plantilla
+        </a>
+      ) : null}
+
+      {warning ? (
+        <div
+          style={{
+            fontSize: 12,
+            lineHeight: 1.4,
+            color: "#fca5a5",
+            border: "1px solid #991b1b",
+            background: "rgba(63,18,20,.55)",
+            borderRadius: 10,
+            padding: "8px 10px",
+          }}
+        >
+          ⚠️ {warning}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 type CropModalState = {
   open: boolean;
@@ -375,6 +663,19 @@ function zoomRect(r: CropRect, nat: NatImg, factor: number, minSize = 80): CropR
   return clampRectToImage(next, nat, minSize);
 }
 
+/** Rect más grande posible con ese aspect, centrado dentro de la imagen. */
+function largestRectForAspect(nat: NatImg, aspect: number): CropRect {
+  let w = nat.w;
+  let h = w / aspect;
+
+  if (h > nat.h) {
+    h = nat.h;
+    w = h * aspect;
+  }
+
+  return { x: (nat.w - w) / 2, y: (nat.h - h) / 2, w, h };
+}
+
 function applyAspectFromAnchor(rect: CropRect, nat: NatImg, handle: Handle, aspect: number, minSize = 80): CropRect {
   let r = { ...rect };
   const controlsW = handle.includes("e") || handle.includes("w");
@@ -390,6 +691,146 @@ function applyAspectFromAnchor(rect: CropRect, nat: NatImg, handle: Handle, aspe
 /* =======================
    ICONOS SVG
 ======================= */
+
+/* =========================
+   ACORDEÓN DEL FORM DE SALA
+   ========================================================================
+   Sólo reorganiza los campos que ya existían: no hay estado del form acá, el
+   `editing` sigue siendo la única fuente de verdad y Guardar manda todo aunque
+   haya secciones cerradas.
+========================= */
+
+type SectionKey = "general" | "categoria" | "imagenes" | "contacto" | "records";
+
+const FORM_SECTIONS: { key: SectionKey; title: string; hint: string }[] = [
+  { key: "general", title: "General", hint: "Nombre, sucursal, estado y descripción" },
+  {
+    key: "categoria",
+    title: "Categoría y dificultad",
+    hint: "Tipo, nivel, temáticas, jugadores y puntaje",
+  },
+  { key: "imagenes", title: "Imágenes", hint: "Card 1200×1200 y banner 1440×600" },
+  { key: "contacto", title: "Contacto y reserva", hint: "Teléfono, link de reserva y QR único" },
+  { key: "records", title: "Récords históricos", hint: "Mejores tiempos publicados (MM:SS)" },
+];
+
+/* Estilos compartidos por los campos del form, para no repetirlos por campo. */
+const formLabelStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 700,
+  color: "#cbd5e1",
+};
+
+const formFieldStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 8,
+  minWidth: 0,
+};
+
+const formPanelStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,.08)",
+  borderRadius: 18,
+  background: "rgba(255,255,255,.03)",
+  padding: 16,
+  minWidth: 0,
+};
+
+/* auto-fit + minmax: 2–3 columnas si entran, apilado en mobile. */
+const formRowStyle = (min: number): React.CSSProperties => ({
+  display: "grid",
+  gridTemplateColumns: `repeat(auto-fit, minmax(${min}px, 1fr))`,
+  gap: 14,
+});
+
+/* Multi-open: abrir una sección no cierra las otras. */
+const INITIAL_SECTIONS: Record<SectionKey, boolean> = {
+  general: true,
+  categoria: false,
+  imagenes: false,
+  contacto: false,
+  records: false,
+};
+
+function FormSection({
+  title,
+  hint,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  hint: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      style={{
+        border: "1px solid rgba(255,255,255,.08)",
+        borderRadius: 8,
+        background: "rgba(255,255,255,.02)",
+        overflow: "hidden",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        style={{
+          width: "100%",
+          padding: 16,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          background: "rgba(255,255,255,.04)",
+          border: "none",
+          borderBottom: `1px solid ${open ? "rgba(255,255,255,.08)" : "transparent"}`,
+          color: "#e2e8f0",
+          font: "inherit",
+          textAlign: "left",
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: 15, fontWeight: 800 }}>{title}</span>
+          <span style={{ display: "block", marginTop: 2, fontSize: 12, color: "#94a3b8" }}>
+            {hint}
+          </span>
+        </span>
+
+        <span
+          aria-hidden="true"
+          style={{
+            display: "inline-flex",
+            flex: "0 0 auto",
+            color: "#94a3b8",
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform .2s ease",
+          }}
+        >
+          <svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+            <path
+              d="M6 9l6 6 6-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </span>
+      </button>
+
+      {open ? (
+        <div className="egSectionBody" style={{ padding: 20 }}>
+          {children}
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 function Icon({
   name,
@@ -596,18 +1037,15 @@ const [editingBannerPhotoFile, setEditingBannerPhotoFile] = useState<File | null
 const [tempCardPreviewUrl, setTempCardPreviewUrl] = useState<string | null>(null);
 const [tempBannerPreviewUrl, setTempBannerPreviewUrl] = useState<string | null>(null);
 
-const [cropTarget, setCropTarget] = useState<"card" | "banner" | null>(null);
+const [cropTarget, setCropTarget] = useState<ImageSlot | null>(null);
 
-  const previewWrapRef = useRef<HTMLDivElement | null>(null);
-  const draggingRef = useRef(false);
-  const dragStartRef = useRef<{ y: number; startPos: number; h: number } | null>(null);
+  /** Aviso de aspect ratio del archivo elegido, por slot. */
+  const [aspectWarn, setAspectWarn] = useState<Partial<Record<ImageSlot, string>>>({});
+
+  const { toasts, toast, dismiss } = useToasts();
 
   const [themesOpen, setThemesOpen] = useState(false);
   const themesWrapRef = useRef<HTMLDivElement | null>(null);
-
-  const [bombEditing, setBombEditing] = useState(false);
-  const [bomb, setBomb] = useState<BombCardState>(() => loadBombCard());
-  const bombFileRef = useRef<HTMLInputElement | null>(null);
 
   const [descModal, setDescModal] = useState<{ title: string; text: string } | null>(null);
 
@@ -619,10 +1057,60 @@ const [cropTarget, setCropTarget] = useState<"card" | "banner" | null>(null);
   } | null>(null);
 
   const [qrModal, setQrModal] = useState<{
-    title: string;
+    name: string;
     value: string;
+    /** Canvas visible del modal. */
     canvasId: string;
+    /** Canvas oculto a 480px que alimenta el PNG y la impresión. */
+    exportCanvasId: string;
+    code: string;
+    branch: string;
+    category: string;
   } | null>(null);
+
+  /* Acordeón del form de sala: multi-open, sin persistir. */
+  const [openSections, setOpenSections] =
+    useState<Record<SectionKey, boolean>>(INITIAL_SECTIONS);
+
+  /* Para poder saltar al campo que falló la validación aunque su sección esté
+     cerrada. */
+  const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  const toggleSection = (key: SectionKey) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  const setFieldRef = (key: string) => (el: HTMLElement | null) => {
+    fieldRefs.current[key] = el;
+  };
+
+  /**
+   * Abre la sección del campo, hace scroll hasta él y lo enfoca. El `alert` de
+   * la validación bloquea el hilo, así que el timeout corre recién cuando el
+   * usuario lo cierra: para entonces React ya montó la sección.
+   */
+  const focusFormField = (section: SectionKey, field: string) => {
+    setOpenSections((prev) => (prev[section] ? prev : { ...prev, [section]: true }));
+
+    setTimeout(() => {
+      const el = fieldRefs.current[field];
+      if (!el) return;
+
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      if (typeof el.focus === "function") el.focus({ preventScroll: true });
+    }, 150);
+  };
+
+  /** Corta el submit avisando y llevando al campo culpable. */
+  const failField = (section: SectionKey, field: string, message: string) => {
+    focusFormField(section, field);
+    alert(message);
+  };
+
+  const [goldenOpen, setGoldenOpen] = useState(false);
+  const [goldenGranted, setGoldenGranted] = useState<number | null>(null);
+  /* El PNG puede no estar subido todavía: si falla, va el placeholder dorado. */
+  const [goldenImgFailed, setGoldenImgFailed] = useState(false);
 
   const [me, setMe] = useState<MyAuth>({
     isAuthed: false,
@@ -630,7 +1118,7 @@ const [cropTarget, setCropTarget] = useState<"card" | "banner" | null>(null);
     isGM: false,
     isBranchScoped: false,
     branchId: null,
-    perms: { canManageRooms: false, canEditRankings: false },
+    perms: { canManageRooms: false, canEditRankings: false, canManageUsers: false },
     ready: false,
   });
 
@@ -655,6 +1143,10 @@ const [cropTarget, setCropTarget] = useState<"card" | "banner" | null>(null);
 
   const canCreateRoom = me.isSuper || me.perms.canManageRooms;
   const canManageRoomFull = me.isSuper || me.perms.canManageRooms;
+
+  /* Golden Tickets vive como card clickeable acá adentro; el permiso es el
+     mismo que gobernaba la vieja página. */
+  const canSeeGoldenTickets = me.isSuper || me.perms.canManageUsers;
 
 const canEditRankings =
   me.isSuper ||
@@ -809,7 +1301,6 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       setThemesOpen(false);
-      setBombEditing(false);
       setDescModal(null);
       setRecordsModal(null);
       setQrModal(null);
@@ -824,10 +1315,6 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
       document.removeEventListener("keydown", onKey);
     };
   }, [themesOpen, cropModal?.open]);
-
-  useEffect(() => {
-    saveBombCard(bomb);
-  }, [bomb]);
 
   useEffect(() => {
     let mounted = true;
@@ -876,7 +1363,11 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
               isGM: false,
               isBranchScoped: false,
               branchId: null,
-              perms: { canManageRooms: false, canEditRankings: false },
+              perms: {
+                canManageRooms: false,
+                canEditRankings: false,
+                canManageUsers: false,
+              },
               ready: true,
             });
           }
@@ -892,6 +1383,7 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
         const perms: StaffPerms = {
           canManageRooms: Boolean((permsRaw as any).canManageRooms),
           canEditRankings: Boolean((permsRaw as any).canEditRankings),
+          canManageUsers: Boolean((permsRaw as any).canManageUsers),
         };
 
         if (mounted) {
@@ -957,6 +1449,28 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
       mounted = false;
     };
   }, [me.ready, me.isBranchScoped, me.branchId]);
+
+  /* Sólo el contador de la stat card: el resto de las queries de Golden Tickets
+     (secret, pendientes) se hacen recién al abrir el modal. */
+  useEffect(() => {
+    if (!me.ready || !canSeeGoldenTickets) return;
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        const count = await fetchGrantedCount();
+        if (mounted) setGoldenGranted(count);
+      } catch (e) {
+        console.error("golden ticket count failed", e);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [me.ready, canSeeGoldenTickets]);
+
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (!menuOpenId) return;
@@ -1007,7 +1521,6 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
     totalRooms: filtered.length,
     activeRooms: filtered.filter((r) => r.active).length,
     inactiveRooms: filtered.filter((r) => !r.active).length,
-    bombCards: 1,
   }), [filtered]);
 
   const toggleTheme = (t: string) => {
@@ -1072,7 +1585,6 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
 
       cardPhoto: "",
       bannerPhoto: "",
-      photoPosition: 50,
 
       name: "",
       slug: "",
@@ -1107,6 +1619,9 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
     setTempCardPreviewUrl(null);
     setTempBannerPreviewUrl(null);
     setCropTarget(null);
+
+    setOpenSections(INITIAL_SECTIONS);
+    fieldRefs.current = {};
 
     setOpen(true);
   };
@@ -1185,6 +1700,9 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
     setTempBannerPreviewUrl(null);
     setCropTarget(null);
 
+    setOpenSections(INITIAL_SECTIONS);
+    fieldRefs.current = {};
+
     setOpen(true);
   };
 const onPickCardImage = () => {
@@ -1196,7 +1714,7 @@ const onPickBannerImage = () => {
   setCropTarget("banner");
   bannerFileRef.current?.click();
 };
-  const openCropperForFile = (file: File) => {
+  const openCropperForFile = (file: File, slot: ImageSlot) => {
     const url = URL.createObjectURL(file);
 
     setNatImg(null);
@@ -1212,13 +1730,9 @@ const onPickBannerImage = () => {
       const nat = { w: img.naturalWidth || 1, h: img.naturalHeight || 1 };
       setNatImg(nat);
 
-      const margin = 0.1;
-      const init: CropRect = {
-        x: nat.w * margin,
-        y: nat.h * margin,
-        w: nat.w * (1 - margin * 2),
-        h: nat.h * (1 - margin * 2),
-      };
+      /* Arranca con el recorte más grande posible que respete el aspect
+         del slot, centrado. */
+      const init = largestRectForAspect(nat, ROOM_IMAGE_SPECS[slot].aspect);
 
       setCropRect(clampRectToImage(init, nat, 80));
     };
@@ -1232,19 +1746,18 @@ const onPickBannerImage = () => {
     img.src = url;
   };
 
-  const onFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+  const onFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
   if (!canManageRoomFull) {
     e.target.value = "";
-    return alert("No tenés permiso para cambiar la imagen.");
+    return toast("error", "No tenés permiso para cambiar la imagen.");
   }
 
   const file = e.target.files?.[0] || null;
   if (!file) return;
 
   if (!file.type.startsWith("image/")) {
-    alert("Elegí una imagen (JPG/PNG/WebP).");
     e.target.value = "";
-    return;
+    return toast("error", "Elegí una imagen (JPG/PNG/WebP).");
   }
 
   if (!editing) {
@@ -1252,13 +1765,39 @@ const onPickBannerImage = () => {
     return;
   }
 
-  if (!cropTarget) {
+  const slot = cropTarget;
+  if (!slot) {
     e.target.value = "";
-    return alert("No se definió el destino de la imagen.");
+    return toast("error", "No se definió el destino de la imagen.");
   }
 
-  openCropperForFile(file);
   e.target.value = "";
+
+  const spec = ROOM_IMAGE_SPECS[slot];
+
+  let size: { w: number; h: number };
+  try {
+    size = await readImageSize(file);
+  } catch {
+    return toast("error", "No pude leer la imagen.");
+  }
+
+  const ratio = size.w / size.h;
+
+  if (aspectMatches(ratio, spec.aspect)) {
+    setAspectWarn((prev) => ({ ...prev, [slot]: undefined }));
+  } else {
+    const msg =
+      `Aspect ratio inválido. Necesita ${spec.ratioLabel} (ej: ${spec.w}×${spec.h}). ` +
+      `La imagen que elegiste es ${size.w}×${size.h} (${ratio.toFixed(2)}:1).`;
+
+    setAspectWarn((prev) => ({ ...prev, [slot]: msg }));
+    toast("error", `${msg} Recortala en el editor para poder usarla.`, 8000);
+  }
+
+  /* Se abre igual: el recorte queda bloqueado al aspect correcto, así que
+     el resultado siempre sale con el ratio que espera la app. */
+  openCropperForFile(file, slot);
 };
 
  const removeCardImage = () => {
@@ -1282,49 +1821,10 @@ const removeBannerImage = () => {
   if (tempBannerPreviewUrl) URL.revokeObjectURL(tempBannerPreviewUrl);
   setTempBannerPreviewUrl(null);
 
-  setEditing((prev) =>
-    prev
-      ? {
-          ...prev,
-          bannerPhoto: "",
-          photoPosition: 50,
-        }
-      : prev
-  );
+  setEditing((prev) => (prev ? { ...prev, bannerPhoto: "" } : prev));
 
   if (bannerFileRef.current) bannerFileRef.current.value = "";
 };
-
-  const onPreviewMouseDown: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    if (!editing?.bannerPhoto) return;
-    if (!canManageRoomFull) return;
-
-    const el = previewWrapRef.current;
-    if (!el) return;
-
-    draggingRef.current = true;
-    const rect = el.getBoundingClientRect();
-    dragStartRef.current = {
-      y: e.clientY,
-      startPos: editing.photoPosition ?? 50,
-      h: Math.max(1, rect.height),
-    };
-  };
-
-  const onPreviewMouseMove: React.MouseEventHandler<HTMLDivElement> = (e) => {
-    if (!draggingRef.current || !dragStartRef.current || !editing) return;
-    if (!canManageRoomFull) return;
-
-    const dy = e.clientY - dragStartRef.current.y;
-    const delta = (dy / dragStartRef.current.h) * 100;
-    const next = Math.round(clamp(dragStartRef.current.startPos + delta, 0, 100));
-    setEditing({ ...editing, photoPosition: next });
-  };
-
-  const endDrag = () => {
-    draggingRef.current = false;
-    dragStartRef.current = null;
-  };
 
   const copy = async (text: string) => {
     try {
@@ -1439,10 +1939,13 @@ const removeBannerImage = () => {
     cursorRef.current = "default";
   };
 
+  /** Aspect al que está bloqueado el recorte según el slot en edición. */
+  const cropAspect = ROOM_IMAGE_SPECS[cropTarget ?? "card"].aspect;
+
   const applyMaxCrop = () => {
     if (!natImg) return;
-    const full: CropRect = { x: 0, y: 0, w: natImg.w, h: natImg.h };
-    setCropRect(clampRectToImage(full, natImg, 80));
+    /* "Máximo" respetando el aspect del slot, no la imagen entera. */
+    setCropRect(clampRectToImage(largestRectForAspect(natImg, cropAspect), natImg, 80));
   };
 
   const onCropStageMouseDown: React.MouseEventHandler<HTMLDivElement> = (e) => {
@@ -1536,7 +2039,9 @@ const removeBannerImage = () => {
 
       next = clampRectToImage(next, natImg, 80);
 
-      if (e.shiftKey) next = applyAspectFromAnchor(next, natImg, h, ROOM_CARD_ASPECT, 80);
+      /* El recorte queda siempre bloqueado al aspect del slot: la app no
+         puede reencuadrar, así que lo que sale de acá tiene que ser exacto. */
+      next = applyAspectFromAnchor(next, natImg, h, cropAspect, 80);
 
       setCropRect(next);
       return;
@@ -1586,15 +2091,19 @@ const removeBannerImage = () => {
 
       const rect = clampRectToImage(cropRect, natImg, 80);
 
+      /* Se exporta a las medidas exactas que espera la app, así el archivo
+         que llega al bucket ya tiene el aspect correcto sí o sí. */
+      const spec = ROOM_IMAGE_SPECS[cropTarget ?? "card"];
+
       const canvas = document.createElement("canvas");
-      canvas.width = Math.round(rect.w);
-      canvas.height = Math.round(rect.h);
+      canvas.width = spec.w;
+      canvas.height = spec.h;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("No pude abrir canvas para recortar.");
 
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+      ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, spec.w, spec.h);
 
       const blob: Blob = await new Promise((resolve, reject) => {
         canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("No pude exportar el recorte."))), "image/jpeg", 0.9);
@@ -1626,21 +2135,17 @@ if (cropTarget === "banner") {
   if (tempBannerPreviewUrl) URL.revokeObjectURL(tempBannerPreviewUrl);
   setTempBannerPreviewUrl(prevUrl);
 
-  setEditing((prev) =>
-    prev
-      ? {
-          ...prev,
-          bannerPhoto: prevUrl,
-          photoPosition: 50,
-        }
-      : prev
-  );
+  setEditing((prev) => (prev ? { ...prev, bannerPhoto: prevUrl } : prev));
 }
+
+/* El recorte ya salió con el aspect exacto: se limpia el aviso. */
+if (cropTarget) setAspectWarn((prev) => ({ ...prev, [cropTarget]: undefined }));
+
 setCropTarget(null);
       closeCropModal();
     } catch (err: any) {
       console.error(err);
-      alert(err?.message || "Error recortando imagen.");
+      toast("error", err?.message || "Error recortando imagen.");
     }
   };
 
@@ -1662,22 +2167,35 @@ setCropTarget(null);
       editing.branch_id = me.branchId;
       editing.branch = myBranchName || editing.branch || "";
     } else {
-      if (!resolvedBranchId) return alert("Elegí una sucursal válida.");
+      if (!resolvedBranchId) {
+        return failField("general", "branch", "Elegí una sucursal válida.");
+      }
       editing.branch_id = resolvedBranchId;
       editing.branch = branchesById.get(resolvedBranchId) || editing.branch || "";
     }
 
-    if (!editing.name.trim()) return alert("Poné el nombre de la sala.");
-    if (editing.reserveUrl && !isHttpUrl(editing.reserveUrl)) {
-      return alert("El link de reserva debe empezar con http/https (ej: https://...).");
+    if (!editing.name.trim()) {
+      return failField("general", "name", "Poné el nombre de la sala.");
     }
-    if (!String(editing.qrCode || "").trim()) return alert("El QR único no puede quedar vacío.");
-    if (!isMMSS(editing.record1) || !isMMSS(editing.record2)) {
-      return alert("Récord debe ser MM:SS (ej: 12:34).");
+    if (editing.reserveUrl && !isHttpUrl(editing.reserveUrl)) {
+      return failField(
+        "contacto",
+        "reserveUrl",
+        "El link de reserva debe empezar con http/https (ej: https://...)."
+      );
+    }
+    if (!String(editing.qrCode || "").trim()) {
+      return failField("contacto", "qrCode", "El QR único no puede quedar vacío.");
+    }
+    if (!isMMSS(editing.record1)) {
+      return failField("records", "record1", "Récord 1 debe ser MM:SS (ej: 12:34).");
+    }
+    if (!isMMSS(editing.record2)) {
+      return failField("records", "record2", "Récord 2 debe ser MM:SS (ej: 12:34).");
     }
 
     if (isNew && !editingCardPhotoFile && !editingBannerPhotoFile && !editing.cardPhoto && !editing.bannerPhoto) {
-      return alert("Seleccioná al menos una imagen para la sala.");
+      return failField("imagenes", "cardPhoto", "Seleccioná al menos una imagen para la sala.");
     }
 
     setSaving(true);
@@ -1796,25 +2314,6 @@ setCropTarget(null);
     }
   };  
 
-  const onBombPickImage = () => bombFileRef.current?.click();
-
-  const onBombFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    const file = e.target.files?.[0] || null;
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      alert("Elegí una imagen (JPG/PNG/WebP).");
-      e.target.value = "";
-      return;
-    }
-
-    const url = URL.createObjectURL(file);
-    setBomb((prev) => ({ ...prev, imageUrl: url }));
-    e.target.value = "";
-  };
-
-  const canEditBomb = !me.isBranchScoped && (me.isSuper || me.perms.canManageRooms);
-
   const cropRectStyle = useMemo(() => {
     if (!natImg || !cropRect || !cropModal?.open) return null;
     const sr = natToScreenRect(cropRect);
@@ -1863,9 +2362,36 @@ const tdBase: React.CSSProperties = {
   verticalAlign: "middle",
 };
 
-  const openQr = (title: string, value: string) => {
-    const canvasId = `qr_modal_canvas_${crypto.randomUUID()}`;
-    setQrModal({ title, value, canvasId });
+/* Tinte dorado propio para que la fila fija se lea como fijada y no como
+   una sala más del listado. */
+const GOLDEN_ROW_BG = "rgba(255,190,60,0.06)";
+const GOLDEN_ROW_BG_HOVER = "rgba(255,190,60,0.12)";
+
+const statCardStyle: React.CSSProperties = {
+  border: "1px solid #1f2937",
+  borderRadius: 18,
+  background: "#0b1220",
+  padding: 18,
+  color: "#cbd5e1",
+  minHeight: 92,
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "space-between",
+  boxSizing: "border-box",
+};
+
+  const openQr = (room: Room, value: string) => {
+    const uid = crypto.randomUUID();
+
+    setQrModal({
+      name: room.name || "QR Sala",
+      value,
+      canvasId: `qr_modal_canvas_${uid}`,
+      exportCanvasId: `qr_export_canvas_${uid}`,
+      code: value,
+      branch: room.branch || "",
+      category: ROOM_CATEGORY_LABEL[room.category] || room.category || "",
+    });
   };
 
 return (
@@ -1970,7 +2496,7 @@ return (
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(180px, 1fr))",
+          gridTemplateColumns: "repeat(3, minmax(180px, 1fr))",
           gap: 12,
           marginBottom: 14,
         }}
@@ -1979,21 +2505,10 @@ return (
           ["Salas visibles", totals.totalRooms],
           ["Salas activas", totals.activeRooms],
           ["Salas inactivas", totals.inactiveRooms],
-          ["Bomb Ticket", totals.bombCards],
         ].map(([label, value]) => (
           <div
             key={String(label)}
-            style={{
-              border: "1px solid #1f2937",
-              borderRadius: 18,
-              background: "#0b1220",
-              padding: 18,
-              color: "#cbd5e1",
-              minHeight: 92,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-            }}
+            style={statCardStyle}
           >
             <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 700 }}>{label}</span>
             <strong style={{ fontSize: 22, fontWeight: 800, color: "#fff", lineHeight: 1 }}>
@@ -2033,152 +2548,118 @@ return (
             </thead>
 
             <tbody>
-              <tr
-                style={{ background: "rgba(255,255,255,0.02)" }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLTableRowElement).style.background = "rgba(255,255,255,0.04)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLTableRowElement).style.background = "rgba(255,255,255,0.02)";
-                }}
-              >
-                <td style={{ ...tdBase, padding: 8 }}>
-                  <div
-                    style={{
-                      width: 56,
-                      height: 38,
-                      borderRadius: 10,
-                      overflow: "hidden",
-                      border: "1px solid rgba(255,255,255,.12)",
-                      background: "rgba(0,0,0,.35)",
-                    }}
-                  >
-                    <img
-                      src={bomb.imageUrl || "https://picsum.photos/seed/bombticket/900/520"}
-                      alt={bomb.title}
-                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/seed/bombticket/900/520";
+              {/* Fila fija: no sale de `items`, así que ignora búsqueda, filtro de
+                  sucursal y orden, y no entra en los contadores de arriba. */}
+              {canSeeGoldenTickets ? (
+                <tr
+                  onClick={() => setGoldenOpen(true)}
+                  style={{ background: GOLDEN_ROW_BG, cursor: "pointer" }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLTableRowElement).style.background = GOLDEN_ROW_BG_HOVER;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLTableRowElement).style.background = GOLDEN_ROW_BG;
+                  }}
+                  title="Gestionar Golden Tickets"
+                >
+                  <td style={{ ...tdBase, padding: 8 }}>
+                    <div
+                      style={{
+                        width: 56,
+                        height: 38,
+                        borderRadius: 10,
+                        overflow: "hidden",
+                        border: "1px solid rgba(255,190,60,.35)",
+                        background: "rgba(0,0,0,.35)",
                       }}
-                    />
-                  </div>
-                </td>
+                    >
+                      {goldenImgFailed ? (
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            background: "linear-gradient(180deg, #f0c040 0%, #b8860b 100%)",
+                            color: "#3b2600",
+                            fontSize: 13,
+                            fontWeight: 900,
+                            letterSpacing: 0.5,
+                          }}
+                        >
+                          GT
+                        </div>
+                      ) : (
+                        <img
+                          src={GOLDEN_TICKET_IMAGE_URL}
+                          alt="Golden Ticket"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                          onError={() => setGoldenImgFailed(true)}
+                        />
+                      )}
+                    </div>
+                  </td>
 
-                <td style={{ ...tdBase }} title={bomb.title}>
-                  <div
-                    style={{
-                      fontWeight: 900,
-                      fontSize: 13,
-                      color: "rgba(255,255,255,.92)",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {bomb.title || "Bomb Ticket"}
-                  </div>
-                </td>
+                  <td style={{ ...tdBase }} title="Golden Ticket">
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        fontSize: 13,
+                        color: "rgba(255,255,255,.92)",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      Golden Ticket
+                    </div>
+                    <div style={{ marginTop: 4, fontSize: 11.5, color: "#94a3b8" }}>
+                      {goldenGranted == null
+                        ? `— / ${GOLDEN_TICKET_LIMIT} otorgados`
+                        : `${goldenGranted} / ${GOLDEN_TICKET_LIMIT} otorgados`}
+                    </div>
+                  </td>
 
-                <td style={{ ...tdBase }}>—</td>
-                <td style={{ ...tdBase }}>—</td>
-                <td style={{ ...tdBase }}>—</td>
-                <td style={{ ...tdBase }}>—</td>
-                <td style={{ ...tdBase }}>—</td>
-                <td style={{ ...tdBase }}>—</td>
-                <td style={{ ...tdBase }}>—</td>
-                <td style={{ ...tdBase }}>{badge("ACTIVA", "on")}</td>
+                  <td style={{ ...tdBase }}>—</td>
+                  <td style={{ ...tdBase }}>{badge("GOLDEN", "hot")}</td>
+                  <td style={{ ...tdBase }}>—</td>
+                  <td style={{ ...tdBase }}>—</td>
+                  <td style={{ ...tdBase }}>—</td>
+                  <td style={{ ...tdBase }}>—</td>
+                  <td style={{ ...tdBase }}>—</td>
+                  <td style={{ ...tdBase }}>{badge("ACTIVA", "on")}</td>
 
-                <td style={{ ...tdBase, textAlign: "center", padding: 8 }}>
-                  <button
-                    type="button"
-                    className="ghostBtn"
-                    data-menu-btn="1"
-                    onClick={(e) => {
-                      if (saving) return;
-                      const btn = e.currentTarget as HTMLButtonElement;
-                      if (menuOpenId === BOMB_ROW_ID) {
-                        closeMenu();
-                        return;
-                      }
-                      openMenuFor(BOMB_ROW_ID, btn);
-                    }}
-                    style={{
-                      padding: "8px 10px",
-                      borderRadius: 12,
-                      background: "rgba(0,0,0,0.55)",
-                      border: "1px solid rgba(255,255,255,0.14)",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                    title="Opciones"
-                    aria-label="Opciones"
-                  >
-                    <Icon name="dots" size={16} />
-                  </button>
-
-                  {menuOpenId === BOMB_ROW_ID && menuPos
-  ? createPortal(
-      <div
-        data-menu-popup="1"
-        style={{
-          ...portalMenuStyle,
-          top: menuPos.top,
-          left: menuPos.left,
-        }}
-        onMouseDown={(ev) => ev.stopPropagation()}
-      >
-        <button
-          type="button"
-          style={portalItemStyle}
-          onClick={() => {
-            closeMenu();
-            openQr(bomb.title || "Bomb Ticket", BOMB_TICKET_QR);
-          }}
-          onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
-          onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
-        >
-          <Icon name="qr" size={16} />
-          Ver QR (copiar / imprimir)
-        </button>
-
-        <button
-          type="button"
-          style={portalItemStyle}
-          onClick={async () => {
-            closeMenu();
-            await copy(BOMB_TICKET_QR);
-          }}
-          onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
-          onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
-        >
-          <Icon name="copy" size={16} />
-          Copiar valor QR
-        </button>
-
-        {canEditBomb ? <div style={portalDividerStyle} /> : null}
-
-        {canEditBomb ? (
-          <button
-            type="button"
-            style={portalItemStyle}
-            onClick={() => {
-              closeMenu();
-              setBombEditing(true);
-            }}
-            onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
-            onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
-          >
-            <Icon name="edit" size={16} />
-            Editar Bomb Ticket
-          </button>
-        ) : null}
-      </div>,
-      document.body
-    )
-  : null}
-                </td>
-              </tr>
+                  <td style={{ ...tdBase, textAlign: "center", padding: 8 }}>
+                    <button
+                      type="button"
+                      className="ghostBtn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setGoldenOpen(true);
+                      }}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: 12,
+                        background: "rgba(0,0,0,0.55)",
+                        border: "1px solid rgba(255,190,60,0.35)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                      title="Gestionar Golden Tickets"
+                      aria-label="Gestionar Golden Tickets"
+                    >
+                      <Icon name="qr" size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ) : null}
 
               {loading ? (
                 <tr>
@@ -2196,7 +2677,6 @@ return (
                 filtered.map((r, idx) => {
                   const rowBg = idx % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.00)";
                   const branchName = r.branch || (r.branch_id ? branchesById.get(r.branch_id) || "" : "");
-                  const qrValue = String(r.qrCode || "").trim() || makeRoomQr(r.id);
 
                   return (
                     <tr
@@ -2227,7 +2707,6 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                               width: "100%",
                               height: "100%",
                               objectFit: "cover",
-                              objectPosition: `50% ${r.photoPosition}%`,
                               display: "block",
                             }}
                             onError={(e) => {
@@ -2396,7 +2875,7 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                 style={portalItemStyle}
                 onClick={() => {
                   closeMenu();
-                  openQr(r.name || "QR Sala", qrValue);
+                  openQr(r, qrValue);
                 }}
                 onMouseEnter={(e) => menuItemHoverOn(e.currentTarget)}
                 onMouseLeave={(e) => menuItemHoverOff(e.currentTarget)}
@@ -2523,61 +3002,138 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
      {qrModal ? (
   <>
     <div className="backdrop show" onMouseDown={() => setQrModal(null)} />
-    <div className="modalCenter" onMouseDown={() => setQrModal(null)}>
-      <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+    <div
+      className="modalCenter"
+      onMouseDown={() => setQrModal(null)}
+      style={{ alignItems: "center" }}
+    >
+      <div
+        className="modalBox"
+        onMouseDown={(e) => e.stopPropagation()}
+        style={{ width: "min(600px, 94vw)", maxWidth: 600 }}
+      >
         <div className="modalHead">
-          <div className="modalTitle">QR</div>
+          <div className="modalTitle">QR de {qrModal.name}</div>
           <button className="iconBtn" onClick={() => setQrModal(null)} aria-label="Cerrar">
             ✕
           </button>
         </div>
-        <div className="modalBody">
-          <div style={{ fontWeight: 900, fontSize: 14, marginBottom: 10 }}>{qrModal.title}</div>
 
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <div
+        {/* Sin scroll interno: el contenido está acotado a mano. */}
+        <div
+          className="modalBody"
+          style={{
+            overflow: "visible",
+            maxHeight: "none",
+            padding: "20px 16px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+          }}
+        >
+          <h2
+            style={{
+              margin: "0 0 16px 0",
+              fontSize: 24,
+              fontWeight: 900,
+              lineHeight: 1.2,
+              color: "#fff",
+            }}
+          >
+            {qrModal.name}
+          </h2>
+
+          <div
+            style={{
+              borderRadius: 14,
+              overflow: "hidden",
+              border: "1px solid rgba(255,255,255,.12)",
+              background: "#fff",
+              padding: 12,
+              lineHeight: 0,
+            }}
+          >
+            <QRCodeCanvas
+              id={qrModal.canvasId}
+              value={qrModal.value}
+              size={QR_VIEW_SIZE}
+              includeMargin
+              bgColor="#ffffff"
+              fgColor="#000000"
               style={{
-                borderRadius: 14,
-                overflow: "hidden",
-                border: "1px solid rgba(255,255,255,.12)",
-                background: "rgba(255,255,255,.96)",
-                padding: 10,
+                width: "min(320px, 62vw)",
+                height: "min(320px, 62vw)",
+                display: "block",
               }}
-            >
-              <QRCodeCanvas
-                id={qrModal.canvasId}
-                value={qrModal.value}
-                size={160}
-                includeMargin
-                bgColor="#ffffff"
-                fgColor="#000000"
-              />
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button className="ghostBtn" onClick={() => copy(qrModal.value)}>
-                Copiar valor QR
-              </button>
-              <button
-                className="ghostBtn"
-                onClick={() => downloadPngFromCanvas(qrModal.canvasId, `qr-${Date.now()}.png`)}
-              >
-                Descargar PNG
-              </button>
-              <button className="ghostBtn" onClick={() => printPngFromCanvas(qrModal.canvasId, qrModal.title)}>
-                Imprimir
-              </button>
-            </div>
+            />
           </div>
 
-          <div style={{ marginTop: 12, opacity: 0.75, fontSize: 12 }}>
-            Valor: <span style={{ fontFamily: "monospace" }}>{qrModal.value}</span>
+          <div
+            style={{
+              marginTop: 14,
+              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+              fontSize: 13,
+              color: "#cbd5e1",
+              wordBreak: "break-all",
+            }}
+          >
+            {qrModal.code}
+          </div>
+
+          {roomQrMetaLine(qrModal) ? (
+            <div style={{ marginTop: 6, fontSize: 13, color: "#94a3b8" }}>
+              {roomQrMetaLine(qrModal)}
+            </div>
+          ) : null}
+
+          {/* Copia oculta a 480px: es la que se exporta e imprime, para que el
+              PNG no salga de escalar el QR chico de pantalla. */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              width: 0,
+              height: 0,
+              overflow: "hidden",
+              opacity: 0,
+              pointerEvents: "none",
+            }}
+          >
+            <QRCodeCanvas
+              id={qrModal.exportCanvasId}
+              value={qrModal.value}
+              size={QR_EXPORT_SIZE}
+              includeMargin
+              bgColor="#ffffff"
+              fgColor="#000000"
+            />
           </div>
         </div>
 
-        <div className="modalFoot">
-          <button className="ghostBtn" onClick={() => setQrModal(null)}>
-            Cerrar
+        <div className="modalFoot" style={{ justifyContent: "center", flexWrap: "wrap" }}>
+          <button
+            className="ghostBtn"
+            onClick={() => downloadRoomQrPng(qrModal.exportCanvasId, qrModal)}
+          >
+            Descargar PNG
+          </button>
+
+          <button
+            className="ghostBtn"
+            onClick={() => printRoomQrSheet(qrModal.exportCanvasId, qrModal)}
+          >
+            Imprimir
+          </button>
+
+          <button
+            className="ghostBtn"
+            onClick={async () => {
+              await copy(qrModal.value);
+              toast("success", "Link del QR copiado");
+            }}
+          >
+            Copiar link
           </button>
         </div>
       </div>
@@ -2633,66 +3189,6 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
           </button>
           <button className="btnSmall" onClick={saveRecords} disabled={saving}>
             {saving ? "Guardando…" : "Guardar"}
-          </button>
-        </div>
-      </div>
-    </div>
-  </>
-) : null}
-
-{bombEditing && canEditBomb ? (
-  <>
-    <div className="backdrop show" onMouseDown={() => setBombEditing(false)} />
-    <div className="modalCenter" onMouseDown={() => setBombEditing(false)}>
-      <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="modalHead">
-          <div className="modalTitle">Editar Bomb Ticket</div>
-          <button className="iconBtn" onClick={() => setBombEditing(false)} aria-label="Cerrar">
-            ✕
-          </button>
-        </div>
-
-        <div className="modalBody">
-          <input ref={bombFileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onBombFileChange} />
-
-          <div className="formGrid2">
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span className="label">Título</span>
-              <input className="input" value={bomb.title} onChange={(e) => setBomb((p) => ({ ...p, title: e.target.value }))} />
-            </label>
-
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span className="label">Descripción</span>
-              <textarea
-                className="input"
-                rows={3}
-                value={bomb.description}
-                onChange={(e) => setBomb((p) => ({ ...p, description: e.target.value }))}
-                style={{ resize: "vertical" }}
-              />
-            </label>
-
-            <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <span className="label">Imagen</span>
-              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <button type="button" className="btnSmall" onClick={onBombPickImage}>
-                  Elegir imagen…
-                </button>
-                {bomb.imageUrl ? (
-                  <button type="button" className="ghostBtn" onClick={() => setBomb((p) => ({ ...p, imageUrl: "" }))}>
-                    Quitar
-                  </button>
-                ) : (
-                  <span style={{ opacity: 0.8, fontSize: 12 }}>Sin imagen (placeholder)</span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="modalFoot">
-          <button className="ghostBtn" onClick={() => setBombEditing(false)}>
-            Listo
           </button>
         </div>
       </div>
@@ -2785,6 +3281,23 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
           </button>
         </div>
 
+        {/* Los file inputs viven fuera del acordeón: tienen que seguir montados
+            aunque la sección Imágenes esté cerrada (closeModal los limpia). */}
+        <input
+          ref={cardFileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={onFileChange}
+        />
+        <input
+          ref={bannerFileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={onFileChange}
+        />
+
         <div
           style={{
             padding: 22,
@@ -2792,601 +3305,561 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
             overflowX: "hidden",
             display: "flex",
             flexDirection: "column",
-            gap: 16,
+            gap: 12,
           }}
         >
-          <input
-            ref={cardFileRef}
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={onFileChange}
-          />
-          <input
-            ref={bannerFileRef}
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={onFileChange}
-          />
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(220px, 1fr))",
-              gap: 14,
-            }}
+          {/* ---------- 1. GENERAL ---------- */}
+          <FormSection
+            title={FORM_SECTIONS[0].title}
+            hint={FORM_SECTIONS[0].hint}
+            open={openSections.general}
+            onToggle={() => toggleSection("general")}
           >
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Nombre</span>
-              <input
-                className="input"
-                value={editing.name}
-                onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-              />
-            </label>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={formRowStyle(220)}>
+                <label style={formFieldStyle}>
+                  <span style={formLabelStyle}>Nombre</span>
+                  <input
+                    ref={setFieldRef("name")}
+                    className="input"
+                    value={editing.name}
+                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  />
+                </label>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Categoría</span>
-              <select
-                className="input"
-                value={editing.category}
-                onChange={(e) => setEditing({ ...editing, category: e.target.value as RoomCategory })}
-              >
-                <option value="WOW">WOW</option>
-                <option value="CLASICO">Clásico (20%)</option>
-                <option value="DESPEDIDA">Despedida</option>
-              </select>
-            </label>
+                <label style={formFieldStyle}>
+                  <span style={formLabelStyle}>Sucursal</span>
+                  <select
+                    ref={setFieldRef("branch")}
+                    className="input"
+                    value={editing.branch}
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      const bid = branchesByName.get(name) || null;
+                      setEditing({ ...editing, branch: name, branch_id: bid });
+                    }}
+                    disabled={me.isBranchScoped}
+                  >
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.name}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Sucursal</span>
-              <select
-                className="input"
-                value={editing.branch}
-                onChange={(e) => {
-                  const name = e.target.value;
-                  const bid = branchesByName.get(name) || null;
-                  setEditing({ ...editing, branch: name, branch_id: bid });
-                }}
-                disabled={me.isBranchScoped}
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.name}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+                <div style={formFieldStyle}>
+                  <span style={formLabelStyle}>Estado</span>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(220px, 1fr))",
-              gap: 14,
-            }}
-          >
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Teléfono</span>
-              <input
-                className="input"
-                value={editing.whatsappPhone}
-                onChange={(e) => setEditing({ ...editing, whatsappPhone: e.target.value })}
-                placeholder="Ej: +54911XXXXXXXX"
-                inputMode="tel"
-              />
-            </label>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={editing.active}
+                    onClick={() => setEditing({ ...editing, active: !editing.active })}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 10,
+                      height: 42,
+                      padding: "0 14px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,.12)",
+                      background: "rgba(255,255,255,.04)",
+                      color: "#e2e8f0",
+                      font: "inherit",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        position: "relative",
+                        width: 38,
+                        height: 22,
+                        flex: "0 0 auto",
+                        borderRadius: 999,
+                        background: editing.active ? "#16a34a" : "rgba(255,255,255,.18)",
+                        transition: "background .18s ease",
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 3,
+                          left: editing.active ? 19 : 3,
+                          width: 16,
+                          height: 16,
+                          borderRadius: "50%",
+                          background: "#fff",
+                          transition: "left .18s ease",
+                        }}
+                      />
+                    </span>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Link de reserva</span>
-              <input
-                className="input"
-                value={editing.reserveUrl}
-                onChange={(e) => setEditing({ ...editing, reserveUrl: e.target.value })}
-                placeholder="https://..."
-                inputMode="url"
-              />
-            </label>
+                    {editing.active ? "Activa" : "Inactiva"}
+                  </button>
+                </div>
+              </div>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>QR único</span>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8 }}>
-                <input
+              <label style={formFieldStyle}>
+                <span style={formLabelStyle}>Descripción</span>
+                <textarea
                   className="input"
-                  value={editing.qrCode || ""}
-                  onChange={(e) => setEditing({ ...editing, qrCode: e.target.value })}
-                  placeholder={`Ej: ${makeRoomQr(editing.id)}`}
-                  style={{ minWidth: 0, fontFamily: "monospace" }}
+                  value={editing.description}
+                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  rows={4}
+                  style={{ resize: "vertical" }}
                 />
+              </label>
+            </div>
+          </FormSection>
 
-                <button
-                  type="button"
-                  className="ghostBtn"
-                  onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}
-                  title="Regenerar QR"
-                  style={{
-                    width: 42,
-                    minWidth: 42,
-                    height: 42,
-                    padding: 0,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: 12,
-                  }}
-                >
-                  <Icon name="refresh" size={18} />
-                </button>
+          {/* ---------- 2. CATEGORÍA Y DIFICULTAD ---------- */}
+          <FormSection
+            title={FORM_SECTIONS[1].title}
+            hint={FORM_SECTIONS[1].hint}
+            open={openSections.categoria}
+            onToggle={() => toggleSection("categoria")}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={formRowStyle(220)}>
+                <label style={formFieldStyle}>
+                  <span style={formLabelStyle}>Categoría</span>
+                  <select
+                    className="input"
+                    value={editing.category}
+                    onChange={(e) =>
+                      setEditing({ ...editing, category: e.target.value as RoomCategory })
+                    }
+                  >
+                    <option value="WOW">WOW</option>
+                    <option value="CLASICO">Clásico (20%)</option>
+                    <option value="DESPEDIDA">Despedida</option>
+                  </select>
+                </label>
 
-                <button
-                  type="button"
-                  className="ghostBtn"
-                  onClick={() => editing.qrCode && copy(editing.qrCode)}
-                  disabled={!editing.qrCode}
-                  title="Copiar QR"
-                  style={{
-                    width: 42,
-                    minWidth: 42,
-                    height: 42,
-                    padding: 0,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: 12,
-                  }}
-                >
-                  <Icon name="copy" size={18} />
-                </button>
+                <label style={formFieldStyle}>
+                  <span style={formLabelStyle}>Nivel</span>
+                  <select
+                    className="input"
+                    value={editing.level}
+                    onChange={(e) => setEditing({ ...editing, level: e.target.value as RoomLevel })}
+                  >
+                    <option value="FACIL">Fácil</option>
+                    <option value="INTERMEDIO">Intermedio</option>
+                    <option value="AVANZADO">Avanzado</option>
+                  </select>
+                </label>
+
+                <label style={formFieldStyle}>
+                  <span style={formLabelStyle}>Puntaje</span>
+                  <select
+                    className="input"
+                    value={String(editing.points ?? 1)}
+                    onChange={(e) =>
+                      setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })
+                    }
+                  >
+                    {[1, 2, 3].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-            </label>
-          </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(220px, 1fr))",
-              gap: 14,
-            }}
-          >
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Récord 1</span>
-              <input
-                className="input"
-                value={editing.record1}
-                onChange={(e) => setEditing({ ...editing, record1: e.target.value })}
-                placeholder="12:34"
-              />
-            </label>
+              <div style={formRowStyle(240)}>
+                <label style={formFieldStyle}>
+                  <span style={formLabelStyle}>
+                    Dificultad{" "}
+                    <span style={{ color: "#94a3b8", fontWeight: 600 }}>
+                      ({editing.difficulty ?? 5}/10)
+                    </span>
+                  </span>
+                  <input
+                    className="rangeInput"
+                    type="range"
+                    min={1}
+                    max={10}
+                    step={1}
+                    value={String(editing.difficulty ?? 5)}
+                    onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}
+                  />
+                </label>
 
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Récord 2</span>
-              <input
-                className="input"
-                value={editing.record2}
-                onChange={(e) => setEditing({ ...editing, record2: e.target.value })}
-                placeholder="14:10"
-              />
-            </label>
-
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Puntaje</span>
-              <select
-                className="input"
-                value={String(editing.points ?? 1)}
-                onChange={(e) =>
-                  setEditing({ ...editing, points: Number(e.target.value) as 1 | 2 | 3 })
-                }
-              >
-                {[1, 2, 3].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(220px, 1fr))",
-              gap: 14,
-            }}
-          >
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Jugadores mín</span>
-              <input
-                className="input"
-                value={String(editing.playersMin ?? 1)}
-                onChange={(e) => setEditing({ ...editing, playersMin: Number(e.target.value) })}
-                inputMode="numeric"
-              />
-            </label>
-
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Jugadores máx</span>
-              <input
-                className="input"
-                value={String(editing.playersMax ?? 6)}
-                onChange={(e) => setEditing({ ...editing, playersMax: Number(e.target.value) })}
-                inputMode="numeric"
-              />
-            </label>
-
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Nivel</span>
-              <select
-                className="input"
-                value={editing.level}
-                onChange={(e) => setEditing({ ...editing, level: e.target.value as RoomLevel })}
-              >
-                <option value="FACIL">Fácil</option>
-                <option value="INTERMEDIO">Intermedio</option>
-                <option value="AVANZADO">Avanzado</option>
-              </select>
-            </label>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(220px, 1fr))",
-              gap: 14,
-            }}
-          >
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Dificultad</span>
-              <select
-                className="input"
-                value={String(editing.difficulty ?? 5)}
-                onChange={(e) => setEditing({ ...editing, difficulty: Number(e.target.value) })}
-              >
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Factor sorpresa</span>
-              <select
-                className="input"
-                value={String(editing.surprise ?? 5)}
-                onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}
-              >
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(280px, 1fr))",
-              gap: 14,
-            }}
-          >
-            <div
-              style={{
-                border: "1px solid rgba(255,255,255,.08)",
-                borderRadius: 18,
-                background: "rgba(255,255,255,.03)",
-                padding: 16,
-                minWidth: 0,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
-                Imagen card
+                <label style={formFieldStyle}>
+                  <span style={formLabelStyle}>
+                    Factor sorpresa{" "}
+                    <span style={{ color: "#94a3b8", fontWeight: 600 }}>
+                      ({editing.surprise ?? 5}/10)
+                    </span>
+                  </span>
+                  <input
+                    className="rangeInput"
+                    type="range"
+                    min={1}
+                    max={10}
+                    step={1}
+                    value={String(editing.surprise ?? 5)}
+                    onChange={(e) => setEditing({ ...editing, surprise: Number(e.target.value) })}
+                  />
+                </label>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="btnSmall"
-                  onClick={onPickCardImage}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                >
-                  <Icon name="image" size={16} />
-                  Elegir
-                </button>
+
+              <div style={formRowStyle(260)}>
+                <div ref={themesWrapRef} style={{ ...formPanelStyle, position: "relative" }}>
+                  <div style={{ ...formLabelStyle, marginBottom: 10 }}>Temática</div>
+
+                  <button
+                    type="button"
+                    className="input multiSelectBtn"
+                    onClick={() => setThemesOpen((v) => !v)}
+                    aria-expanded={themesOpen}
+                  >
+                    {selectedThemes.length ? (
+                      <span className="multiSelectValue">
+                        {selectedThemes.map((t) => (
+                          <span key={t} className="tagChip">
+                            {t}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span style={{ opacity: 0.75 }}>Elegí hasta 4…</span>
+                    )}
+                    <span className="multiSelectCaret">▾</span>
+                  </button>
+
+                  {themesOpen && (
+                    <div className="multiSelectPanel">
+                      <div className="multiSelectTop">
+                        <div style={{ opacity: 0.85, fontSize: 12 }}>
+                          Seleccionadas: <b>{selectedThemes.length}</b>/4
+                        </div>
+                        <button
+                          type="button"
+                          className="ghostBtn"
+                          onClick={clearThemes}
+                          disabled={!selectedThemes.length}
+                        >
+                          Limpiar
+                        </button>
+                      </div>
+
+                      <div className="multiSelectList">
+                        {ROOM_THEMES_MULTI.map((t) => {
+                          const checked = selectedThemes.includes(t);
+                          const disabled = !checked && atThemesLimit;
+
+                          return (
+                            <label
+                              key={t}
+                              className={`multiSelectItem ${disabled ? "disabled" : ""}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                disabled={disabled}
+                                onChange={() => toggleTheme(t)}
+                              />
+                              <span>{t}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      {atThemesLimit ? (
+                        <div className="multiSelectHint">
+                          Llegaste al máximo de 4 temáticas.
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+
+                <div style={formPanelStyle}>
+                  <div style={{ ...formLabelStyle, marginBottom: 10 }}>Jugadores</div>
+
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 12,
+                    }}
+                  >
+                    <label style={formFieldStyle}>
+                      <span style={{ ...formLabelStyle, fontSize: 12 }}>Mínimo</span>
+                      <input
+                        className="input"
+                        value={String(editing.playersMin ?? 1)}
+                        onChange={(e) =>
+                          setEditing({ ...editing, playersMin: Number(e.target.value) })
+                        }
+                        inputMode="numeric"
+                      />
+                    </label>
+
+                    <label style={formFieldStyle}>
+                      <span style={{ ...formLabelStyle, fontSize: 12 }}>Máximo</span>
+                      <input
+                        className="input"
+                        value={String(editing.playersMax ?? 6)}
+                        onChange={(e) =>
+                          setEditing({ ...editing, playersMax: Number(e.target.value) })
+                        }
+                        inputMode="numeric"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </FormSection>
+
+          {/* ---------- 3. IMÁGENES ---------- */}
+          <FormSection
+            title={FORM_SECTIONS[2].title}
+            hint={FORM_SECTIONS[2].hint}
+            open={openSections.imagenes}
+            onToggle={() => toggleSection("imagenes")}
+          >
+            <div style={formRowStyle(300)}>
+              {/* Card */}
+              <div ref={setFieldRef("cardPhoto")} style={formPanelStyle}>
+                <div style={{ ...formLabelStyle, marginBottom: 10 }}>
+                  Imagen para card (listado)
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btnSmall"
+                    onClick={onPickCardImage}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                  >
+                    <Icon name="image" size={16} />
+                    Elegir
+                  </button>
+
+                  {editing.cardPhoto ? (
+                    <button type="button" className="ghostBtn" onClick={removeCardImage}>
+                      Quitar
+                    </button>
+                  ) : (
+                    <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
+                  )}
+                </div>
+
+                <ImageSpecHelp slot="card" warning={aspectWarn.card} />
+
+                <div style={{ ...formLabelStyle, margin: "14px 0 10px 0" }}>Previa card</div>
 
                 {editing.cardPhoto ? (
-                  <button type="button" className="ghostBtn" onClick={removeCardImage}>
-                    Quitar
+                  <div
+                    style={{
+                      borderRadius: 16,
+                      overflow: "hidden",
+                      border: "1px solid rgba(255,255,255,.12)",
+                      background: "rgba(0,0,0,.25)",
+                    }}
+                  >
+                    <img
+                      src={editing.cardPhoto}
+                      alt="Preview card"
+                      style={{
+                        width: "100%",
+                        height: "clamp(200px, 30vh, 320px)",
+                        objectFit: "contain",
+                        display: "block",
+                        background: "#000",
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      minHeight: 160,
+                      borderRadius: 16,
+                      border: "1px dashed rgba(255,255,255,.18)",
+                      background: "rgba(255,255,255,.03)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center",
+                      padding: 20,
+                      opacity: 0.75,
+                    }}
+                  >
+                    Acá se va a ver la previa de la imagen card.
+                  </div>
+                )}
+
+                <div style={{ marginTop: 12 }}>
+                  <CropPreview slot="card" src={editing.cardPhoto} />
+                </div>
+              </div>
+
+              {/* Banner */}
+              <div style={formPanelStyle}>
+                <div style={{ ...formLabelStyle, marginBottom: 10 }}>
+                  Imagen para banner (vista previa)
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btnSmall"
+                    onClick={onPickBannerImage}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+                  >
+                    <Icon name="image" size={16} />
+                    Elegir
                   </button>
-                ) : (
-                  <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
-                )}
-              </div>
-            </div>
 
-            <div
-              style={{
-                border: "1px solid rgba(255,255,255,.08)",
-                borderRadius: 18,
-                background: "rgba(255,255,255,.03)",
-                padding: 16,
-                minWidth: 0,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
-                Imagen banner
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="btnSmall"
-                  onClick={onPickBannerImage}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                >
-                  <Icon name="image" size={16} />
-                  Elegir
-                </button>
-
-                {editing.bannerPhoto ? (
-                  <button type="button" className="ghostBtn" onClick={removeBannerImage}>
-                    Quitar
-                  </button>
-                ) : (
-                  <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(280px, 1fr))",
-              gap: 14,
-            }}
-          >
-            <div
-              ref={themesWrapRef}
-              style={{
-                position: "relative",
-                border: "1px solid rgba(255,255,255,.08)",
-                borderRadius: 18,
-                background: "rgba(255,255,255,.03)",
-                padding: 16,
-                minWidth: 0,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
-                Temática
-              </div>
-
-              <button
-                type="button"
-                className="input multiSelectBtn"
-                onClick={() => setThemesOpen((v) => !v)}
-                aria-expanded={themesOpen}
-              >
-                {selectedThemes.length ? (
-                  <span className="multiSelectValue">
-                    {selectedThemes.map((t) => (
-                      <span key={t} className="tagChip">
-                        {t}
-                      </span>
-                    ))}
-                  </span>
-                ) : (
-                  <span style={{ opacity: 0.75 }}>Elegí hasta 4…</span>
-                )}
-                <span className="multiSelectCaret">▾</span>
-              </button>
-
-              {themesOpen && (
-                <div className="multiSelectPanel">
-                  <div className="multiSelectTop">
-                    <div style={{ opacity: 0.85, fontSize: 12 }}>
-                      Seleccionadas: <b>{selectedThemes.length}</b>/4
-                    </div>
-                    <button
-                      type="button"
-                      className="ghostBtn"
-                      onClick={clearThemes}
-                      disabled={!selectedThemes.length}
-                    >
-                      Limpiar
+                  {editing.bannerPhoto ? (
+                    <button type="button" className="ghostBtn" onClick={removeBannerImage}>
+                      Quitar
                     </button>
-                  </div>
-
-                  <div className="multiSelectList">
-                    {ROOM_THEMES_MULTI.map((t) => {
-                      const checked = selectedThemes.includes(t);
-                      const disabled = !checked && atThemesLimit;
-
-                      return (
-                        <label
-                          key={t}
-                          className={`multiSelectItem ${disabled ? "disabled" : ""}`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            disabled={disabled}
-                            onChange={() => toggleTheme(t)}
-                          />
-                          <span>{t}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-
-                  {atThemesLimit ? (
-                    <div className="multiSelectHint">
-                      Llegaste al máximo de 4 temáticas.
-                    </div>
-                  ) : null}
+                  ) : (
+                    <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <div
-              style={{
-                border: "1px solid rgba(255,255,255,.08)",
-                borderRadius: 18,
-                background: "rgba(255,255,255,.03)",
-                padding: 16,
-                minWidth: 0,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
-                Estado
+                <ImageSpecHelp slot="banner" warning={aspectWarn.banner} />
+
+                <div style={{ ...formLabelStyle, margin: "14px 0 10px 0" }}>
+                  Previa del recorte final
+                </div>
+
+                <CropPreview slot="banner" src={editing.bannerPhoto} />
               </div>
-              <select
-                className="input"
-                value={editing.active ? "1" : "0"}
-                onChange={(e) => setEditing({ ...editing, active: e.target.value === "1" })}
-              >
-                <option value="1">Activa</option>
-                <option value="0">Inactiva</option>
-              </select>
             </div>
-          </div>
+          </FormSection>
 
-          <label style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1" }}>Descripción</span>
-            <textarea
-              className="input"
-              value={editing.description}
-              onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-              rows={4}
-              style={{ resize: "vertical" }}
-            />
-          </label>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(280px, 1fr))",
-              gap: 14,
-            }}
+          {/* ---------- 4. CONTACTO Y RESERVA ---------- */}
+          <FormSection
+            title={FORM_SECTIONS[3].title}
+            hint={FORM_SECTIONS[3].hint}
+            open={openSections.contacto}
+            onToggle={() => toggleSection("contacto")}
           >
-            <div
-              style={{
-                border: "1px solid rgba(255,255,255,.08)",
-                borderRadius: 18,
-                background: "rgba(255,255,255,.03)",
-                padding: 16,
-                minWidth: 0,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
-                Previa card
-              </div>
+            <div style={formRowStyle(240)}>
+              <label style={formFieldStyle}>
+                <span style={formLabelStyle}>Teléfono</span>
+                <input
+                  className="input"
+                  value={editing.whatsappPhone}
+                  onChange={(e) => setEditing({ ...editing, whatsappPhone: e.target.value })}
+                  placeholder="Ej: +54911XXXXXXXX"
+                  inputMode="tel"
+                />
+              </label>
 
-              {editing.cardPhoto ? (
-                <div
-                  style={{
-                    borderRadius: 16,
-                    overflow: "hidden",
-                    border: "1px solid rgba(255,255,255,.12)",
-                    background: "rgba(0,0,0,.25)",
-                  }}
-                >
-                  <img
-                    src={editing.cardPhoto}
-                    alt="Preview card"
-                    style={{
-                      width: "100%",
-                      height: "clamp(220px, 34vh, 360px)",
-                      objectFit: "contain",
-                      display: "block",
-                      background: "#000",
-                    }}
+              <label style={formFieldStyle}>
+                <span style={formLabelStyle}>Link de reserva</span>
+                <input
+                  ref={setFieldRef("reserveUrl")}
+                  className="input"
+                  value={editing.reserveUrl}
+                  onChange={(e) => setEditing({ ...editing, reserveUrl: e.target.value })}
+                  placeholder="https://..."
+                  inputMode="url"
+                />
+              </label>
+
+              <label style={formFieldStyle}>
+                <span style={formLabelStyle}>QR único</span>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8 }}>
+                  <input
+                    ref={setFieldRef("qrCode")}
+                    className="input"
+                    value={editing.qrCode || ""}
+                    onChange={(e) => setEditing({ ...editing, qrCode: e.target.value })}
+                    placeholder={`Ej: ${makeRoomQr(editing.id)}`}
+                    style={{ minWidth: 0, fontFamily: "monospace" }}
                   />
+
+                  <button
+                    type="button"
+                    className="ghostBtn"
+                    onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}
+                    title="Regenerar QR"
+                    style={{
+                      width: 42,
+                      minWidth: 42,
+                      height: 42,
+                      padding: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Icon name="refresh" size={18} />
+                  </button>
+
+                  <button
+                    type="button"
+                    className="ghostBtn"
+                    onClick={() => editing.qrCode && copy(editing.qrCode)}
+                    disabled={!editing.qrCode}
+                    title="Copiar QR"
+                    style={{
+                      width: 42,
+                      minWidth: 42,
+                      height: 42,
+                      padding: 0,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Icon name="copy" size={18} />
+                  </button>
                 </div>
-              ) : (
-                <div
-                  style={{
-                    minHeight: 180,
-                    borderRadius: 16,
-                    border: "1px dashed rgba(255,255,255,.18)",
-                    background: "rgba(255,255,255,.03)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    textAlign: "center",
-                    padding: 20,
-                    opacity: 0.75,
-                  }}
-                >
-                  Acá se va a ver la previa de la imagen card.
-                </div>
-              )}
+              </label>
+            </div>
+          </FormSection>
+
+          {/* ---------- 5. RÉCORDS HISTÓRICOS ---------- */}
+          <FormSection
+            title={FORM_SECTIONS[4].title}
+            hint={FORM_SECTIONS[4].hint}
+            open={openSections.records}
+            onToggle={() => toggleSection("records")}
+          >
+            <div style={formRowStyle(220)}>
+              <label style={formFieldStyle}>
+                <span style={formLabelStyle}>Récord 1</span>
+                <input
+                  ref={setFieldRef("record1")}
+                  className="input"
+                  value={editing.record1}
+                  onChange={(e) => setEditing({ ...editing, record1: e.target.value })}
+                  placeholder="12:34"
+                />
+              </label>
+
+              <label style={formFieldStyle}>
+                <span style={formLabelStyle}>Récord 2</span>
+                <input
+                  ref={setFieldRef("record2")}
+                  className="input"
+                  value={editing.record2}
+                  onChange={(e) => setEditing({ ...editing, record2: e.target.value })}
+                  placeholder="14:10"
+                />
+              </label>
             </div>
 
-            <div
-              style={{
-                border: "1px solid rgba(255,255,255,.08)",
-                borderRadius: 18,
-                background: "rgba(255,255,255,.03)",
-                padding: 16,
-                minWidth: 0,
-              }}
-            >
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#cbd5e1", marginBottom: 10 }}>
-                Previa banner
-              </div>
-
-              {editing.bannerPhoto ? (
-                <div
-                  ref={previewWrapRef}
-                  onMouseDown={onPreviewMouseDown}
-                  onMouseMove={onPreviewMouseMove}
-                  onMouseUp={endDrag}
-                  onMouseLeave={endDrag}
-                  style={{
-                    borderRadius: 16,
-                    overflow: "hidden",
-                    border: "1px solid rgba(255,255,255,.12)",
-                    background: "rgba(0,0,0,.25)",
-                    cursor: "grab",
-                    userSelect: "none",
-                  }}
-                  title="Ajuste vertical fino"
-                >
-                  <img
-                    src={editing.bannerPhoto}
-                    alt="Preview banner"
-                    style={{
-                      width: "100%",
-                      height: "clamp(220px, 34vh, 360px)",
-                      objectFit: "cover",
-                      objectPosition: `50% ${editing.photoPosition}%`,
-                      display: "block",
-                      pointerEvents: "none",
-                    }}
-                  />
-                </div>
-              ) : (
-                <div
-                  style={{
-                    minHeight: 180,
-                    borderRadius: 16,
-                    border: "1px dashed rgba(255,255,255,.18)",
-                    background: "rgba(255,255,255,.03)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    textAlign: "center",
-                    padding: 20,
-                    opacity: 0.75,
-                  }}
-                >
-                  Acá se va a ver la previa de la imagen banner.
-                </div>
-              )}
+            <div style={{ marginTop: 10, opacity: 0.75, fontSize: 12 }}>
+              Formato válido: <b>MM:SS</b> (ej: 08:45).
             </div>
-          </div>
+          </FormSection>
         </div>
 
         <div
@@ -3424,8 +3897,12 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
 
         <div className="modalBody">
           <div style={{ opacity: 0.78, fontSize: 12, marginBottom: 10 }}>
-            Mouse: <b>mover</b> arrastrando dentro, <b>resize</b> arrastrando bordes/esquinas. Ruedita = zoom del recorte.
-            Doble click = máximo. Mantener <b>Shift</b> = ratio card.
+            Recorte fijado a <b>{ROOM_IMAGE_SPECS[cropTarget ?? "card"].ratioLabel}</b> — se exporta a{" "}
+            <b>
+              {ROOM_IMAGE_SPECS[cropTarget ?? "card"].w}×{ROOM_IMAGE_SPECS[cropTarget ?? "card"].h}
+            </b>
+            . Mouse: <b>mover</b> arrastrando dentro, <b>resize</b> arrastrando bordes/esquinas. Ruedita = zoom del
+            recorte. Doble click = máximo.
           </div>
 
           <div
@@ -3508,6 +3985,14 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
     </div>
   </>
 ) : null}
+
+<GoldenTicketManagementModal
+  open={goldenOpen}
+  onClose={() => setGoldenOpen(false)}
+  toast={toast}
+/>
+
+<ToastStack toasts={toasts} onDismiss={dismiss} />
 
     </div>
   </div>
