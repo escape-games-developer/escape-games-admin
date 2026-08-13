@@ -14,6 +14,7 @@ type CreateUserBody = {
   send_invite?: boolean;
   permissions?: Record<string, boolean>;
   redirect_to?: string;
+  gm_code?: string;
 };
 
 const corsHeaders: HeadersInit = {
@@ -44,6 +45,15 @@ function genTempPassword(len = 10) {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#";
   let out = "";
   for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+// Matches constraint: ^[A-Z0-9]{6,12}$
+// Generates 10-char code (matches existing format) — no hyphens, no lowercase.
+function genGmCode(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let out = "";
+  for (let i = 0; i < 10; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return out;
 }
 
@@ -106,6 +116,23 @@ async function findUserIdByEmail(supabaseAdmin: any, email: string) {
   return u?.id ?? null;
 }
 
+async function gmCodeExists(supabaseAdmin: any, code: string): Promise<boolean> {
+  const { data } = await supabaseAdmin.from("admins").select("user_id").eq("gm_code", code).maybeSingle();
+  return !!data?.user_id;
+}
+
+async function generateUniqueGmCode(supabaseAdmin: any): Promise<string> {
+  for (let i = 0; i < 20; i++) {
+    const code = genGmCode();
+    if (!(await gmCodeExists(supabaseAdmin, code))) return code;
+  }
+  throw new Error("No se pudo generar un gm_code único tras 20 intentos");
+}
+
+function validateGmCodeFormat(code: string): boolean {
+  return /^[A-Z0-9]{6,12}$/.test(code);
+}
+
 function defaultPermissionsForRole(role: string): Record<string, boolean> {
   if (role === "ADMIN_GENERAL") {
     return {
@@ -161,6 +188,7 @@ Deno.serve(async (req: Request) => {
     const resetPassword = Boolean(body.reset_password);
     const customPermissions = body.permissions;
     const redirectTo = body.redirect_to;
+    const customGmCode = body.gm_code ? String(body.gm_code).trim().toUpperCase() : null;
     const isStaff = role === "GM" || role === "ADMIN_GENERAL";
     const sendInvite = body.send_invite === undefined ? isStaff : Boolean(body.send_invite);
 
@@ -179,6 +207,21 @@ Deno.serve(async (req: Request) => {
     if (role === "GM") {
       const resolved = await resolveBranchUuidByRaw(supabaseAdmin, body.branch_id);
       branchId = resolved.branchId;
+    }
+
+    let gmCode: string | null = null;
+    if (role === "GM") {
+      if (customGmCode) {
+        if (!validateGmCodeFormat(customGmCode)) {
+          return json({ error: `gm_code inválido: debe ser 6-12 caracteres A-Z0-9` }, 400);
+        }
+        if (await gmCodeExists(supabaseAdmin, customGmCode)) {
+          return json({ error: `El gm_code '${customGmCode}' ya existe` }, 409);
+        }
+        gmCode = customGmCode;
+      } else {
+        gmCode = await generateUniqueGmCode(supabaseAdmin);
+      }
     }
 
     const existingId = await findUserIdByEmail(supabaseAdmin, mail);
@@ -247,6 +290,7 @@ Deno.serve(async (req: Request) => {
       const adminPayload: any = {
         user_id: userId, mail,
         branch_id: role === "GM" ? branchId : null,
+        gm_code: role === "GM" ? gmCode : null,
         is_super: role === "ADMIN_GENERAL",
         permissions: effectivePerms,
         created_at: existed ? undefined : new Date().toISOString(),
@@ -259,7 +303,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return json({ mail, tempPassword, userId, existed, method, permissions: effectivePerms }, 200);
+    return json({
+      mail, tempPassword, userId, existed, method,
+      permissions: effectivePerms,
+      gm_code: gmCode,
+    }, 200);
   } catch (e) {
     return json({ error: errMsg(e) }, 500);
   }
