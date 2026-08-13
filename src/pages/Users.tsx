@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 
 import GoldenTicketReviewModal from "../components/GoldenTicketReviewModal";
 import { ToastStack, useToasts } from "../components/Toast";
+import { fetchAppConfig, setRatingUploadEnabled } from "../lib/appConfig";
 import {
   describeGoldenTicketSource,
   fetchGoldenTicketInfo,
@@ -57,14 +58,47 @@ type User = {
   _isStaff: boolean;
 };
 
-const defaultPerms = (): UserPermissions => ({
-  canManageRooms: false,
-  canManageNews: false,
-  canManageUsers: false,
-  canEditRankings: false,
-  canAwardKeys: false,
-  canResetClientPassword: true,
-});
+/**
+ * Espejo exacto de defaultPermissionsForRole() de la Edge Function create-user.
+ * Si esto se desincroniza, la UI miente sobre lo que el server guardó.
+ */
+const defaultPermsForRole = (role: UserRole): UserPermissions =>
+  role === "ADMIN_GENERAL"
+    ? {
+        canManageRooms: true,
+        canManageNews: true,
+        canManageUsers: true,
+        canEditRankings: true,
+        canAwardKeys: true,
+        canResetClientPassword: true,
+      }
+    : {
+        canManageRooms: false,
+        canManageNews: false,
+        canManageUsers: false,
+        canEditRankings: false,
+        canAwardKeys: role === "GM",
+        canResetClientPassword: false,
+      };
+
+/** Permisos que un GM no puede tener nunca. */
+const ADMIN_ONLY_PERMS = [
+  "canManageRooms",
+  "canManageNews",
+  "canManageUsers",
+  "canResetClientPassword",
+] as const;
+
+/** Red de seguridad: venga de donde venga el objeto, se normaliza al rol. */
+const sanitizePermsForRole = (role: UserRole, p: UserPermissions): UserPermissions => {
+  if (role === "ADMIN_GENERAL") return defaultPermsForRole("ADMIN_GENERAL");
+
+  const out: UserPermissions = { ...p, canAwardKeys: role === "GM" };
+  for (const k of ADMIN_ONLY_PERMS) out[k] = false;
+  return out;
+};
+
+const isStaffRole = (r: UserRole) => r === "GM" || r === "ADMIN_GENERAL";
 
 function safeRole(v: any): UserRole {
   return v === "CLIENT" || v === "GM" || v === "ADMIN_GENERAL" ? v : "CLIENT";
@@ -120,7 +154,7 @@ function newUserTemplate(): User {
     role: "CLIENT",
     branch: "",
     active: true,
-    permissions: defaultPerms(),
+    permissions: defaultPermsForRole("CLIENT"),
     goldenActive: false,
     goldenSource: null,
     _isStaff: false,
@@ -425,6 +459,20 @@ function CreateUserModal({
             </FieldRow>
           ) : null}
 
+          {draft.role === "GM" ? (
+            <div style={styles.inviteNote}>
+              El GM se crea con los <b>permisos por defecto del rol</b> (otorgar llaves). Los
+              permisos de Admin General no se pueden asignar a un GM.
+            </div>
+          ) : null}
+
+          {isStaffRole(draft.role) ? (
+            <div style={styles.inviteNote}>
+              Se le va a enviar un <b>email de invitación</b> a <b>{draft.email || "el mail indicado"}</b>{" "}
+              para que configure su propia contraseña. No se genera contraseña temporal.
+            </div>
+          ) : null}
+
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
             <button className="ghostBtn" onClick={onClose} disabled={busy}>
               Cancelar
@@ -449,6 +497,15 @@ function CreateUserModal({
 export default function Users() {
   const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
   const ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
+
+  /* Base del link que viaja en el mail de invitación.
+     window.location.origin alcanza en producción (es la URL que el admin tiene
+     abierta). VITE_ADMIN_URL es el escape para cuando ese origin NO sirve como
+     destino público: dev en localhost o un preview deploy, donde Supabase
+     descarta el redirect_to por no estar en su allow-list y manda al Site URL. */
+  const ADMIN_URL =
+    (import.meta.env.VITE_ADMIN_URL as string | undefined)?.trim().replace(/\/+$/, "") ||
+    window.location.origin;
 
   const [, setMyRole] = useState<UserRole | "">("");
 
@@ -491,6 +548,17 @@ export default function Users() {
     user: null,
   });
 
+  /** Sólo para altas con contraseña temporal (Cliente). Los GM/Admin van por invite. */
+  const [tempPassModal, setTempPassModal] = useState<{
+    open: boolean;
+    mail: string;
+    tempPassword: string | null;
+    existed: boolean;
+  }>({ open: false, mail: "", tempPassword: null, existed: false });
+
+  const closeTempPass = () =>
+    setTempPassModal({ open: false, mail: "", tempPassword: null, existed: false });
+
   /* ---------- Golden Ticket ---------- */
 
   const { toasts, toast, dismiss } = useToasts();
@@ -513,6 +581,52 @@ export default function Users() {
 
   const [busy, setBusy] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+
+  /** Kill switch del FAB del clip en la app cliente (app_config.rating_upload_enabled). */
+  const [ratingUpload, setRatingUpload] = useState(true);
+  const [ratingLoading, setRatingLoading] = useState(true);
+  const [ratingSaving, setRatingSaving] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const cfg = await fetchAppConfig();
+        if (mounted) setRatingUpload(cfg.ratingUploadEnabled);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (mounted) setRatingLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const toggleRatingUpload = async () => {
+    if (ratingSaving || ratingLoading) return;
+
+    const next = !ratingUpload;
+    setRatingSaving(true);
+
+    try {
+      const applied = await setRatingUploadEnabled(next);
+      setRatingUpload(applied);
+
+      toast(
+        "success",
+        applied ? "Subida de capturas activada" : "Subida de capturas desactivada"
+      );
+    } catch (err: any) {
+      console.error(err);
+      toast("error", err?.message || "No pude cambiar la configuración.");
+    } finally {
+      setRatingSaving(false);
+    }
+  };
 
   useEffect(() => {
     document.body.classList.add("users-fullwidth");
@@ -608,7 +722,7 @@ export default function Users() {
           role,
           branch: (branchName as Branch) || "",
           active: p?.is_active ?? true,
-          permissions: { ...defaultPerms(), ...(a.permissions || {}) },
+          permissions: { ...defaultPermsForRole(role), ...(a.permissions || {}) },
           goldenActive: p?.golden_ticket_active === true,
           goldenSource: normalizeGoldenTicketSource(p?.golden_ticket_source),
           _isStaff: true,
@@ -627,7 +741,7 @@ export default function Users() {
           role: "CLIENT" as UserRole,
           branch: "",
           active: p?.is_active ?? true,
-          permissions: defaultPerms(),
+          permissions: defaultPermsForRole("CLIENT"),
           goldenActive: p?.golden_ticket_active === true,
           goldenSource: normalizeGoldenTicketSource(p?.golden_ticket_source),
           _isStaff: false,
@@ -672,6 +786,7 @@ export default function Users() {
         setPermModal({ open: false, user: null });
         setResetModal({ open: false, user: null });
         setDeleteModal({ open: false, user: null });
+        closeTempPass();
       }
     };
 
@@ -781,6 +896,8 @@ export default function Users() {
     if (u.role === "CLIENT" && !u.alias.trim()) return alert("Para Cliente, falta el alias.");
     if (u.role === "GM" && !u.branch) return alert("Para GM, elegí sucursal.");
 
+    const staff = isStaffRole(u.role);
+
     setBusy(true);
     try {
       const body: any = {
@@ -793,22 +910,53 @@ export default function Users() {
       if (u.role === "CLIENT") body.alias = u.alias.trim();
       if (u.role === "GM") body.branch_id = String(u.branch || "Nuñez");
 
-      type CreateUserResp = { mail?: string; tempPassword?: string | null; existed?: boolean };
+      if (staff) {
+        // GM / Admin General: invitación por mail, sin contraseña temporal.
+        // Nunca mandamos `permissions`: manda defaultPermissionsForRole() del server.
+        body.send_invite = true;
+        body.redirect_to = `${ADMIN_URL}/set-password`;
+      } else {
+        // Cliente: se mantiene el alta con contraseña temporal.
+        body.send_invite = false;
+      }
+
+      type CreateUserResp = {
+        mail?: string;
+        tempPassword?: string | null;
+        userId?: string;
+        existed?: boolean;
+        method?: "invite" | "password";
+        permissions?: Record<string, boolean> | null;
+      };
+
       const data = await invokeEdge<CreateUserResp>("create-user", body);
 
       setCreateModalOpen(false);
       setCreateInitial(null);
 
-      alert(
-        `Usuario creado.\nMail: ${data?.mail ?? u.email}\nPass temporal: ${data?.tempPassword ?? "-"}${
-          data?.existed ? "\n(Ya existía, se actualizó)" : ""
-        }`
-      );
-
       await fetchUsers();
+
+      const mail = data?.mail ?? u.email.trim();
+      const method = data?.method ?? (staff ? "invite" : "password");
+
+      if (method === "invite") {
+        toast(
+          "success",
+          `Invitación enviada a ${mail}. El usuario recibirá un email para configurar su contraseña.`,
+          8000
+        );
+        return;
+      }
+
+      setTempPassModal({
+        open: true,
+        mail,
+        tempPassword: data?.tempPassword ?? null,
+        existed: !!data?.existed,
+      });
     } catch (err: any) {
       console.error(err);
-      alert(humanizeEdgeError(err));
+      toast("error", humanizeEdgeError(err), 8000);
     } finally {
       setBusy(false);
     }
@@ -915,7 +1063,7 @@ export default function Users() {
     if (!canManageUsers) return alert("No autorizado.");
     if (!u._isStaff) return alert("Permisos solo aplican a GM/Admin General (tabla admins).");
 
-    const permsToSave: UserPermissions = u.role === "ADMIN_GENERAL" ? defaultPerms() : u.permissions;
+    const permsToSave: UserPermissions = sanitizePermsForRole(u.role, u.permissions);
 
     setBusy(true);
     try {
@@ -1040,6 +1188,43 @@ export default function Users() {
               <button className="btnSmall" onClick={startCreate} disabled={busy}>
                 + Nuevo usuario
               </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div style={styles.killSwitchRow}>
+          <span style={styles.killSwitchText}>
+            Botón "Subir captura" (Golden Ticket) para todos los clientes:
+          </span>
+
+          <div style={styles.killSwitchControl}>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={ratingUpload}
+              aria-label='Botón "Subir captura" para todos los clientes'
+              onClick={toggleRatingUpload}
+              disabled={ratingLoading || ratingSaving}
+              style={{
+                ...styles.switch,
+                ...(ratingUpload ? styles.switchOn : styles.switchOff),
+                ...(ratingLoading || ratingSaving ? styles.switchBusy : null),
+              }}
+            >
+              <span
+                style={{
+                  ...styles.switchKnob,
+                  transform: ratingUpload ? "translateX(28px)" : "translateX(0)",
+                }}
+              />
+            </button>
+
+            <b style={{ color: ratingUpload ? "#4ade80" : "#f87171", fontSize: 13 }}>
+              {ratingLoading ? "…" : ratingUpload ? "ACTIVADO" : "DESACTIVADO"}
+            </b>
+
+            {ratingSaving ? (
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>Guardando…</span>
             ) : null}
           </div>
         </div>
@@ -1319,6 +1504,46 @@ export default function Users() {
           onSave={createSave}
         />
 
+        <ModalShell open={tempPassModal.open} title="Usuario creado" onClose={closeTempPass}>
+          <div style={{ marginBottom: 12, opacity: 0.85, fontSize: 13 }}>
+            Mail: <b>{tempPassModal.mail}</b>
+            {tempPassModal.existed ? " (ya existía, se actualizó)" : ""}
+          </div>
+
+          <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>
+              Contraseña temporal
+            </div>
+
+            <div style={styles.tempPassValue}>{tempPassModal.tempPassword ?? "—"}</div>
+
+            <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 10, lineHeight: 1.6 }}>
+              Guardala ahora: no se vuelve a mostrar.
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <button className="ghostBtn" onClick={closeTempPass}>
+              Cerrar
+            </button>
+
+            <button
+              className="btnSmall"
+              disabled={!tempPassModal.tempPassword}
+              onClick={async () => {
+                if (!tempPassModal.tempPassword) return;
+                const ok = await copyToClipboard(tempPassModal.tempPassword);
+                toast(
+                  ok ? "success" : "error",
+                  ok ? "Contraseña copiada al portapapeles." : "No pude copiar al portapapeles."
+                );
+              }}
+            >
+              Copiar al portapapeles
+            </button>
+          </div>
+        </ModalShell>
+
         <ModalShell open={goldenModal.open} title="Golden Ticket" onClose={closeGolden}>
           {goldenModal.user ? (
             <>
@@ -1468,16 +1693,33 @@ export default function Users() {
                       ["canAwardKeys", "Otorgar llaves"],
                       ["canResetClientPassword", "Reset pass cliente"],
                     ] as const
-                  ).map(([k, label]) => (
-                    <label key={k} style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={!!permModal.user?.permissions?.[k]}
-                        onChange={(e) => patchPerm(k, e.target.checked)}
-                      />
-                      <span>{label}</span>
-                    </label>
-                  ))}
+                  ).map(([k, label]) => {
+                    const locked =
+                      permModal.user?.role === "GM" &&
+                      (ADMIN_ONLY_PERMS as readonly string[]).includes(k);
+
+                    return (
+                      <label
+                        key={k}
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          alignItems: "center",
+                          opacity: locked ? 0.5 : 1,
+                          cursor: locked ? "not-allowed" : "pointer",
+                        }}
+                        title={locked ? "Exclusivo de Admin General." : undefined}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!locked && !!permModal.user?.permissions?.[k]}
+                          disabled={locked}
+                          onChange={(e) => patchPerm(k, e.target.checked)}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               )}
 
@@ -1728,6 +1970,72 @@ const styles: Record<string, any> = {
     display: "flex",
     alignItems: "center",
     gap: 10,
+  },
+
+  killSwitchRow: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+    flexWrap: "wrap",
+    marginBottom: 14,
+    padding: "12px 14px",
+    borderRadius: 16,
+    border: "1px solid #1f2937",
+    background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
+    boxSizing: "border-box",
+  },
+
+  killSwitchText: {
+    fontSize: 13.5,
+    color: "#e5e7eb",
+    fontWeight: 600,
+    minWidth: 0,
+  },
+
+  killSwitchControl: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 0,
+  },
+
+  switch: {
+    width: 62,
+    height: 32,
+    borderRadius: 999,
+    padding: 3,
+    border: "1px solid",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    flexShrink: 0,
+    transition: "background 140ms ease, border-color 140ms ease",
+  },
+
+  switchOn: {
+    background: "rgba(22,101,52,0.55)",
+    borderColor: "#166534",
+  },
+
+  switchOff: {
+    background: "rgba(30,41,59,0.9)",
+    borderColor: "#334155",
+  },
+
+  switchBusy: {
+    opacity: 0.6,
+    cursor: "not-allowed",
+  },
+
+  switchKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    background: "#e5e7eb",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.35)",
+    transition: "transform 140ms ease",
+    display: "block",
   },
 
   filtersRow: {
@@ -2128,5 +2436,25 @@ const styles: Record<string, any> = {
     padding: 0,
     cursor: "pointer",
     color: "#9ca3af",
+  },
+
+  inviteNote: {
+    marginTop: 6,
+    padding: 12,
+    borderRadius: 14,
+    border: "1px solid rgba(56,189,248,0.28)",
+    background: "rgba(56,189,248,0.10)",
+    color: "#bae6fd",
+    fontSize: 13,
+    lineHeight: 1.6,
+  },
+
+  tempPassValue: {
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
+    fontSize: 20,
+    fontWeight: 800,
+    color: "#fff",
+    wordBreak: "break-all" as const,
+    userSelect: "all" as const,
   },
 };
