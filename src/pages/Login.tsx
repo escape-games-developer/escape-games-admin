@@ -72,7 +72,7 @@ export default function Login() {
 
       const { data: adminRow, error: adminErr } = await supabase
         .from("admins")
-        .select("user_id, mail, branch_id, gm_code, is_super")
+        .select("user_id, mail, branch_id, gm_code, is_super, permissions")
         .eq("user_id", data.session.user.id)
         .maybeSingle();
 
@@ -97,6 +97,7 @@ export default function Login() {
       localStorage.setItem("eg_admin_mail", adminRow.mail ?? email.trim());
       localStorage.setItem("eg_admin_branch_id", String(adminRow.branch_id ?? ""));
       localStorage.setItem("eg_admin_is_super", adminRow.is_super ? "true" : "false");
+      localStorage.setItem("eg_admin_permissions", JSON.stringify(adminRow.permissions ?? {}));
 
       nav("/salas", { replace: true });
     } catch (e: any) {

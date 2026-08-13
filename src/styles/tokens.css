@@ -1,0 +1,94 @@
+/**
+ * Design tokens del panel administrativo — SOLO PRESENTACIÓN.
+ *
+ * Prefijo `--eg-` para no colisionar con las variables viejas de app.css
+ * (--bg, --txt, --accent, ...), que siguen vivas hasta que las vistas
+ * terminen de migrar al sistema nuevo.
+ *
+ * Regla: ningún color hardcodeado fuera de este archivo.
+ */
+
+:root {
+  /* ---- Superficies: azul casi negro, de más oscuro a más claro ---- */
+  --eg-bg: #0b111b;
+  --eg-sidebar: #0e1523;
+  --eg-surface: #131c2b;
+  --eg-surface-2: #182233;
+  --eg-surface-3: #1e293b;
+  --eg-overlay: rgba(6, 10, 17, 0.72);
+
+  /* ---- Bordes: muy sutiles ---- */
+  --eg-border: rgba(255, 255, 255, 0.07);
+  --eg-border-strong: rgba(255, 255, 255, 0.12);
+
+  /* ---- Texto ---- */
+  --eg-text: #e8edf5;
+  --eg-text-dim: #8b9ab0;
+  --eg-text-faint: #5f6d82;
+
+  /* ---- Marca y semánticos ---- */
+  --eg-accent: #ff6a00;
+  --eg-accent-hover: #ff8124;
+  --eg-accent-soft: rgba(255, 106, 0, 0.12);
+  --eg-accent-border: rgba(255, 106, 0, 0.32);
+
+  --eg-success: #3ecf8e;
+  --eg-success-soft: rgba(62, 207, 142, 0.12);
+
+  --eg-danger: #ff4d4f;
+  --eg-danger-hover: #ff6b6d;
+  --eg-danger-soft: rgba(255, 77, 79, 0.12);
+
+  --eg-warning: #f5a623;
+  --eg-warning-soft: rgba(245, 166, 35, 0.12);
+
+  --eg-info: #4d94ff;
+  --eg-info-soft: rgba(77, 148, 255, 0.12);
+
+  /* ---- Espaciado (escala de 4) ---- */
+  --eg-sp-1: 4px;
+  --eg-sp-2: 8px;
+  --eg-sp-3: 12px;
+  --eg-sp-4: 16px;
+  --eg-sp-5: 20px;
+  --eg-sp-6: 24px;
+  --eg-sp-7: 28px;
+  --eg-sp-8: 32px;
+
+  /* ---- Radios ---- */
+  --eg-radius-sm: 6px;
+  --eg-radius: 10px;
+  --eg-radius-lg: 12px;
+  --eg-radius-pill: 999px;
+
+  /* ---- Alturas normalizadas ---- */
+  --eg-h-input: 42px;
+  --eg-h-btn: 42px;
+  --eg-h-btn-sm: 34px;
+  --eg-h-row: 64px;
+  --eg-h-nav-item: 46px;
+  --eg-h-topbar: 62px;
+
+  /* ---- Layout ---- */
+  --eg-sidebar-w: 252px;
+  --eg-sidebar-w-collapsed: 76px;
+  --eg-content-pad: 28px;
+
+  /* ---- Tipografía ---- */
+  --eg-fs-xs: 11px;
+  --eg-fs-sm: 12px;
+  --eg-fs-base: 13px;
+  --eg-fs-md: 14px;
+  --eg-fs-lg: 16px;
+  --eg-fs-title: 26px;
+  --eg-fs-stat: 24px;
+
+  /* ---- Sombras: discretas, sin glow ---- */
+  --eg-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --eg-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --eg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+
+  /* ---- Transiciones: cortas, sin adornos ---- */
+  --eg-t-fast: 120ms ease;
+  --eg-t: 180ms ease;
+}

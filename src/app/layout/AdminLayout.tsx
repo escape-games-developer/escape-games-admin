@@ -62,7 +62,13 @@ export default function AdminLayout() {
   }, [loc.pathname]);
 
   useEffect(() => {
-    const widePaths = ["/salas", "/novedades", "/usuarios", "/usuarios/progreso"];
+    const widePaths = [
+      "/salas",
+      "/novedades",
+      "/usuarios",
+      "/usuarios/progreso",
+      "/golden-tickets",
+    ];
     const isWide = widePaths.includes(loc.pathname);
 
     const cls = "adminWide";

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import GoldenTicketReviewModal from "../components/GoldenTicketReviewModal";
-import { ToastStack, useToasts } from "../components/Toast";
+import { useToasts, ToastStack } from "../components/Toast";
 import {
   fetchGrantedCount,
   fetchPendingRequests,
@@ -11,7 +11,13 @@ import {
   type PendingRequest,
 } from "../lib/goldenTickets";
 
-export default function GoldenTickets() {
+/**
+ * Revisión de solicitudes de Golden Ticket.
+ *
+ * El QR que se imprime para las salas NO vive acá: está en el modal que abre la
+ * fila fija de /salas (GoldenTicketManagementModal).
+ */
+export default function GoldenTicketAdmin() {
   const { toasts, toast, dismiss } = useToasts();
 
   const [granted, setGranted] = useState<number | null>(null);
@@ -52,38 +58,44 @@ export default function GoldenTickets() {
       <div style={styles.pageInner}>
         <div style={styles.headerWrap}>
           <div style={styles.headerText}>
-            <h1 style={styles.title}>Golden Tickets</h1>
+            <h1 style={styles.title}>Golden Ticket</h1>
             <p style={styles.subtitle}>
               Revisá las capturas de valoración que mandaron los usuarios y otorgá el
               Golden Ticket. El cupo es de {GOLDEN_TICKET_LIMIT} en total.
             </p>
           </div>
 
-          <div style={styles.headerActions}>
-            <button type="button" className="ghostBtn" onClick={load} disabled={loading}>
-              {loading ? "Actualizando…" : "Actualizar"}
-            </button>
-          </div>
+          <button
+            type="button"
+            className="ghostBtn"
+            onClick={load}
+            disabled={loading}
+            style={styles.refreshBtn}
+          >
+            {loading ? "Actualizando…" : "Actualizar"}
+          </button>
         </div>
 
         <div style={styles.cardsGrid}>
           <div style={styles.card}>
             <span style={styles.cardLabel}>Otorgados</span>
-            <div style={{ ...styles.cardValue, color: exhausted ? "#f87171" : "#ffffff" }}>
+            <strong
+              style={{ ...styles.cardValue, color: exhausted ? "#f87171" : "#ffffff" }}
+            >
               {granted == null ? "—" : `${granted} / ${GOLDEN_TICKET_LIMIT}`}
-            </div>
+            </strong>
           </div>
 
           <div style={styles.card}>
             <span style={styles.cardLabel}>Pendientes de revisión</span>
-            <div style={styles.cardValue}>{loading ? "—" : pending.length}</div>
+            <strong style={styles.cardValue}>{loading ? "—" : pending.length}</strong>
           </div>
 
           <div style={styles.card}>
             <span style={styles.cardLabel}>Disponibles</span>
-            <div style={styles.cardValue}>
+            <strong style={styles.cardValue}>
               {granted == null ? "—" : Math.max(0, GOLDEN_TICKET_LIMIT - granted)}
-            </div>
+            </strong>
           </div>
         </div>
 
@@ -96,58 +108,61 @@ export default function GoldenTickets() {
 
         <h2 style={styles.sectionTitle}>Solicitudes pendientes</h2>
 
-        {loading ? (
-          <div style={styles.panel}>Cargando…</div>
-        ) : errMsg ? (
-          <div style={{ ...styles.panel, color: "#f87171" }}>{errMsg}</div>
-        ) : pending.length === 0 ? (
-          <div style={styles.panel}>No hay capturas pendientes de revisión.</div>
-        ) : (
-          <div style={styles.list}>
-            {pending.map((p) => {
-              const name = fullName(p);
+        <div style={styles.listScroller}>
+          {loading ? (
+            <div style={styles.panel}>Cargando…</div>
+          ) : errMsg ? (
+            <div style={{ ...styles.panel, color: "#f87171" }}>{errMsg}</div>
+          ) : pending.length === 0 ? (
+            <div style={styles.panel}>No hay capturas pendientes de revisión.</div>
+          ) : (
+            <div style={styles.list}>
+              {pending.map((p) => {
+                const name = fullName(p);
 
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setSelected(p)}
-                  style={styles.row}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "#334155";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "#1f2937";
-                  }}
-                >
-                  {p.photo_url ? (
-                    <img src={p.photo_url} alt="" style={styles.avatar} />
-                  ) : (
-                    <div style={{ ...styles.avatar, ...styles.avatarFallback }}>
-                      {name.charAt(0).toUpperCase()}
-                    </div>
-                  )}
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelected(p)}
+                    style={styles.row}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = "#334155";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = "#1f2937";
+                    }}
+                  >
+                    {p.photo_url ? (
+                      <img src={p.photo_url} alt="" style={styles.avatar} />
+                    ) : (
+                      <div style={{ ...styles.avatar, ...styles.avatarFallback }}>
+                        {name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
 
-                  <div style={styles.rowInfo}>
-                    <div style={styles.rowName}>{name}</div>
-                    <div style={styles.rowMeta}>
-                      {p.alias ? `@${p.alias}` : "sin alias"} · {p.mail ?? "sin mail"}
+                    <div style={styles.rowInfo}>
+                      <div style={styles.rowName}>{name}</div>
+                      <div style={styles.rowMeta}>
+                        {p.alias ? `@${p.alias}` : "sin alias"} · {p.mail ?? "sin mail"}
+                      </div>
                     </div>
-                  </div>
 
-                  <div style={styles.rowRight}>
-                    <div style={styles.rowTime}>
-                      Subido {formatRelative(p.rating_screenshot_uploaded_at)}
+                    <div style={styles.rowRight}>
+                      <div style={styles.rowTime}>
+                        Subido {formatRelative(p.rating_screenshot_uploaded_at)}
+                      </div>
+                      <div style={styles.rowCta}>Revisar captura →</div>
                     </div>
-                    <div style={styles.rowCta}>Revisar captura →</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
+      {/* Trae el visor de la captura con Aceptar / Rechazar (con motivo). */}
       <GoldenTicketReviewModal
         open={!!selected}
         request={selected}
@@ -164,10 +179,13 @@ export default function GoldenTickets() {
 const styles: Record<string, any> = {
   page: {
     width: "100%",
-    minHeight: "100%",
-    height: "100%",
+    minHeight: "100vh",
+    height: "100vh",
     background: "#0f172a",
     color: "#e5e7eb",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
     fontFamily:
       'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     boxSizing: "border-box",
@@ -175,22 +193,24 @@ const styles: Record<string, any> = {
 
   pageInner: {
     width: "100%",
-    maxWidth: "100%",
-    minHeight: "100%",
-    margin: 0,
-    padding: "14px 18px 18px",
-    boxSizing: "border-box",
+    flex: 1,
+    minHeight: 0,
     display: "flex",
     flexDirection: "column",
+    padding: "14px 18px 18px",
+    boxSizing: "border-box",
+    overflow: "hidden",
   },
 
   headerWrap: {
     display: "flex",
     gap: 16,
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "flex-end",
     flexWrap: "wrap",
-    marginBottom: 14,
+    marginBottom: 24,
+    width: "100%",
+    flexShrink: 0,
   },
 
   headerText: {
@@ -211,12 +231,11 @@ const styles: Record<string, any> = {
     fontSize: 14,
     color: "#94a3b8",
     maxWidth: 760,
+    lineHeight: 1.55,
   },
 
-  headerActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
+  refreshBtn: {
+    flexShrink: 0,
   },
 
   cardsGrid: {
@@ -225,6 +244,7 @@ const styles: Record<string, any> = {
     gap: 12,
     marginBottom: 18,
     width: "100%",
+    flexShrink: 0,
   },
 
   card: {
@@ -259,6 +279,7 @@ const styles: Record<string, any> = {
     padding: 12,
     fontSize: 13.5,
     marginBottom: 16,
+    flexShrink: 0,
   },
 
   sectionTitle: {
@@ -266,6 +287,14 @@ const styles: Record<string, any> = {
     fontSize: 18,
     fontWeight: 800,
     color: "#ffffff",
+    flexShrink: 0,
+  },
+
+  listScroller: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+    paddingRight: 4,
   },
 
   panel: {

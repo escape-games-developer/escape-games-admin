@@ -4,12 +4,13 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AdminLayout from "./layout/AdminLayout";
 
 import Login from ".././pages/Login";
+import SetPassword from ".././pages/SetPassword";
 import Rooms from ".././pages/Rooms";
 import News from ".././pages/News";
 import Users from ".././pages/Users";
 import UserProgressPage from ".././pages/UserProgressPage";
-import GoldenTickets from ".././pages/GoldenTickets";
-import Config from ".././pages/Config";
+import GoldenTicketAdmin from ".././pages/GoldenTicketAdmin";
+import UiPreview from ".././pages/UiPreview";
 
 type UserRole = "CLIENT" | "GM" | "ADMIN" | "ADMIN_GENERAL";
 
@@ -79,6 +80,17 @@ export default function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
 
+      {/*
+        Público a propósito: se entra con el link del invite de Supabase, que
+        trae los tokens en el hash. No puede pasar por AdminLayout ni por los
+        guards, porque todavía no hay nada en localStorage.
+      */}
+      <Route path="/set-password" element={<SetPassword />} />
+
+      {/* Vitrina del sistema de UI (Etapa 1A del rediseño). Fuera de
+          AdminLayout y sin guards: es solo presentación, no toca datos. */}
+      <Route path="/_ui-preview" element={<UiPreview />} />
+
       <Route element={<AdminLayout />}>
         <Route path="/" element={<Navigate to="/salas" replace />} />
 
@@ -110,6 +122,15 @@ export default function AppRoutes() {
         />
 
         <Route
+          path="/golden-tickets"
+          element={
+            <RequirePerm permKey="canManageUsers">
+              <GoldenTicketAdmin />
+            </RequirePerm>
+          }
+        />
+
+        <Route
           path="/usuarios/progreso"
           element={
             <RequireRole allow={["ADMIN_GENERAL", "ADMIN"]}>
@@ -118,23 +139,6 @@ export default function AppRoutes() {
           }
         />
 
-        <Route
-          path="/golden-tickets"
-          element={
-            <RequirePerm permKey="canManageUsers">
-              <GoldenTickets />
-            </RequirePerm>
-          }
-        />
-
-        <Route
-          path="/configuracion"
-          element={
-            <RequirePerm permKey="canManageUsers">
-              <Config />
-            </RequirePerm>
-          }
-        />
       </Route>
 
       <Route path="*" element={<Navigate to="/salas" replace />} />

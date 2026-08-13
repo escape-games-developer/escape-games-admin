@@ -2,6 +2,9 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { TEMPLATE_URLS } from "../lib/imageTemplates";
+import { readImageSize, aspectMatches } from "../lib/imageAspect";
+import { useToasts, ToastStack } from "../components/Toast";
 
 import type { EmojiClickData } from "emoji-picker-react";
 const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
@@ -16,7 +19,6 @@ type NewsItem = {
   type: NewsType;
   publishedAt: string;
   image: string;
-  imagePosition: number;
   ctaMode: CtaMode;
   ctaLink: string;
   active: boolean;
@@ -32,9 +34,14 @@ const TYPE_LABEL: Record<NewsType, string> = {
 
 const clamp = (n: number, a: number, b: number) => Math.max(a, Math.min(b, n));
 const NEWS_BUCKET = "news";
-const NEWS_IMAGE_WIDTH = 1200;
-const NEWS_IMAGE_HEIGHT = 500;
+
+/* Caja real de la app para news_v1.image_url: aspectRatio 2.4 (ver
+   app/(tabs)/index.tsx -> styles.cardImageWrap). */
+const NEWS_IMAGE_WIDTH = 1440;
+const NEWS_IMAGE_HEIGHT = 600;
 const NEWS_CARD_ASPECT = NEWS_IMAGE_WIDTH / NEWS_IMAGE_HEIGHT;
+const NEWS_RATIO_LABEL = "2.4:1";
+const NEWS_SIZE_LABEL = "1440 × 600 px (aspect 2.4:1)";
 
 const defaultNews = (): NewsItem => ({
   id: crypto.randomUUID(),
@@ -43,7 +50,6 @@ const defaultNews = (): NewsItem => ({
   type: "DESTACADO",
   publishedAt: new Date().toISOString().slice(0, 10),
   image: "",
-  imagePosition: 50,
   ctaMode: "VER_DETALLE",
   ctaLink: "",
   active: true,
@@ -95,8 +101,6 @@ function fromDb(row: any): NewsItem {
     type,
     publishedAt: row.published_at ? String(row.published_at) : fallbackDate,
     image: row.image_url || "",
-    imagePosition:
-      typeof row.image_position === "number" ? Math.round(row.image_position) : 50,
     ctaMode,
     ctaLink: row.cta_link || "",
     active: Boolean(row.active),
@@ -112,7 +116,12 @@ function toDb(n: NewsItem) {
     type: n.type,
     published_at: n.publishedAt,
     image_url: n.image || null,
-    image_position: Math.round(clamp(n.imagePosition ?? 50, 0, 100)),
+
+    /* image_position es placebo: la app la lee pero nunca la aplica al render.
+       No se puede mandar null (es NOT NULL en news_v1), así que se normaliza
+       al default para limpiar valores viejos. */
+    image_position: 50,
+
     cta_mode: n.ctaMode,
     cta_link: n.ctaLink ? n.ctaLink : null,
     active: Boolean(n.active),
@@ -402,8 +411,19 @@ function CropperModal({
 
   const applyMaxCrop = () => {
     if (!natImg) return;
-    const full: CropRect = { x: 0, y: 0, w: natImg.w, h: natImg.h };
-    setCropRect(clampRectToImage(full, natImg, 80));
+
+    /* "Máximo" respetando el aspect 2.4:1, no la imagen entera: si se usara
+       la imagen completa el recorte saldría con el ratio equivocado. */
+    let w = natImg.w;
+    let h = w / NEWS_CARD_ASPECT;
+
+    if (h > natImg.h) {
+      h = natImg.h;
+      w = h * NEWS_CARD_ASPECT;
+    }
+
+    const max: CropRect = { x: (natImg.w - w) / 2, y: (natImg.h - h) / 2, w, h };
+    setCropRect(clampRectToImage(max, natImg, 80));
   };
 
   const endCropDrag = () => {
@@ -1180,7 +1200,6 @@ export default function News() {
 
     setEditing({
       ...n,
-      imagePosition: n.imagePosition ?? 50,
       ctaLink: n.ctaLink || "",
       title: n.title || "",
       description: htmlToPlainText(n.description || ""),
@@ -1194,6 +1213,9 @@ export default function News() {
     setSendPushOnSave(false);
     setOpen(true);
   };
+
+  const [aspectWarn, setAspectWarn] = useState<string | undefined>(undefined);
+  const { toasts, toast, dismiss } = useToasts();
 
   const onPickImage = () => fileRef.current?.click();
 
@@ -1235,23 +1257,46 @@ export default function News() {
     }
   };
 
-  const onFileChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+  const onFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const file = e.target.files?.[0] || null;
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      alert("Elegí una imagen (JPG/PNG/WebP).");
       e.target.value = "";
-      return;
+      return toast("error", "Elegí una imagen (JPG/PNG/WebP).");
+    }
+
+    e.target.value = "";
+
+    let size: { w: number; h: number };
+    try {
+      size = await readImageSize(file);
+    } catch {
+      return toast("error", "No pude leer la imagen.");
+    }
+
+    const ratio = size.w / size.h;
+
+    if (aspectMatches(ratio, NEWS_CARD_ASPECT)) {
+      setAspectWarn(undefined);
+    } else {
+      const msg =
+        `Aspect ratio inválido. Necesita ${NEWS_RATIO_LABEL} ` +
+        `(ej: ${NEWS_IMAGE_WIDTH}×${NEWS_IMAGE_HEIGHT}). ` +
+        `La imagen que elegiste es ${size.w}×${size.h} (${ratio.toFixed(2)}:1).`;
+
+      setAspectWarn(msg);
+      toast("error", `${msg} Recortala en el editor para poder usarla.`, 8000);
     }
 
     cropOriginalNameRef.current = file.name;
 
     const url = URL.createObjectURL(file);
     setLocalPreview(url);
-    openCropperWithUrl(url, file.name);
 
-    e.target.value = "";
+    /* Se abre igual: el recorte está bloqueado a 2.4:1 y se exporta a
+       1440×600, así que el resultado siempre sale correcto. */
+    openCropperWithUrl(url, file.name);
   };
 
   const removeImage = () => {
@@ -1267,7 +1312,8 @@ export default function News() {
   const onCropConfirm = (file: File, previewUrl: string) => {
     setEditingImageFile(file);
     setLocalPreview(previewUrl);
-    setEditing((prev) => (prev ? { ...prev, imagePosition: 50 } : prev));
+    /* El recorte sale con el aspect exacto: se limpia el aviso. */
+    setAspectWarn(undefined);
     closeCrop();
   };
 
@@ -1588,7 +1634,6 @@ export default function News() {
                               width: "100%",
                               height: "100%",
                               objectFit: "cover",
-                              objectPosition: `50% ${n.imagePosition}%`,
                               display: "block",
                             }}
                             onError={(e) => {
@@ -1866,40 +1911,96 @@ export default function News() {
                     </div>
 
                     <div style={{ ...styles.fieldNews, gridColumn: "1 / -1" }}>
-                      <span style={styles.labelNews}>Vista previa</span>
+                      <span style={styles.labelNews}>Previa del recorte final</span>
 
-                      {editing.image ? (
-                        <div style={styles.editorPreviewWrap}>
+                      <div
+                        style={{
+                          position: "relative",
+                          width: "100%",
+                          aspectRatio: String(NEWS_CARD_ASPECT),
+                          borderRadius: 16,
+                          overflow: "hidden",
+                          border: "1px solid rgba(255,255,255,.12)",
+                          background: "rgba(0,0,0,.25)",
+                        }}
+                      >
+                        {editing.image ? (
                           <img
                             src={editing.image}
                             alt="Preview"
                             style={{
                               width: "100%",
-                              height: 260,
+                              height: "100%",
                               objectFit: "cover",
-                              objectPosition: `50% ${editing.imagePosition}%`,
                               display: "block",
                             }}
                           />
-
-                          <div style={styles.sliderWrap}>
-                            <span style={styles.sliderLabel}>Posición vertical</span>
-                            <input
-                              type="range"
-                              min={0}
-                              max={100}
-                              step={1}
-                              value={editing.imagePosition ?? 50}
-                              onChange={(e) =>
-                                setEditing({ ...editing, imagePosition: Number(e.target.value) })
-                              }
-                              style={{ width: "100%" }}
-                            />
+                        ) : (
+                          <div
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 12,
+                              opacity: 0.7,
+                            }}
+                          >
+                            Todavía no hay imagen seleccionada.
                           </div>
+                        )}
+
+                        {/* Bordes de la caja esperada */}
+                        <div
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            border: "1px dashed rgba(125,211,252,.55)",
+                            borderRadius: 16,
+                            pointerEvents: "none",
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ fontSize: 12, opacity: 0.78 }}>
+                          Medidas requeridas: <b>{NEWS_SIZE_LABEL}</b>
                         </div>
-                      ) : (
-                        <div style={styles.previewPlaceholder}>Todavía no hay imagen seleccionada.</div>
-                      )}
+
+                        {TEMPLATE_URLS.news ? (
+                          <a
+                            href={TEMPLATE_URLS.news}
+                            download
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              fontSize: 12,
+                              color: "#7dd3fc",
+                              textDecoration: "none",
+                              width: "fit-content",
+                            }}
+                          >
+                            📐 Descargar plantilla
+                          </a>
+                        ) : null}
+
+                        {aspectWarn ? (
+                          <div
+                            style={{
+                              fontSize: 12,
+                              lineHeight: 1.4,
+                              color: "#fca5a5",
+                              border: "1px solid #991b1b",
+                              background: "rgba(63,18,20,.55)",
+                              borderRadius: 10,
+                              padding: "8px 10px",
+                            }}
+                          >
+                            ⚠️ {aspectWarn}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
 
                     <label style={{ ...styles.fieldNews, gridColumn: "1 / -1" }}>
@@ -1951,6 +2052,8 @@ export default function News() {
         {previewOpen && previewData ? (
           <ClientCardPreview item={previewData} onClose={() => { setPreviewOpen(false); setPreviewItem(null); }} />
         ) : null}
+
+        <ToastStack toasts={toasts} onDismiss={dismiss} />
       </div>
     </div>
   );

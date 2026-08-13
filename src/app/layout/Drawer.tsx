@@ -222,6 +222,8 @@ export default function Drawer({ open, onClose, userName }: Props) {
 
   const canSeeNews = effectivePerms.canManageNews;
   const canSeeUsers = effectivePerms.canManageUsers;
+  /* Mismo permiso que guarda la ruta y que la fila fija de Salas. */
+  const canSeeGoldenTickets = effectivePerms.canManageUsers;
   const canSeeUserProgress = !loadingRole && isAdmin;
 
   const logout = async () => {
@@ -340,6 +342,16 @@ export default function Drawer({ open, onClose, userName }: Props) {
               </NavLink>
             )}
 
+            {canSeeGoldenTickets && (
+              <NavLink
+                to="/golden-tickets"
+                onClick={onClose}
+                className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
+              >
+                Golden Ticket
+              </NavLink>
+            )}
+
             {canSeeUserProgress && (
               <NavLink
                 to="/usuarios/progreso"
@@ -350,25 +362,6 @@ export default function Drawer({ open, onClose, userName }: Props) {
               </NavLink>
             )}
 
-            {canSeeUsers && (
-              <NavLink
-                to="/golden-tickets"
-                onClick={onClose}
-                className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
-              >
-                Golden Tickets
-              </NavLink>
-            )}
-
-            {canSeeUsers && (
-              <NavLink
-                to="/configuracion"
-                onClick={onClose}
-                className={({ isActive }) => (isActive ? "navItem active" : "navItem")}
-              >
-                Configuración
-              </NavLink>
-            )}
           </nav>
         </div>
 
