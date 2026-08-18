@@ -1,4 +1,4 @@
-import Icon from "../../ui/icons";
+import Breadcrumb from "../../ui/Breadcrumb";
 
 export type Crumb = {
   label: string;
@@ -8,8 +8,8 @@ export type Crumb = {
 
 type Props = {
   crumbs: Crumb[];
-  userName: string;
-  online?: boolean;
+  /** Conservado por compatibilidad con la vitrina; el usuario vive en el sidebar. */
+  userName?: string;
   /** Solo se muestra en mobile, para abrir el sidebar como drawer. */
   onOpenMenu?: () => void;
 };
@@ -18,7 +18,7 @@ type Props = {
  * Barra superior compacta (62px). Reemplaza al header gigante con logo
  * centrado: el logo ahora vive en el sidebar.
  */
-export default function AdminTopbar({ crumbs, userName, online = true, onOpenMenu }: Props) {
+export default function AdminTopbar({ crumbs, onOpenMenu }: Props) {
   return (
     <header className="eg-topbar">
       {onOpenMenu && (
@@ -36,36 +36,7 @@ export default function AdminTopbar({ crumbs, userName, online = true, onOpenMen
         </button>
       )}
 
-      <nav className="eg-crumbs" aria-label="Ruta">
-        {crumbs.map((c, i) => {
-          const last = i === crumbs.length - 1;
-          return (
-            <span key={`${c.label}-${i}`} className="eg-crumbs__item">
-              {i > 0 && (
-                <span className="eg-crumbs__sep" aria-hidden="true">
-                  /
-                </span>
-              )}
-              <span className={last ? "eg-crumbs__current" : "eg-crumbs__link"}>{c.label}</span>
-            </span>
-          );
-        })}
-      </nav>
-
-      <div className="eg-topbar__right">
-        <span className={`eg-status${online ? " is-online" : ""}`}>
-          <span className="eg-status__dot" aria-hidden="true" />
-          {online ? "online" : "offline"}
-        </span>
-
-        <span className="eg-topbar__user" title={userName}>
-          <span className="eg-avatar eg-avatar--sm" aria-hidden="true">
-            {(userName.trim()[0] || "A").toUpperCase()}
-          </span>
-          <span className="eg-topbar__user-name">{userName}</span>
-          <Icon name="chevronRight" size={14} />
-        </span>
-      </div>
+      <Breadcrumb items={crumbs} />
     </header>
   );
 }

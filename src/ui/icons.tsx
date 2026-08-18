@@ -28,6 +28,7 @@ export type IconName =
   | "users"
   | "ticket"
   | "progress"
+  | "settings"
   | "logout"
   // Chrome
   | "chevronLeft"
@@ -260,6 +261,19 @@ export default function Icon({ name, size = 16, className, style }: Props) {
           />
           <path d="M10 8.5 6.5 12 10 15.5" stroke="currentColor" strokeWidth={S} strokeLinecap="round" strokeLinejoin="round" />
           <path d="M6.5 12H15" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+        </svg>
+      );
+
+    case "settings":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth={S} />
+          <path
+            d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.55v.17h-3v-.17a1.7 1.7 0 0 0-1.03-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.04 15a1.7 1.7 0 0 0-1.55-1.03h-.17v-3h.17A1.7 1.7 0 0 0 7.04 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06 2.12-2.12.06.06a1.7 1.7 0 0 0 1.87.34A1.7 1.7 0 0 0 11.72 3.8v-.17h3v.17a1.7 1.7 0 0 0 1.03 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06 2.12 2.12-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.55 1.03h.17v3h-.17A1.7 1.7 0 0 0 19.4 15Z"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
         </svg>
       );
 

@@ -2,11 +2,6 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
-type AdminRole = "ADMIN_GENERAL" | "ADMIN" | "GM";
-
-/** Home del panel (misma que usa Login). */
-const HOME_PATH = "/salas";
-
 const MIN_PASS = 8;
 
 /**
@@ -56,33 +51,6 @@ function parseHashParams(hash: string) {
 /** Saca los tokens de la URL para que no queden en el historial. */
 function stripHash() {
   window.history.replaceState(null, "", window.location.pathname + window.location.search);
-}
-
-/**
- * Replica lo que hace Login al entrar: sin estas keys los guards de routes.tsx
- * leen role "CLIENT" y rebotan al usuario.
- */
-async function hydrateAdminSession(userId: string): Promise<boolean> {
-  const { data: adminRow, error } = await supabase
-    .from("admins")
-    .select("user_id, mail, branch_id, gm_code, is_super, permissions")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error || !adminRow) return false;
-
-  let role: AdminRole;
-  if (adminRow.is_super) role = "ADMIN_GENERAL";
-  else if (adminRow.gm_code) role = "GM";
-  else role = "ADMIN";
-
-  localStorage.setItem("eg_admin_role", role);
-  localStorage.setItem("eg_admin_mail", adminRow.mail ?? "");
-  localStorage.setItem("eg_admin_branch_id", String(adminRow.branch_id ?? ""));
-  localStorage.setItem("eg_admin_is_super", adminRow.is_super ? "true" : "false");
-  localStorage.setItem("eg_admin_permissions", JSON.stringify(adminRow.permissions ?? {}));
-
-  return true;
 }
 
 /* ===== COMPONENTE ===== */
@@ -197,22 +165,21 @@ export default function SetPassword() {
     setBusy(true);
 
     try {
-      const { data, error } = await supabase.auth.updateUser({ password: pass1 });
+      const { error } = await supabase.auth.updateUser({ password: pass1 });
       if (error) throw error;
 
       setOkMsg("Contraseña configurada");
 
-      const userId = data.user?.id;
-      const isAdmin = userId ? await hydrateAdminSession(userId) : false;
+      /* Cerramos la sesión que abrió el link de invitación. Si la dejáramos
+         viva el usuario quedaría adentro del panel sin haber pasado nunca por
+         el login, un estado ambiguo difícil de depurar. Que cierre el círculo
+         entrando con su mail y la contraseña que acaba de elegir. */
+      await supabase.auth.signOut();
 
-      if (!isAdmin) {
-        // No está habilitado como admin: que entre por la puerta de siempre.
-        await supabase.auth.signOut();
-        nav("/login", { replace: true });
-        return;
-      }
-
-      nav(HOME_PATH, { replace: true });
+      nav("/login", {
+        replace: true,
+        state: { notice: "Contraseña creada, ingresá con tu email y contraseña." },
+      });
     } catch (e: any) {
       setErr(e?.message ?? "No pude configurar la contraseña.");
     } finally {

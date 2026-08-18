@@ -5,6 +5,23 @@ import { supabase } from "../lib/supabase";
 import { TEMPLATE_URLS } from "../lib/imageTemplates";
 import { readImageSize, aspectMatches } from "../lib/imageAspect";
 import { useToasts, ToastStack } from "../components/Toast";
+import {
+  ActionMenu,
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  Icon as UiIcon,
+  Input,
+  Modal,
+  PageHeader,
+  SearchInput,
+  Select,
+  StatCard,
+  Toggle,
+  type DataTableColumn,
+} from "../ui";
 
 import type { EmojiClickData } from "emoji-picker-react";
 const EmojiPicker = React.lazy(() => import("emoji-picker-react"));
@@ -41,7 +58,7 @@ const NEWS_IMAGE_WIDTH = 1440;
 const NEWS_IMAGE_HEIGHT = 600;
 const NEWS_CARD_ASPECT = NEWS_IMAGE_WIDTH / NEWS_IMAGE_HEIGHT;
 const NEWS_RATIO_LABEL = "2.4:1";
-const NEWS_SIZE_LABEL = "1440 × 600 px (aspect 2.4:1)";
+const NEWS_SIZE_LABEL = "1440 × 600 px · 2.4:1";
 
 const defaultNews = (): NewsItem => ({
   id: crypto.randomUUID(),
@@ -760,126 +777,9 @@ function ClientCardPreview({
   );
 }
 
-function Icon({
-  name,
-  size = 16,
-  style,
-}: {
-  name: "dots" | "edit" | "eye" | "toggle" | "trash";
-  size?: number;
-  style?: React.CSSProperties;
-}) {
-  const common = {
-    width: size,
-    height: size,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    xmlns: "http://www.w3.org/2000/svg",
-    style,
-  } as any;
-
-  if (name === "dots") {
-    return (
-      <svg {...common}>
-        <circle cx="5" cy="12" r="1.8" fill="currentColor" />
-        <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-        <circle cx="19" cy="12" r="1.8" fill="currentColor" />
-      </svg>
-    );
-  }
-
-  if (name === "edit") {
-    return (
-      <svg {...common}>
-        <path d="M12 20h9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        <path
-          d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-
-  if (name === "eye") {
-    return (
-      <svg {...common}>
-        <path d="M1.5 12s4-7.5 10.5-7.5S22.5 12 22.5 12 18.5 19.5 12 19.5 1.5 12 1.5 12Z" stroke="currentColor" strokeWidth="2" />
-        <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="2" />
-      </svg>
-    );
-  }
-
-  if (name === "toggle") {
-    return (
-      <svg {...common}>
-        <path d="M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-        <circle cx="10" cy="12" r="3" fill="currentColor" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg {...common}>
-      <path d="M4 7h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M6 7l1 14h10l1-14" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M9 7V4h6v3" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function FIcon({
-  name,
-  size = 16,
-}: {
-  name: "bold" | "italic" | "underline" | "list";
-  size?: number;
-}) {
-  const common = {
-    width: size,
-    height: size,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    xmlns: "http://www.w3.org/2000/svg",
-  } as any;
-
-  if (name === "bold") {
-    return (
-      <svg {...common}>
-        <path d="M7 4h6a4 4 0 0 1 0 8H7V4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-        <path d="M7 12h7a4 4 0 0 1 0 8H7v-8Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      </svg>
-    );
-  }
-  if (name === "italic") {
-    return (
-      <svg {...common}>
-        <path d="M19 4h-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        <path d="M13 20H5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        <path d="M15 4 9 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-    );
-  }
-  if (name === "underline") {
-    return (
-      <svg {...common}>
-        <path d="M7 4v7a5 5 0 0 0 10 0V4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        <path d="M5 20h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-    );
-  }
-  return (
-    <svg {...common}>
-      <path d="M6 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M6 12h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M6 17h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="4" cy="7" r="1" fill="currentColor" />
-      <circle cx="4" cy="12" r="1" fill="currentColor" />
-      <circle cx="4" cy="17" r="1" fill="currentColor" />
-    </svg>
-  );
+function FIcon({ name }: { name: "bold" | "italic" | "underline" | "list" }) {
+  const label = name === "bold" ? "B" : name === "italic" ? "I" : name === "underline" ? "U" : "≡";
+  return <span aria-hidden="true" style={{ fontWeight: name === "bold" ? 800 : 500, fontStyle: name === "italic" ? "italic" : "normal", textDecoration: name === "underline" ? "underline" : "none" }}>{label}</span>;
 }
 
 export default function News() {
@@ -1502,561 +1402,182 @@ export default function News() {
       el.focus();
     });
   };
+  void menuPos;
+  void openMenuFor;
+
+  const isEditingExisting = Boolean(editing && items.some((item) => item.id === editing.id));
+  const columns: DataTableColumn<NewsItem>[] = [
+    {
+      key: "image",
+      header: "Imagen",
+      className: "eg-news-table__image-col",
+      render: (item) => item.image ? (
+        <img className="eg-news-thumb" src={item.image} alt="" />
+      ) : (
+        <span className="eg-news-thumb eg-news-thumb--empty"><UiIcon name="image" size={18} /></span>
+      ),
+    },
+    {
+      key: "title",
+      header: "Título",
+      className: "eg-news-table__title-col",
+      render: (item) => (
+        <div className="eg-news-title-cell">
+          <strong>{item.title || "—"}</strong>
+          <span title={htmlToPlainText(item.description)}>{ellipsize(htmlToPlainText(item.description), 90) || "Sin descripción"}</span>
+        </div>
+      ),
+    },
+    {
+      key: "type",
+      header: "Tipo",
+      render: (item) => <Badge tone={item.type === "DESTACADO" ? "accent" : "neutral"} small>{TYPE_LABEL[item.type]}</Badge>,
+    },
+    { key: "date", header: "Fecha", render: (item) => <span className="eg-news-date">{item.publishedAt}</span> },
+    {
+      key: "link",
+      header: "Link",
+      className: "eg-news-table__link-col",
+      render: (item) => item.ctaLink ? (
+        <a className="eg-news-link" href={item.ctaLink} target="_blank" rel="noreferrer" title={item.ctaLink}>
+          <UiIcon name="link" size={14} /> {ellipsize(item.ctaLink, 36)}
+        </a>
+      ) : <span className="eg-news-muted">Sin link</span>,
+    },
+    {
+      key: "status",
+      header: "Estado",
+      align: "center",
+      render: (item) => <Badge tone={item.active ? "success" : "neutral"} dot small>{item.active ? "Activa" : "Inactiva"}</Badge>,
+    },
+    {
+      key: "actions",
+      header: "Acciones",
+      align: "center",
+      render: (item) => canManageNews ? (
+        <ActionMenu items={[
+          { key: "edit", label: "Editar", icon: "edit", disabled: saving, onSelect: () => startEdit(item) },
+          { key: "preview", label: "Vista previa", icon: "eye", disabled: saving, onSelect: () => openCardPreview(item) },
+          { key: "toggle", label: item.active ? "Desactivar" : "Activar", icon: "toggle", disabled: saving, onSelect: () => toggleActive(item.id) },
+          { key: "delete", label: "Borrar", icon: "trash", danger: true, separatorBefore: true, disabled: saving, onSelect: () => remove(item.id) },
+        ]} />
+      ) : <span className="eg-news-muted">—</span>,
+    },
+  ];
 
   return (
-    <div style={styles.page}>
-      <div style={styles.pageInner}>
-        <div style={styles.headerWrap}>
-          <div style={styles.headerText}>
-            <h1 style={styles.title}>Novedades</h1>
-            <p style={styles.subtitle}></p>
-          </div>
+    <div className="eg-news-page">
+      <PageHeader
+        title="Novedades"
+        subtitle="Administrá las novedades publicadas en la app."
+        action={canManageNews ? <Button variant="primary" icon="plus" onClick={startCreate}>Nueva novedad</Button> : undefined}
+      />
 
-          <div style={styles.headerActions}>
-            {canManageNews ? (
-              <button className="btnSmall" onClick={startCreate}>
-                + Nueva novedad
-              </button>
-            ) : null}
-          </div>
-        </div>
+      <Card padding="sm" className="eg-news-filters">
+        <SearchInput value={q} onChange={(event) => setQ(event.target.value)} placeholder="Buscar por título, descripción o tipo..." aria-label="Buscar novedades" />
+        <Select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} aria-label="Filtrar por tipo">
+          <option value="">Todos los tipos</option>
+          <option value="PROMO">Promo</option><option value="DESTACADO">Destacado</option>
+          <option value="EVENTO">Evento</option><option value="PROXIMAMENTE">Próximamente</option>
+        </Select>
+        <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filtrar por estado">
+          <option value="">Todos los estados</option><option value="active">Solo activas</option><option value="inactive">Solo inactivas</option>
+        </Select>
+        <Input ref={fromRef} type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} onFocus={() => openDatePicker(fromRef.current)} aria-label="Fecha desde" />
+        <Input ref={toRef} type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} onFocus={() => openDatePicker(toRef.current)} aria-label="Fecha hasta" />
+      </Card>
 
-        <div style={styles.filtersRowNews}>
-          <div style={styles.searchBox}>
-            <input
-              className="input"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar por título, descripción o tipo"
-              style={styles.searchInput}
-            />
-          </div>
-
-          <select className="input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} style={styles.filterSelect}>
-            <option value="">Todos los tipos</option>
-            <option value="PROMO">Promo</option>
-            <option value="DESTACADO">Destacado</option>
-            <option value="EVENTO">Evento</option>
-            <option value="PROXIMAMENTE">Próximamente</option>
-          </select>
-
-          <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={styles.filterSelect}>
-            <option value="">Todos los estados</option>
-            <option value="active">Solo activas</option>
-            <option value="inactive">Solo inactivas</option>
-          </select>
-
-          <input
-            ref={fromRef}
-            className="input"
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            onFocus={() => openDatePicker(fromRef.current)}
-            onClick={() => openDatePicker(fromRef.current)}
-            style={styles.filterDate}
-          />
-
-          <input
-            ref={toRef}
-            className="input"
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            onFocus={() => openDatePicker(toRef.current)}
-            onClick={() => openDatePicker(toRef.current)}
-            style={styles.filterDate}
-          />
-        </div>
-
-        <div style={styles.cardsGrid}>
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Novedades visibles</span>
-            <strong style={styles.cardValue}>{totals.total}</strong>
-          </div>
-
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Activas</span>
-            <strong style={styles.cardValue}>{totals.active}</strong>
-          </div>
-
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Inactivas</span>
-            <strong style={styles.cardValue}>{totals.inactive}</strong>
-          </div>
-
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Destacadas</span>
-            <strong style={styles.cardValue}>{totals.featured}</strong>
-          </div>
-        </div>
-
-        {loading ? (
-          <div style={styles.loadingPanel}>Cargando novedades…</div>
-        ) : (
-          <div style={styles.tableOuter}>
-            <div style={styles.tableWrapNews}>
-              <div style={styles.tableHeaderNews}>
-                <div style={{ ...styles.th, ...styles.colImg }}>Imagen</div>
-                <div style={{ ...styles.th, ...styles.colTitle }}>Título</div>
-                <div style={{ ...styles.th, ...styles.colDesc }}>Descripción</div>
-                <div style={{ ...styles.thCenter, ...styles.colType }}>Tipo</div>
-                <div style={{ ...styles.thCenter, ...styles.colDate }}>Fecha</div>
-                <div style={{ ...styles.th, ...styles.colLink }}>Link</div>
-                <div style={{ ...styles.thCenter, ...styles.colStatus }}>Estado</div>
-                <div style={{ ...styles.thCenter, ...styles.colAction }}>Acciones</div>
-              </div>
-
-              {filtered.length === 0 ? (
-                <div style={styles.emptyState}>No hay novedades con esos filtros.</div>
-              ) : (
-                filtered.map((n, idx) => {
-                  const desc = htmlToPlainText(n.description || "");
-                  const rowBg = idx % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.00)";
-
-                  return (
-                    <div
-                      key={n.id}
-                      style={{ ...styles.rowNews, background: rowBg }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLDivElement).style.background = rowBg;
-                      }}
-                    >
-                      <div style={{ ...styles.td, ...styles.colImg, padding: 8 }}>
-                        <div style={styles.newsThumb}>
-                          <img
-                            src={n.image || "https://picsum.photos/seed/news-placeholder/900/520"}
-                            alt={n.title || TYPE_LABEL[n.type]}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                              display: "block",
-                            }}
-                            onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).src =
-                                "https://picsum.photos/seed/news-placeholder/900/520";
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div style={{ ...styles.td, ...styles.colTitle }} title={n.title || ""}>
-                        <div style={styles.newsTitleCell}>{n.title || "—"}</div>
-                      </div>
-
-                      <div style={{ ...styles.td, ...styles.colDesc }} title={desc}>
-                        {ellipsize(desc, 120) || "—"}
-                      </div>
-
-                      <div style={{ ...styles.tdCenter, ...styles.colType }}>
-                        <span style={styles.typeBadge}>{TYPE_LABEL[n.type]}</span>
-                      </div>
-
-                      <div style={{ ...styles.tdCenter, ...styles.colDate }}>{n.publishedAt}</div>
-
-                      <div style={{ ...styles.td, ...styles.colLink }} title={n.ctaLink || ""}>
-                        {n.ctaLink ? ellipsize(n.ctaLink, 54) : <span style={{ opacity: 0.7 }}>Sin link</span>}
-                      </div>
-
-                      <div style={{ ...styles.tdCenter, ...styles.colStatus }}>
-                        {n.active ? (
-                          <span style={styles.statusBadgeActive}>Activa</span>
-                        ) : (
-                          <span style={styles.statusBadgeOff}>Inactiva</span>
-                        )}
-                      </div>
-
-                      <div style={{ ...styles.tdCenter, ...styles.colAction }}>
-                        {canManageNews ? (
-                          <button
-                            type="button"
-                            className="ghostBtn"
-                            data-menu-btn="1"
-                            onClick={(e) => {
-                              if (saving) return;
-                              const btn = e.currentTarget as HTMLButtonElement;
-                              if (menuOpenId === n.id) {
-                                closeMenu();
-                                return;
-                              }
-                              openMenuFor(n.id, btn);
-                            }}
-                            style={styles.actionBtnIcon}
-                            title="Opciones"
-                            aria-label="Opciones"
-                          >
-                            <Icon name="dots" size={16} />
-                          </button>
-                        ) : (
-                          <span style={{ opacity: 0.5 }}>—</span>
-                        )}
-
-                        {menuOpenId === n.id && menuPos
-                          ? createPortal(
-                              <div
-                                data-menu-popup="1"
-                                style={styles.portalMenu(menuPos.left, menuPos.top)}
-                                onMouseDown={(ev) => ev.stopPropagation()}
-                              >
-                                <button className="ghostBtn" style={styles.portalItem} onClick={() => { closeMenu(); startEdit(n); }} disabled={saving}>
-                                  <Icon name="edit" size={16} />
-                                  Editar
-                                </button>
-
-                                <button className="ghostBtn" style={styles.portalItem} onClick={() => { closeMenu(); openCardPreview(n); }} disabled={saving}>
-                                  <Icon name="eye" size={16} />
-                                  Vista previa
-                                </button>
-
-                                <button className="ghostBtn" style={styles.portalItem} onClick={() => { closeMenu(); toggleActive(n.id); }} disabled={saving}>
-                                  <Icon name="toggle" size={16} />
-                                  {n.active ? "Desactivar" : "Activar"}
-                                </button>
-
-                                <div style={styles.portalDivider} />
-
-                                <button className="ghostBtn" style={{ ...styles.portalItem, ...styles.portalDangerItem }} onClick={() => { closeMenu(); remove(n.id); }} disabled={saving}>
-                                  <Icon name="trash" size={16} />
-                                  Borrar
-                                </button>
-                              </div>,
-                              document.body
-                            )
-                          : null}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
-
-        {open && editing && (
-          <>
-            <div style={styles.overlay} onMouseDown={closeModal} />
-            <div style={styles.modalCenter} onMouseDown={closeModal}>
-              <div style={{ ...styles.modal, maxWidth: 1120 }} onMouseDown={(e) => e.stopPropagation()}>
-                <div style={styles.modalHeader}>
-                  <h2 style={styles.modalTitle}>
-                    {items.some((x) => x.id === editing.id) ? "Editar novedad" : "Nueva novedad"}
-                  </h2>
-                  <button className="ghostBtn" onClick={closeModal}>✕</button>
-                </div>
-
-                <div style={{ padding: 22 }}>
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept="image/*"
-                    style={{ display: "none" }}
-                    onChange={onFileChange}
-                  />
-
-                  <div style={styles.formGridNews}>
-                    <label style={styles.fieldNews}>
-                      <span style={styles.labelNews}>Título</span>
-                      <input
-                        className="input"
-                        value={editing.title}
-                        onChange={(e) => setEditing({ ...editing, title: e.target.value })}
-                        placeholder="Título"
-                      />
-                    </label>
-
-                    <label style={styles.fieldNews}>
-                      <span style={styles.labelNews}>Tipo</span>
-                      <select
-                        className="input"
-                        value={editing.type}
-                        onChange={(e) => {
-                          const nextType = e.target.value as NewsType;
-                          setEditing({
-                            ...editing,
-                            type: nextType,
-                            ctaMode: nextType === "PROMO" ? "CONSULTAR" : "VER_DETALLE",
-                          });
-                        }}
-                      >
-                        <option value="PROMO">Promo</option>
-                        <option value="DESTACADO">Destacado</option>
-                        <option value="EVENTO">Evento</option>
-                        <option value="PROXIMAMENTE">Próximamente</option>
-                      </select>
-                    </label>
-
-                    <label style={styles.fieldNews}>
-                      <span style={styles.labelNews}>Fecha</span>
-                      <input
-                        ref={publishedRef}
-                        className="input"
-                        type="date"
-                        value={editing.publishedAt}
-                        onChange={(e) => setEditing({ ...editing, publishedAt: e.target.value })}
-                        onFocus={() => openDatePicker(publishedRef.current)}
-                        onClick={() => openDatePicker(publishedRef.current)}
-                      />
-                    </label>
-
-                    <label style={{ ...styles.fieldNews, gridColumn: "1 / -1" }}>
-                      <span style={styles.labelNews}>Link CTA</span>
-                      <input
-                        className="input"
-                        value={editing.ctaLink}
-                        onChange={(e) => setEditing({ ...editing, ctaLink: e.target.value })}
-                        placeholder="https://..."
-                      />
-                    </label>
-
-                    <div style={{ ...styles.fieldNews, gridColumn: "1 / -1" }}>
-                      <span style={styles.labelNews}>Descripción</span>
-
-                      <div style={styles.formatToolbar}>
-                        <button type="button" className="ghostBtn" style={styles.toolbarBtn} onClick={() => applyInlineFormat("bold")} title="Negrita">
-                          <FIcon name="bold" />
-                        </button>
-
-                        <button type="button" className="ghostBtn" style={styles.toolbarBtn} onClick={() => applyInlineFormat("italic")} title="Itálica">
-                          <FIcon name="italic" />
-                        </button>
-
-                        <button type="button" className="ghostBtn" style={styles.toolbarBtn} onClick={() => applyInlineFormat("underline")} title="Subrayado">
-                          <FIcon name="underline" />
-                        </button>
-
-                        <button type="button" className="ghostBtn" style={styles.toolbarBtn} onClick={() => applyInlineFormat("list")} title="Lista">
-                          <FIcon name="list" />
-                        </button>
-
-                        <div style={styles.toolbarDivider} />
-
-                        <button
-                          ref={emojiBtnRef}
-                          type="button"
-                          className="ghostBtn"
-                          onClick={() => (emojiOpen ? setEmojiOpen(false) : openEmoji())}
-                          title="Emojis"
-                          style={styles.toolbarBtn}
-                        >
-                          😀
-                        </button>
-
-                        <button type="button" className="btnSmall" onClick={onPickImage}>
-                          Imagen…
-                        </button>
-
-                        {editing.image ? (
-                          <button type="button" className="ghostBtn" onClick={removeImage}>
-                            Quitar imagen
-                          </button>
-                        ) : null}
-                      </div>
-
-                      {emojiOpen && emojiPos
-                        ? createPortal(
-                            <div
-                              ref={emojiPanelRef}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              style={{
-                                position: "absolute",
-                                top: emojiPos.top,
-                                left: emojiPos.left,
-                                zIndex: 99999,
-                                borderRadius: 12,
-                                overflow: "hidden",
-                                border: "1px solid rgba(255,255,255,.12)",
-                                background: "rgba(0,0,0,.9)",
-                              }}
-                            >
-                              <EmojiBoundary>
-                                <Suspense fallback={<div style={{ padding: 12, fontSize: 12, opacity: 0.9 }}>Cargando emojis…</div>}>
-                                  <EmojiPicker
-                                    theme={"dark" as any}
-                                    width={360}
-                                    height={420}
-                                    searchPlaceHolder="Buscar emoji…"
-                                    onEmojiClick={(emojiData: EmojiClickData) => {
-                                      const emo = (emojiData as any)?.emoji || "";
-                                      if (!emo) return;
-                                      insertEmoji(emo);
-                                    }}
-                                  />
-                                </Suspense>
-                              </EmojiBoundary>
-                            </div>,
-                            document.body
-                          )
-                        : null}
-
-                      <textarea
-                        ref={descRef}
-                        className="input"
-                        rows={8}
-                        value={editing.description || ""}
-                        onChange={(e) => setEditing({ ...editing, description: e.target.value })}
-                        style={{
-                          resize: "vertical",
-                          whiteSpace: "pre-wrap",
-                          minHeight: 180,
-                          width: "100%",
-                          boxSizing: "border-box",
-                          paddingTop: 14,
-                        }}
-                        placeholder="Escribí el contenido…"
-                      />
-                    </div>
-
-                    <div style={{ ...styles.fieldNews, gridColumn: "1 / -1" }}>
-                      <span style={styles.labelNews}>Previa del recorte final</span>
-
-                      <div
-                        style={{
-                          position: "relative",
-                          width: "100%",
-                          aspectRatio: String(NEWS_CARD_ASPECT),
-                          borderRadius: 16,
-                          overflow: "hidden",
-                          border: "1px solid rgba(255,255,255,.12)",
-                          background: "rgba(0,0,0,.25)",
-                        }}
-                      >
-                        {editing.image ? (
-                          <img
-                            src={editing.image}
-                            alt="Preview"
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                              display: "block",
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 12,
-                              opacity: 0.7,
-                            }}
-                          >
-                            Todavía no hay imagen seleccionada.
-                          </div>
-                        )}
-
-                        {/* Bordes de la caja esperada */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            inset: 0,
-                            border: "1px dashed rgba(125,211,252,.55)",
-                            borderRadius: 16,
-                            pointerEvents: "none",
-                          }}
-                        />
-                      </div>
-
-                      <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                        <div style={{ fontSize: 12, opacity: 0.78 }}>
-                          Medidas requeridas: <b>{NEWS_SIZE_LABEL}</b>
-                        </div>
-
-                        {TEMPLATE_URLS.news ? (
-                          <a
-                            href={TEMPLATE_URLS.news}
-                            download
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              fontSize: 12,
-                              color: "#7dd3fc",
-                              textDecoration: "none",
-                              width: "fit-content",
-                            }}
-                          >
-                            📐 Descargar plantilla
-                          </a>
-                        ) : null}
-
-                        {aspectWarn ? (
-                          <div
-                            style={{
-                              fontSize: 12,
-                              lineHeight: 1.4,
-                              color: "#fca5a5",
-                              border: "1px solid #991b1b",
-                              background: "rgba(63,18,20,.55)",
-                              borderRadius: 10,
-                              padding: "8px 10px",
-                            }}
-                          >
-                            ⚠️ {aspectWarn}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <label style={{ ...styles.fieldNews, gridColumn: "1 / -1" }}>
-                      <span style={styles.labelNews}>Opciones</span>
-                      <div style={styles.optionsRowNews}>
-                        <label style={styles.checkRow}>
-                          <input
-                            type="checkbox"
-                            checked={editing.active}
-                            onChange={(e) => setEditing({ ...editing, active: e.target.checked })}
-                          />
-                          <span>Activa</span>
-                        </label>
-
-                        <label style={styles.checkRow}>
-                          <input
-                            type="checkbox"
-                            checked={sendPushOnSave}
-                            onChange={(e) => setSendPushOnSave(e.target.checked)}
-                          />
-                          <span>Enviar push al guardar</span>
-                        </label>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div style={styles.modalFooter}>
-                    <button className="ghostBtn" onClick={closeModal} disabled={saving}>
-                      Cancelar
-                    </button>
-                    <button className="btnSmall" onClick={save} disabled={saving}>
-                      {saving ? "Guardando…" : "Guardar"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        <CropperModal
-          open={cropOpen}
-          sourceUrl={cropSourceUrl}
-          originalFileName={cropOriginalNameRef.current}
-          onClose={closeCrop}
-          onConfirm={onCropConfirm}
-        />
-
-        {previewOpen && previewData ? (
-          <ClientCardPreview item={previewData} onClose={() => { setPreviewOpen(false); setPreviewItem(null); }} />
-        ) : null}
-
-        <ToastStack toasts={toasts} onDismiss={dismiss} />
+      <div className="eg-news-stats">
+        <StatCard value={totals.total} label="Novedades visibles" loading={loading} />
+        <StatCard value={totals.active} label="Activas" tone="success" loading={loading} />
+        <StatCard value={totals.inactive} label="Inactivas" loading={loading} />
+        <StatCard value={totals.featured} label="Destacadas" tone="accent" loading={loading} />
       </div>
+
+      <Card padding="none" className="eg-news-table-card">
+        <DataTable
+          columns={columns}
+          rows={filtered}
+          rowKey={(item) => item.id}
+          loading={loading}
+          loadingLabel="Cargando novedades..."
+          empty={<EmptyState title="No hay novedades con esos filtros" description="Probá modificando la búsqueda o los filtros." icon="news" />}
+        />
+      </Card>
+
+      <Modal
+        open={open && Boolean(editing)}
+        title={isEditingExisting ? "Editar novedad" : "Nueva novedad"}
+        description={isEditingExisting ? "Actualizá la información publicada en la app." : "Completá la información para publicar una novedad."}
+        panelClassName="eg-news-modal"
+        headerActions={editing ? <div className="eg-news-modal-toggles">
+          <Toggle title="Será visible en la aplicación." label="Activa" checked={editing.active} onChange={(event) => setEditing({ ...editing, active: event.target.checked })} />
+          <Toggle title="Solo se enviará si la novedad queda activa." label="Push" checked={sendPushOnSave} onChange={(event) => setSendPushOnSave(event.target.checked)} />
+        </div> : undefined}
+        size="lg"
+        onClose={closeModal}
+        footer={<><Button variant="secondary" onClick={closeModal} disabled={saving}>Cancelar</Button><Button variant="primary" onClick={save} loading={saving}>{isEditingExisting ? "Guardar cambios" : "Crear novedad"}</Button></>}
+      >
+        {editing && <div className="eg-news-form">
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFileChange} />
+
+          <section className="eg-news-form__section">
+            <div className="eg-news-form__heading"><span>Información</span><small>Contenido y publicación</small></div>
+            <div className="eg-news-form__grid">
+              <Input id="news-title" label="Título" value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} placeholder="Título de la novedad" />
+              <Select id="news-type" label="Tipo" value={editing.type} onChange={(event) => { const type = event.target.value as NewsType; setEditing({ ...editing, type, ctaMode: type === "PROMO" ? "CONSULTAR" : "VER_DETALLE" }); }}>
+                <option value="PROMO">Promo</option><option value="DESTACADO">Destacado</option><option value="EVENTO">Evento</option><option value="PROXIMAMENTE">Próximamente</option>
+              </Select>
+              <Input ref={publishedRef} id="news-date" label="Fecha" type="date" value={editing.publishedAt} onChange={(event) => setEditing({ ...editing, publishedAt: event.target.value })} onFocus={() => openDatePicker(publishedRef.current)} />
+              <Input id="news-link" label="Link CTA" value={editing.ctaLink} onChange={(event) => setEditing({ ...editing, ctaLink: event.target.value })} placeholder="https://..." />
+              <div className="eg-news-editor">
+                <div className="eg-news-editor__label"><span className="eg-field__label">Descripción</span><span>{htmlToPlainText(editing.description || "").length} / 113</span></div>
+                <div className="eg-news-editor__toolbar">
+                  <button type="button" onClick={() => applyInlineFormat("bold")} aria-label="Negrita"><FIcon name="bold" /></button>
+                  <button type="button" onClick={() => applyInlineFormat("italic")} aria-label="Itálica"><FIcon name="italic" /></button>
+                  <button type="button" onClick={() => applyInlineFormat("underline")} aria-label="Subrayado"><FIcon name="underline" /></button>
+                  <button type="button" onClick={() => applyInlineFormat("list")} aria-label="Lista"><FIcon name="list" /></button>
+                  <button ref={emojiBtnRef} type="button" onClick={() => emojiOpen ? setEmojiOpen(false) : openEmoji()} aria-label="Insertar emoji">😀</button>
+                </div>
+                <textarea ref={descRef} className="eg-input eg-news-editor__textarea" rows={3} value={editing.description || ""} onChange={(event) => setEditing({ ...editing, description: event.target.value })} placeholder="Escribí el contenido..." />
+              </div>
+            </div>
+          </section>
+
+          <section className="eg-news-form__section eg-news-form__section--image">
+            <div className="eg-news-form__heading"><span>Imagen</span><small>{NEWS_SIZE_LABEL}</small></div>
+            <div
+              className={`eg-news-image-field${editing.image ? " has-image" : ""}`}
+              role="button"
+              tabIndex={0}
+              aria-label={editing.image ? "Cambiar imagen" : "Seleccionar imagen"}
+              onClick={onPickImage}
+              onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onPickImage(); } }}
+            >
+              {editing.image ? <img src={editing.image} alt="Vista previa de la novedad" /> : <div className="eg-news-image-field__empty"><UiIcon name="image" size={28} /><strong>Seleccioná una imagen</strong><span>JPG, PNG o WebP · {NEWS_RATIO_LABEL}</span></div>}
+              {editing.image && <div className="eg-news-image-field__actions" onClick={(event) => event.stopPropagation()}>
+                <Button variant="secondary" size="sm" icon="image" onClick={onPickImage}>Cambiar imagen</Button>
+                <Button variant="secondary" size="sm" icon="edit" onClick={() => openCropperWithUrl(editing.image, cropOriginalNameRef.current)}>Editar recorte</Button>
+                <Button variant="ghost" size="sm" icon="trash" onClick={removeImage}>Quitar</Button>
+              </div>}
+            </div>
+            {aspectWarn && <p className="eg-news-image-warning">{aspectWarn}</p>}
+            {TEMPLATE_URLS.news && <a className="eg-news-template" href={TEMPLATE_URLS.news} download target="_blank" rel="noreferrer">Descargar plantilla</a>}
+          </section>
+        </div>}
+      </Modal>
+
+      {emojiOpen && emojiPos ? createPortal(
+        <div ref={emojiPanelRef} className="eg-news-emoji" style={{ top: emojiPos.top, left: emojiPos.left }} onMouseDown={(event) => event.stopPropagation()}>
+          <EmojiBoundary><Suspense fallback={<div className="eg-news-emoji__loading">Cargando emojis...</div>}><EmojiPicker theme={"dark" as any} width={360} height={420} searchPlaceHolder="Buscar emoji..." onEmojiClick={(data: EmojiClickData) => { const emoji = (data as any)?.emoji || ""; if (emoji) insertEmoji(emoji); }} /></Suspense></EmojiBoundary>
+        </div>, document.body
+      ) : null}
+      <CropperModal open={cropOpen} sourceUrl={cropSourceUrl} originalFileName={cropOriginalNameRef.current} onClose={closeCrop} onConfirm={onCropConfirm} />
+      {previewOpen && previewData ? <ClientCardPreview item={previewData} onClose={() => { setPreviewOpen(false); setPreviewItem(null); }} /> : null}
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>
   );
+
 }
 
 const styles: Record<string, any> = {

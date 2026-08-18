@@ -3,6 +3,23 @@ import { supabase } from "../lib/supabase";
 
 import GoldenTicketReviewModal from "../components/GoldenTicketReviewModal";
 import { ToastStack, useToasts } from "../components/Toast";
+import {
+  ActionMenu,
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  Icon as UiIcon,
+  Input,
+  Modal,
+  PageHeader,
+  SearchInput,
+  Select,
+  StatCard,
+  Toggle,
+  type DataTableColumn,
+} from "../ui";
 import { fetchAppConfig, setRatingUploadEnabled } from "../lib/appConfig";
 import {
   describeGoldenTicketSource,
@@ -103,7 +120,6 @@ const isStaffRole = (r: UserRole) => r === "GM" || r === "ADMIN_GENERAL";
 function safeRole(v: any): UserRole {
   return v === "CLIENT" || v === "GM" || v === "ADMIN_GENERAL" ? v : "CLIENT";
 }
-
 function genGmCode(len = 10) {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let out = "";
@@ -175,7 +191,6 @@ function EyeOpenIcon() {
     </svg>
   );
 }
-
 function EyeClosedIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -190,146 +205,24 @@ function EyeClosedIcon() {
   );
 }
 
-function Icon({
-  name,
-  size = 16,
-  style,
-}: {
-  name: "dots" | "key" | "shield" | "refresh" | "trash";
-  size?: number;
-  style?: React.CSSProperties;
-}) {
-  const common = {
-    width: size,
-    height: size,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    xmlns: "http://www.w3.org/2000/svg",
-    style,
-  } as any;
-
-  if (name === "dots") {
-    return (
-      <svg {...common}>
-        <circle cx="5" cy="12" r="1.8" fill="currentColor" />
-        <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-        <circle cx="19" cy="12" r="1.8" fill="currentColor" />
-      </svg>
-    );
-  }
-
-  if (name === "key") {
-    return (
-      <svg {...common}>
-        <path
-          d="M7.5 14.5a4.5 4.5 0 1 1 3.9-2.3L22 12v3h-2v2h-2v2h-3.5l-2.1-2.1"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-        <circle cx="6.5" cy="14.5" r="1" fill="currentColor" />
-      </svg>
-    );
-  }
-
-  if (name === "shield") {
-    return (
-      <svg {...common}>
-        <path
-          d="M12 2 20 6v6c0 5-3.4 9.4-8 10-4.6-.6-8-5-8-10V6l8-4Z"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M9.5 12.5 11.2 14.2 14.8 10.6"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-
-  if (name === "refresh") {
-    return (
-      <svg {...common}>
-        <path
-          d="M20 12a8 8 0 1 1-2.3-5.6"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-        <path
-          d="M20 4v6h-6"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
-  }
-
-  return (
-    <svg {...common}>
-      <path d="M4 7h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M6 7l1 14h10l1-14" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M9 7V4h6v3" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
 /** ===== Modal base ===== */
 function ModalShell({
   open,
   title,
+  description,
   onClose,
   children,
 }: {
   open: boolean;
   title: string;
+  description?: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  if (!open) return null;
-
   return (
-    <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
-          <div>
-            <h2 style={styles.modalTitle}>{title}</h2>
-          </div>
-
-          <button className="ghostBtn" onClick={onClose}>
-            ✕
-          </button>
-        </div>
-
-        <div style={{ padding: 22 }}>{children}</div>
-      </div>
-    </div>
-  );
-}
-
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "160px minmax(0, 1fr)",
-        gap: 10,
-        alignItems: "center",
-        marginBottom: 10,
-      }}
-    >
-      <div style={{ opacity: 0.85, fontSize: 13 }}>{label}</div>
-      <div style={{ minWidth: 0 }}>{children}</div>
-    </div>
+    <Modal open={open} title={title} description={description} size="md" onClose={onClose} panelClassName="eg-users-modal">
+      {children}
+    </Modal>
   );
 }
 
@@ -374,124 +267,40 @@ function CreateUserModal({
     });
   };
 
-  return (
-    <ModalShell open={open} title="Crear usuario" onClose={onClose}>
-      {!draft ? null : (
-        <>
-          <div style={{ marginBottom: 14, opacity: 0.8, fontSize: 13 }}>
-            Completá los datos y guardá. Para GM elegís sucursal. Para Cliente pedimos alias.
-          </div>
-
-          <FieldRow label="Nombre">
-            <input
-              className="input"
-              style={{ width: "100%", minWidth: 0 }}
-              value={draft.firstName}
-              onChange={(e) => patch({ firstName: e.target.value })}
-              placeholder="Nombre"
-              autoFocus
-              spellCheck={false}
-            />
-          </FieldRow>
-
-          <FieldRow label="Apellido">
-            <input
-              className="input"
-              style={{ width: "100%", minWidth: 0 }}
-              value={draft.lastName}
-              onChange={(e) => patch({ lastName: e.target.value })}
-              placeholder="Apellido"
-              spellCheck={false}
-            />
-          </FieldRow>
-
-          <FieldRow label="Mail">
-            <input
-              className="input"
-              style={{ width: "100%", minWidth: 0 }}
-              value={draft.email}
-              onChange={(e) => patch({ email: e.target.value })}
-              placeholder="mail@dominio.com"
-              spellCheck={false}
-            />
-          </FieldRow>
-
-          <FieldRow label="Rol">
-            <select
-              className="input"
-              style={{ width: "100%", minWidth: 0 }}
-              value={draft.role}
-              onChange={(e) => patch({ role: safeRole(e.target.value) })}
-            >
-              <option value="CLIENT">Cliente</option>
-              <option value="GM">Game Master</option>
-              <option value="ADMIN_GENERAL">Admin General</option>
-            </select>
-          </FieldRow>
-
-          {draft.role === "CLIENT" ? (
-            <FieldRow label="Alias (Cliente)">
-              <input
-                className="input"
-                style={{ width: "100%", minWidth: 0 }}
-                value={draft.alias}
-                onChange={(e) => patch({ alias: e.target.value })}
-                placeholder="Alias del cliente"
-                spellCheck={false}
-              />
-            </FieldRow>
-          ) : null}
-
-          {draft.role === "GM" ? (
-            <FieldRow label="Sucursal (GM)">
-              <select
-                className="input"
-                style={{ width: "100%", minWidth: 0 }}
-                value={draft.branch}
-                onChange={(e) => patch({ branch: e.target.value as any })}
-              >
-                {BRANCHES.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
-            </FieldRow>
-          ) : null}
-
-          {draft.role === "GM" ? (
-            <div style={styles.inviteNote}>
-              El GM se crea con los <b>permisos por defecto del rol</b> (otorgar llaves). Los
-              permisos de Admin General no se pueden asignar a un GM.
-            </div>
-          ) : null}
-
-          {isStaffRole(draft.role) ? (
-            <div style={styles.inviteNote}>
-              Se le va a enviar un <b>email de invitación</b> a <b>{draft.email || "el mail indicado"}</b>{" "}
-              para que configure su propia contraseña. No se genera contraseña temporal.
-            </div>
-          ) : null}
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-            <button className="ghostBtn" onClick={onClose} disabled={busy}>
-              Cancelar
-            </button>
-            <button
-              className="btnSmall"
-              onClick={() => {
-                if (!canManageUsers) return alert("No autorizado.");
-                onSave(draft);
-              }}
-              disabled={busy}
-            >
-              {busy ? "Guardando…" : "Guardar"}
-            </button>
-          </div>
-        </>
-      )}
-    </ModalShell>
-  );
+  return <Modal
+    open={open}
+    title="Nuevo usuario"
+    description="Creá un usuario y configurá su acceso al sistema."
+    size="lg"
+    panelClassName="eg-users-modal eg-users-create-modal"
+    onClose={onClose}
+    footer={draft ? <><Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button><Button variant="primary" loading={busy} onClick={() => { if (!canManageUsers) return alert("No autorizado."); onSave(draft); }}>Crear usuario</Button></> : undefined}
+  >
+    {draft && <div className="eg-users-form">
+      <section className="eg-users-form__section">
+        <div className="eg-users-form__heading"><strong>Información personal</strong><span>Datos básicos de identificación</span></div>
+        <div className="eg-users-form__grid">
+          <Input id="user-first-name" label="Nombre" value={draft.firstName} onChange={(event) => patch({ firstName: event.target.value })} placeholder="Nombre" autoFocus spellCheck={false} />
+          <Input id="user-last-name" label="Apellido" value={draft.lastName} onChange={(event) => patch({ lastName: event.target.value })} placeholder="Apellido" spellCheck={false} />
+          <Input id="user-email" className="eg-users-form__wide" label="Mail" type="email" value={draft.email} onChange={(event) => patch({ email: event.target.value })} placeholder="mail@dominio.com" spellCheck={false} />
+          {draft.role === "CLIENT" && <Input id="user-alias" label="Alias" value={draft.alias} onChange={(event) => patch({ alias: event.target.value })} placeholder="Alias del cliente" spellCheck={false} />}
+        </div>
+      </section>
+      <section className="eg-users-form__section">
+        <div className="eg-users-form__heading"><strong>Acceso</strong><span>Rol y alcance administrativo</span></div>
+        <div className="eg-users-form__grid">
+          <Select id="user-role" label="Rol" value={draft.role} onChange={(event) => patch({ role: safeRole(event.target.value) })}>
+            <option value="CLIENT">Cliente</option><option value="GM">Game Master</option><option value="ADMIN_GENERAL">Admin General</option>
+          </Select>
+          {draft.role === "GM" && <Select id="user-branch" label="Sucursal" value={draft.branch} onChange={(event) => patch({ branch: event.target.value as Branch })}>{BRANCHES.map((branch) => <option key={branch} value={branch}>{branch}</option>)}</Select>}
+          <Card padding="sm" className="eg-users-form__note">
+            {draft.role === "CLIENT" ? "Se generará una contraseña temporal y se mostrará una única vez al finalizar." : <>Se enviará una invitación a <strong>{draft.email || "el mail indicado"}</strong> para configurar la contraseña.</>}
+          </Card>
+          {draft.role === "GM" && <Card padding="sm" className="eg-users-form__note">El Game Master se crea con los permisos predeterminados del rol. Los permisos exclusivos de Admin General permanecen bloqueados.</Card>}
+        </div>
+      </section>
+    </div>}
+  </Modal>;
 }
 
 export default function Users() {
@@ -1090,9 +899,6 @@ export default function Users() {
     if (resetPass1.length < 6) return alert("La contraseña debe tener mínimo 6 caracteres.");
     if (resetPass1 !== resetPass2) return alert("Las contraseñas no coinciden.");
 
-    const ok = confirm(`¿Seguro que querés resetear la contraseña de ${u.email}?`);
-    if (!ok) return;
-
     setBusy(true);
     try {
       await invokeEdge<{ ok?: boolean }>("reset-user-password", {
@@ -1114,9 +920,6 @@ export default function Users() {
     if (!u) return;
 
     if (!canManageUsers) return alert("No autorizado.");
-    const ok = confirm(`¿Seguro que querés borrar a "${u.email}"?`);
-    if (!ok) return;
-
     setBusy(true);
     try {
       await invokeEdge<{ ok?: boolean }>("delete-user", { user_id: u.id });
@@ -1174,323 +977,125 @@ export default function Users() {
   const roleLabelOf = (r: UserRole) =>
     r === "CLIENT" ? "Cliente" : r === "GM" ? "Game Master" : "Admin General";
 
-  return (
-    <div style={styles.page}>
-      <div style={styles.pageInner}>
-        <div style={styles.headerWrap}>
-          <div style={styles.headerText}>
-            <h1 style={styles.title}>Usuarios</h1>
-            <p style={styles.subtitle}></p>
-          </div>
-
-          <div style={styles.headerActions}>
-            {canManageUsers ? (
-              <button className="btnSmall" onClick={startCreate} disabled={busy}>
-                + Nuevo usuario
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div style={styles.killSwitchRow}>
-          <span style={styles.killSwitchText}>
-            Botón "Subir captura" (Golden Ticket) para todos los clientes:
+  const userColumns: DataTableColumn<User>[] = [
+    {
+      key: "user",
+      header: "Usuario",
+      className: "eg-users-table__user-col",
+      render: (user) => {
+        const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || "Sin nombre";
+        const initial = (user.firstName?.[0] || user.email?.[0] || "U").toUpperCase();
+        return <div className="eg-users-user">
+          <span className="eg-users-avatar">
+            {user.avatarUrl ? <img src={user.avatarUrl} alt="" /> : initial}
           </span>
+          <span className="eg-users-user__copy"><strong>{name}</strong><small>{user.alias ? `@${user.alias}` : user.email}</small></span>
+        </div>;
+      },
+    },
+    {
+      key: "mail",
+      header: "Mail",
+      className: "eg-users-table__mail-col",
+      render: (user) => <span className="eg-users-mail" title={user.email}>{user.email || "—"}</span>,
+    },
+    {
+      key: "role",
+      header: "Rol",
+      render: (user) => <Badge tone={user.role === "ADMIN_GENERAL" ? "accent" : user.role === "GM" ? "info" : "neutral"} small>{roleLabelOf(user.role)}</Badge>,
+    },
+    {
+      key: "golden",
+      header: "Golden Ticket",
+      align: "center",
+      render: (user) => <span title={user.goldenActive ? `Golden Ticket activo · Origen: ${describeGoldenTicketSource(user.goldenSource)}` : "Sin Golden Ticket"}>
+        <Badge tone={user.goldenActive ? "warning" : "neutral"} small>{user.goldenActive ? "Sí" : "—"}</Badge>
+      </span>,
+    },
+    {
+      key: "branch",
+      header: "Sucursal",
+      align: "center",
+      render: (user) => <span className="eg-users-muted">{user.role === "GM" ? user.branch || "—" : "—"}</span>,
+    },
+    {
+      key: "status",
+      header: "Estado",
+      align: "center",
+      render: (user) => <Badge tone={user.active ? "success" : "neutral"} dot small>{user.active ? "Activo" : "Inactivo"}</Badge>,
+    },
+    {
+      key: "actions",
+      header: "Acciones",
+      align: "center",
+      render: (user) => canManageUsers ? <ActionMenu items={[
+        ...(user._isStaff && (user.role === "GM" || user.role === "ADMIN_GENERAL") ? [{ key: "gm-code", label: "Código GM", icon: "copy" as const, disabled: busy, onSelect: () => ensureAndCopyGmCode(user) }] : []),
+        { key: "permissions", label: "Permisos", icon: "settings", disabled: busy, onSelect: () => setPermModal({ open: true, user: { ...user, permissions: { ...user.permissions } } }) },
+        { key: "password", label: "Resetear contraseña", icon: "refresh", disabled: busy, onSelect: () => openReset(user) },
+        ...(user.role === "CLIENT" ? [{ key: "golden", label: "Golden Ticket", icon: "ticket" as const, disabled: busy, onSelect: () => openGolden(user) }] : []),
+        { key: "delete", label: "Eliminar usuario", icon: "trash", danger: true, separatorBefore: true, disabled: busy, onSelect: () => openDelete(user) },
+      ]} /> : <span className="eg-users-muted">—</span>,
+    },
+  ];
 
-          <div style={styles.killSwitchControl}>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={ratingUpload}
-              aria-label='Botón "Subir captura" para todos los clientes'
-              onClick={toggleRatingUpload}
-              disabled={ratingLoading || ratingSaving}
-              style={{
-                ...styles.switch,
-                ...(ratingUpload ? styles.switchOn : styles.switchOff),
-                ...(ratingLoading || ratingSaving ? styles.switchBusy : null),
-              }}
-            >
-              <span
-                style={{
-                  ...styles.switchKnob,
-                  transform: ratingUpload ? "translateX(28px)" : "translateX(0)",
-                }}
-              />
-            </button>
+  return (
+    <div className="eg-users-page">
+      <div className="eg-users-page__inner">
+        <PageHeader
+          title="Usuarios"
+          subtitle="Administrá usuarios, roles y permisos."
+          action={canManageUsers ? <Button variant="primary" icon="plus" onClick={startCreate} disabled={busy}>Nuevo usuario</Button> : undefined}
+        />
 
-            <b style={{ color: ratingUpload ? "#4ade80" : "#f87171", fontSize: 13 }}>
-              {ratingLoading ? "…" : ratingUpload ? "ACTIVADO" : "DESACTIVADO"}
-            </b>
-
-            {ratingSaving ? (
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>Guardando…</span>
-            ) : null}
+        <Card padding="sm" className="eg-users-config">
+          <div className="eg-users-config__copy">
+            <UiIcon name="ticket" size={18} />
+            <span><strong>Capturas de Golden Ticket</strong><small>Botón “Subir captura” para todos los clientes</small></span>
           </div>
-        </div>
+          <Toggle
+            label={ratingLoading ? "Cargando..." : ratingUpload ? "Activado" : "Desactivado"}
+            checked={ratingUpload}
+            onChange={toggleRatingUpload}
+            disabled={ratingLoading || ratingSaving}
+          />
+        </Card>
 
-        <div style={styles.filtersRow}>
-          <div style={styles.searchBox}>
-            <input
-              className="input"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar por nombre, mail o alias"
-              style={styles.searchInput}
-            />
-          </div>
-
-          <select
-            className="input"
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value as any)}
-            style={styles.filterSelect}
-          >
+        <Card padding="sm" className="eg-users-filters">
+          <SearchInput value={q} onChange={(event) => setQ(event.target.value)} placeholder="Buscar por nombre, mail o alias..." aria-label="Buscar usuarios" />
+          <Select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as UserRole | "")} aria-label="Filtrar por rol">
             <option value="">Todos los roles</option>
             <option value="CLIENT">Cliente</option>
             <option value="GM">Game Master</option>
             <option value="ADMIN_GENERAL">Admin General</option>
-          </select>
-
-          <select
-            className="input"
-            value={branchFilter}
-            onChange={(e) => setBranchFilter(e.target.value as any)}
-            style={styles.filterSelect}
-          >
+          </Select>
+          <Select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value as Branch | "")} aria-label="Filtrar por sucursal">
             <option value="">Todas las sucursales</option>
-            {BRANCHES.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
-          </select>
+            {BRANCHES.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+          </Select>
+        </Card>
+
+        <div className="eg-users-stats">
+          <StatCard value={totals.totalUsers} label="Usuarios visibles" loading={loading} />
+          <StatCard value={totals.activeUsers} label="Usuarios activos" tone="success" loading={loading} />
+          <StatCard value={totals.gmCount} label="Game Masters" loading={loading} />
+          <StatCard value={totals.adminGeneralCount} label="Admin General" tone="accent" loading={loading} />
         </div>
 
-        <div style={styles.cardsGrid}>
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Usuarios visibles</span>
-            <strong style={styles.cardValue}>{totals.totalUsers}</strong>
-          </div>
-
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Usuarios activos</span>
-            <strong style={styles.cardValue}>{totals.activeUsers}</strong>
-          </div>
-
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Game Masters</span>
-            <strong style={styles.cardValue}>{totals.gmCount}</strong>
-          </div>
-
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Admin General</span>
-            <strong style={styles.cardValue}>{totals.adminGeneralCount}</strong>
-          </div>
-        </div>
-
-        {loading ? (
-          <div style={styles.loadingPanel}>Cargando usuarios…</div>
-        ) : (
-          <div style={styles.tableOuter}>
-            <div style={styles.tableWrap}>
-              <div style={styles.tableHeader}>
-                <div style={{ ...styles.th, ...styles.colUser }}>Usuario</div>
-                <div style={{ ...styles.th, ...styles.colMail }}>Mail</div>
-                <div style={{ ...styles.thCenter, ...styles.colRole }}>Rol</div>
-                <div style={{ ...styles.thCenter, ...styles.colGolden }}>Golden Ticket</div>
-                <div style={{ ...styles.thCenter, ...styles.colBranch }}>Sucursal</div>
-                <div style={{ ...styles.thCenter, ...styles.colAlias }}>Alias</div>
-                <div style={{ ...styles.thCenter, ...styles.colStatus }}>Estado</div>
-                <div style={{ ...styles.thCenter, ...styles.colAction }}>Acciones</div>
-              </div>
-
-              {filtered.length === 0 ? (
-                <div style={styles.emptyState}>No hay usuarios con ese filtro.</div>
-              ) : (
-                filtered.map((u) => {
-                  const canShowGmCode = u._isStaff && (u.role === "GM" || u.role === "ADMIN_GENERAL");
-
-                  return (
-                    <div key={u.id} style={{ ...styles.row, opacity: u.active ? 1 : 0.62 }}>
-                      <div style={{ ...styles.td, ...styles.colUser }}>
-                        <div style={styles.userCell}>
-                          <div style={styles.avatar}>
-                            {u.avatarUrl ? (
-                              <img
-                                src={u.avatarUrl}
-                                alt={[u.firstName, u.lastName].filter(Boolean).join(" ") || u.email || "Usuario"}
-                                style={styles.avatarImg}
-                              />
-                            ) : (
-                              <span>{(u.firstName?.[0] || u.email?.[0] || "U").toUpperCase()}</span>
-                            )}
-                          </div>
-
-                          <div style={styles.userTextWrap}>
-                            <div style={styles.userName}>
-                              {[u.firstName, u.lastName].filter(Boolean).join(" ") || "Sin nombre"}
-                            </div>
-                            <div style={styles.userAliasLine}>
-                              {u.role === "CLIENT" && u.alias ? `@${u.alias}` : u.email}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ ...styles.td, ...styles.colMail }}>
-                        <div style={styles.truncate} title={u.email}>
-                          {u.email}
-                        </div>
-                      </div>
-
-                      <div style={{ ...styles.tdCenter, ...styles.colRole }}>
-                        <span style={styles.roleBadge}>{roleLabelOf(u.role)}</span>
-                      </div>
-
-                      {/* Sólo informativo: el checkbox no se puede tocar. */}
-                      <div style={{ ...styles.tdCenter, ...styles.colGolden }}>
-                        <span
-                          style={styles.goldenCell}
-                          title={
-                            u.goldenActive
-                              ? `Golden Ticket activo · Origen: ${describeGoldenTicketSource(
-                                  u.goldenSource
-                                )}`
-                              : "Sin Golden Ticket"
-                          }
-                        >
-                          <input
-                            type="checkbox"
-                            checked={u.goldenActive}
-                            readOnly
-                            tabIndex={-1}
-                            aria-readonly="true"
-                            aria-label={
-                              u.goldenActive ? "Con Golden Ticket" : "Sin Golden Ticket"
-                            }
-                            style={styles.goldenCheckbox}
-                          />
-                        </span>
-                      </div>
-
-                      <div style={{ ...styles.tdCenter, ...styles.colBranch }}>
-                        <div style={styles.centerText}>{u.role === "GM" ? u.branch || "-" : "-"}</div>
-                      </div>
-
-                      <div style={{ ...styles.tdCenter, ...styles.colAlias }}>
-                        <div style={styles.centerText}>{u.role === "CLIENT" ? u.alias || "-" : "-"}</div>
-                      </div>
-
-                      <div style={{ ...styles.tdCenter, ...styles.colStatus }}>
-                        <span style={u.active ? styles.statusBadgeActive : styles.statusBadgeOff}>
-                          {u.active ? "Activo" : "Inactivo"}
-                        </span>
-                      </div>
-
-                      <div style={{ ...styles.tdCenter, ...styles.colAction, ...styles.actionCell }}>
-                        <button
-                          type="button"
-                          data-menu-btn="1"
-                          className="ghostBtn"
-                          onClick={() => {
-                            if (!canManageUsers || busy) return;
-                            setMenuOpenId((prev) => (prev === u.id ? null : u.id));
-                          }}
-                          disabled={!canManageUsers || busy}
-                          style={styles.actionBtn}
-                          title={canManageUsers ? "Opciones" : "No autorizado"}
-                        >
-                          Ver acciones
-                        </button>
-
-                        {menuOpenId === u.id ? (
-                          <div
-                            data-menu-popup="1"
-                            style={styles.inlineMenu}
-                            onMouseDown={(ev) => ev.stopPropagation()}
-                          >
-                            {canShowGmCode ? (
-                              <button
-                                style={styles.portalItem}
-                                onClick={() => ensureAndCopyGmCode(u)}
-                                disabled={busy}
-                                title="Copiar Código GM"
-                                onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.portalItemHover)}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                <Icon name="key" size={16} />
-                                Código GM
-                              </button>
-                            ) : null}
-
-                            <button
-                              style={styles.portalItem}
-                              onClick={() => {
-                                closeMenu();
-                                setPermModal({
-                                  open: true,
-                                  user: { ...u, permissions: { ...u.permissions } },
-                                });
-                              }}
-                              disabled={busy}
-                              onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.portalItemHover)}
-                              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                            >
-                              <Icon name="shield" size={16} />
-                              Permisos
-                            </button>
-
-                            <button
-                              style={styles.portalItem}
-                              onClick={() => openReset(u)}
-                              disabled={busy}
-                              onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.portalItemHover)}
-                              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                            >
-                              <Icon name="refresh" size={16} />
-                              Resetear contraseña
-                            </button>
-
-                            {u.role === "CLIENT" ? (
-                              <button
-                                style={styles.portalItem}
-                                onClick={() => openGolden(u)}
-                                disabled={busy}
-                                onMouseEnter={(e) => Object.assign(e.currentTarget.style, styles.portalItemHover)}
-                                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              >
-                                <Icon name="key" size={16} />
-                                Golden Ticket
-                              </button>
-                            ) : null}
-
-                            <div style={styles.portalDivider} />
-
-                            <button
-                              style={{ ...styles.portalItem, ...styles.portalDangerItem }}
-                              onClick={() => openDelete(u)}
-                              disabled={busy}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = "rgba(248,113,113,0.10)";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = "transparent";
-                              }}
-                            >
-                              <Icon name="trash" size={16} />
-                              Eliminar usuario
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
+        <Card padding="none" className="eg-users-table-card">
+          <DataTable
+            columns={userColumns}
+            rows={filtered}
+            rowKey={(user) => user.id}
+            loading={loading}
+            loadingLabel="Cargando usuarios..."
+            rowClassName={(user) => user.active ? undefined : "eg-users-row--inactive"}
+            empty={<EmptyState
+              icon="users"
+              title={items.length === 0 ? "Todavía no hay usuarios" : "No encontramos usuarios con estos filtros"}
+              description={items.length === 0 ? "Los usuarios aparecerán acá cuando estén disponibles." : "Probá modificando la búsqueda, el rol o la sucursal."}
+            />}
+          />
+        </Card>
 
         <CreateUserModal
           open={createModalOpen}
@@ -1504,31 +1109,15 @@ export default function Users() {
           onSave={createSave}
         />
 
-        <ModalShell open={tempPassModal.open} title="Usuario creado" onClose={closeTempPass}>
-          <div style={{ marginBottom: 12, opacity: 0.85, fontSize: 13 }}>
-            Mail: <b>{tempPassModal.mail}</b>
-            {tempPassModal.existed ? " (ya existía, se actualizó)" : ""}
-          </div>
-
-          <div className="panel" style={{ padding: 14, marginBottom: 14 }}>
-            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 8 }}>
-              Contraseña temporal
-            </div>
-
-            <div style={styles.tempPassValue}>{tempPassModal.tempPassword ?? "—"}</div>
-
-            <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 10, lineHeight: 1.6 }}>
-              Guardala ahora: no se vuelve a mostrar.
-            </div>
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <button className="ghostBtn" onClick={closeTempPass}>
-              Cerrar
-            </button>
-
-            <button
-              className="btnSmall"
+        <ModalShell open={tempPassModal.open} title="Usuario creado" description={`${tempPassModal.mail}${tempPassModal.existed ? " · usuario existente actualizado" : ""}`} onClose={closeTempPass}>
+          <Card padding="md" className="eg-users-temp-password">
+            <span>Contraseña temporal</span>
+            <strong>{tempPassModal.tempPassword ?? "—"}</strong>
+            <small>Guardala ahora: no se vuelve a mostrar.</small>
+          </Card>
+          <div className="eg-users-modal__actions">
+            <Button variant="secondary" onClick={closeTempPass}>Cerrar</Button>
+            <Button variant="primary" icon="copy"
               disabled={!tempPassModal.tempPassword}
               onClick={async () => {
                 if (!tempPassModal.tempPassword) return;
@@ -1538,118 +1127,89 @@ export default function Users() {
                   ok ? "Contraseña copiada al portapapeles." : "No pude copiar al portapapeles."
                 );
               }}
-            >
-              Copiar al portapapeles
-            </button>
+            >Copiar contraseña</Button>
           </div>
         </ModalShell>
 
-        <ModalShell open={goldenModal.open} title="Golden Ticket" onClose={closeGolden}>
+        <ModalShell open={goldenModal.open} title="Golden Ticket" description={goldenModal.user ? goldenModal.user.email || goldenModal.user.alias : undefined} onClose={closeGolden}>
           {goldenModal.user ? (
             <>
-              <div style={{ marginBottom: 14, opacity: 0.8, fontSize: 13 }}>
-                Usuario: <b>{goldenModal.user.email || goldenModal.user.alias}</b>
-              </div>
-
               {goldenLoading ? (
-                <div className="panel" style={{ padding: 12 }}>
-                  Cargando…
-                </div>
+                <Card padding="md" className="eg-users-modal__notice">Cargando…</Card>
               ) : goldenErr ? (
-                <div className="panel" style={{ padding: 12, color: "#f87171" }}>
-                  {goldenErr}
-                </div>
+                <Card padding="md" className="eg-users-golden__error">{goldenErr}</Card>
               ) : goldenInfo?.active ? (
                 <>
-                  <div style={goldenStyles.activeBox}>
-                    <div style={goldenStyles.activeTitle}>
+                  <Card padding="md" className="eg-users-golden__active">
+                    <div className="eg-users-golden__title">
                       Golden Ticket #{goldenInfo.number ?? "—"}
                     </div>
 
-                    <div style={goldenStyles.activeMeta}>
+                    <div className="eg-users-golden__meta">
                       Origen: {describeGoldenTicketSource(goldenInfo.source)}
                     </div>
-                    <div style={goldenStyles.activeMeta}>
+                    <div className="eg-users-golden__meta">
                       Otorgado el {formatDateDDMMYYYY(goldenInfo.grantedAt) || "—"}
                     </div>
-                    <div style={goldenStyles.activeMeta}>
+                    <div className="eg-users-golden__meta">
                       Vence: {formatDateDDMMYYYY(goldenInfo.expiresAt) || "—"}
                     </div>
-                    <div style={goldenStyles.activeMeta}>
+                    <div className="eg-users-golden__meta">
                       Redimido:{" "}
                       {goldenInfo.redeemedAt
                         ? formatDateDDMMYYYY(goldenInfo.redeemedAt)
                         : "No"}
                     </div>
-                  </div>
+                  </Card>
 
                   {goldenConfirmRevoke ? (
-                    <div style={goldenStyles.confirmBox}>
-                      <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+                    <Card padding="md" className="eg-users-delete-warning">
+                      <div>
                         ¿Deshabilitar el Golden Ticket de este usuario? Va a dejar de
                         verlo en la app.
                       </div>
 
-                      <div style={goldenStyles.actions}>
-                        <button
-                          type="button"
-                          className="ghostBtn"
+                      <div className="eg-users-modal__actions">
+                        <Button variant="secondary"
                           onClick={() => setGoldenConfirmRevoke(false)}
                           disabled={goldenBusy}
-                        >
-                          Cancelar
-                        </button>
+                        >Cancelar</Button>
 
-                        <button
-                          type="button"
+                        <Button variant="danger"
                           onClick={doRevokeGolden}
                           disabled={goldenBusy}
-                          style={goldenStyles.dangerBtn}
-                        >
-                          {goldenBusy ? "Deshabilitando…" : "Confirmar"}
-                        </button>
+                          loading={goldenBusy}
+                        >Confirmar</Button>
                       </div>
-                    </div>
+                    </Card>
                   ) : (
-                    <div style={goldenStyles.actions}>
-                      <button
-                        type="button"
+                    <div className="eg-users-modal__actions">
+                      <Button variant="danger"
                         onClick={() => setGoldenConfirmRevoke(true)}
                         disabled={goldenBusy}
-                        style={goldenStyles.dangerBtn}
-                      >
-                        Deshabilitar
-                      </button>
+                      >Deshabilitar</Button>
                     </div>
                   )}
                 </>
               ) : goldenInfo?.screenshotStatus === "REJECTED" ? (
-                <div style={goldenStyles.rejectedBox}>
+                <Card padding="md" className="eg-users-golden__error">
                   <div style={{ fontWeight: 800, marginBottom: 6 }}>
                     Última captura rechazada
                   </div>
                   <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>
                     Motivo: {goldenInfo.rejectionReason || "sin motivo registrado"}
                   </div>
-                </div>
+                </Card>
               ) : goldenInfo?.screenshotStatus === "PENDING" ? (
-                <div className="panel" style={{ padding: 12 }}>
+                <Card padding="md" className="eg-users-modal__notice">
                   <div style={{ marginBottom: 10, fontSize: 13.5 }}>
                     Este usuario tiene una captura esperando revisión.
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={openPendingReview}
-                    style={goldenStyles.linkBtn}
-                  >
-                    Revisar captura pendiente →
-                  </button>
-                </div>
+                  <Button variant="secondary" size="sm" onClick={openPendingReview}>Revisar captura pendiente</Button>
+                </Card>
               ) : (
-                <div className="panel" style={{ padding: 12 }}>
-                  Sin Golden Ticket.
-                </div>
+                <Card padding="md" className="eg-users-modal__notice">Sin Golden Ticket.</Card>
               )}
             </>
           ) : null}
@@ -1670,20 +1230,17 @@ export default function Users() {
         <ModalShell
           open={permModal.open}
           title="Permisos"
+          description={permModal.user ? `${permModal.user.email} · ${roleLabelOf(permModal.user.role)}` : undefined}
           onClose={() => setPermModal({ open: false, user: null })}
         >
           {permModal.user ? (
             <>
-              <div style={{ marginBottom: 12, opacity: 0.8, fontSize: 13 }}>
-                Usuario: <b>{permModal.user.email}</b> — Rol: <b>{permModal.user.role}</b>
-              </div>
-
               {permModal.user.role === "ADMIN_GENERAL" ? (
-                <div className="panel" style={{ padding: 12, marginBottom: 12 }}>
+                <Card padding="sm" className="eg-users-modal__notice">
                   Admin General: por diseño no usamos permisos finos acá.
-                </div>
+                </Card>
               ) : (
-                <div style={{ display: "grid", gap: 10 }}>
+                <div className="eg-users-permissions">
                   {(
                     [
                       ["canManageRooms", "Gestionar salas"],
@@ -1699,41 +1256,23 @@ export default function Users() {
                       (ADMIN_ONLY_PERMS as readonly string[]).includes(k);
 
                     return (
-                      <label
+                      <Toggle
                         key={k}
-                        style={{
-                          display: "flex",
-                          gap: 10,
-                          alignItems: "center",
-                          opacity: locked ? 0.5 : 1,
-                          cursor: locked ? "not-allowed" : "pointer",
-                        }}
+                        label={label}
+                        description={locked ? "Exclusivo de Admin General" : undefined}
                         title={locked ? "Exclusivo de Admin General." : undefined}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!locked && !!permModal.user?.permissions?.[k]}
-                          disabled={locked}
-                          onChange={(e) => patchPerm(k, e.target.checked)}
-                        />
-                        <span>{label}</span>
-                      </label>
+                        checked={!locked && !!permModal.user?.permissions?.[k]}
+                        disabled={locked}
+                        onChange={(e) => patchPerm(k, e.target.checked)}
+                      />
                     );
                   })}
                 </div>
               )}
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-                <button
-                  className="ghostBtn"
-                  onClick={() => setPermModal({ open: false, user: null })}
-                  disabled={busy}
-                >
-                  Cancelar
-                </button>
-                <button className="btnSmall" onClick={savePerms} disabled={busy}>
-                  {busy ? "Guardando…" : "Guardar"}
-                </button>
+              <div className="eg-users-modal__actions">
+                <Button variant="secondary" onClick={() => setPermModal({ open: false, user: null })} disabled={busy}>Cancelar</Button>
+                <Button variant="primary" onClick={savePerms} loading={busy}>Guardar cambios</Button>
               </div>
             </>
           ) : null}
@@ -1741,7 +1280,8 @@ export default function Users() {
 
         <ModalShell
           open={resetModal.open}
-          title="Resetear contraseña"
+          title="Restablecer contraseña"
+          description={resetModal.user ? `Definí una nueva contraseña para ${resetModal.user.email}.` : undefined}
           onClose={() => {
             setShowResetPass1(false);
             setShowResetPass2(false);
@@ -1750,15 +1290,10 @@ export default function Users() {
         >
           {resetModal.user ? (
             <>
-              <div style={{ marginBottom: 12, opacity: 0.8, fontSize: 13 }}>
-                Usuario: <b>{resetModal.user.email}</b>
-              </div>
-
-              <FieldRow label="Nueva contraseña">
-                <div style={{ position: "relative" }}>
+              <div className="eg-users-password-form">
+                <label className="eg-field"><span className="eg-field__label">Nueva contraseña</span><div className="eg-users-password-field">
                   <input
-                    className="input"
-                    style={{ width: "100%", minWidth: 0, paddingRight: 42 }}
+                    className="eg-input"
                     type={showResetPass1 ? "text" : "password"}
                     value={resetPass1}
                     onChange={(e) => setResetPass1(e.target.value)}
@@ -1767,18 +1302,15 @@ export default function Users() {
                     type="button"
                     onClick={() => setShowResetPass1((v) => !v)}
                     aria-label={showResetPass1 ? "Ocultar contraseña" : "Mostrar contraseña"}
-                    style={styles.eyeButton}
+                    className="eg-users-password-field__toggle"
                   >
                     {showResetPass1 ? <EyeOpenIcon /> : <EyeClosedIcon />}
                   </button>
-                </div>
-              </FieldRow>
+                </div></label>
 
-              <FieldRow label="Repetir contraseña">
-                <div style={{ position: "relative" }}>
+                <label className="eg-field"><span className="eg-field__label">Repetir contraseña</span><div className="eg-users-password-field">
                   <input
-                    className="input"
-                    style={{ width: "100%", minWidth: 0, paddingRight: 42 }}
+                    className="eg-input"
                     type={showResetPass2 ? "text" : "password"}
                     value={resetPass2}
                     onChange={(e) => setResetPass2(e.target.value)}
@@ -1787,28 +1319,23 @@ export default function Users() {
                     type="button"
                     onClick={() => setShowResetPass2((v) => !v)}
                     aria-label={showResetPass2 ? "Ocultar contraseña" : "Mostrar contraseña"}
-                    style={styles.eyeButton}
+                    className="eg-users-password-field__toggle"
                   >
                     {showResetPass2 ? <EyeOpenIcon /> : <EyeClosedIcon />}
                   </button>
-                </div>
-              </FieldRow>
+                </div></label>
+              </div>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-                <button
-                  className="ghostBtn"
+              <div className="eg-users-modal__actions">
+                <Button variant="secondary"
                   onClick={() => {
                     setShowResetPass1(false);
                     setShowResetPass2(false);
                     setResetModal({ open: false, user: null });
                   }}
                   disabled={busy}
-                >
-                  Cancelar
-                </button>
-                <button className="btnSmall" onClick={resetPassword} disabled={busy}>
-                  {busy ? "Reseteando…" : "Resetear"}
-                </button>
+                >Cancelar</Button>
+                <Button variant="primary" onClick={resetPassword} loading={busy}>Restablecer contraseña</Button>
               </div>
             </>
           ) : null}
@@ -1817,25 +1344,19 @@ export default function Users() {
         <ModalShell
           open={deleteModal.open}
           title="Eliminar usuario"
+          description="Esta acción utiliza el proceso de eliminación existente del sistema."
           onClose={() => setDeleteModal({ open: false, user: null })}
         >
           {deleteModal.user ? (
             <>
-              <div className="panel" style={{ padding: 12 }}>
-                Estás seguro de querer borrar a: <b>{deleteModal.user.email}</b>
-              </div>
+              <Card padding="md" className="eg-users-delete-warning">¿Seguro que querés eliminar a <strong>{deleteModal.user.email}</strong>?</Card>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-                <button
-                  className="ghostBtn"
+              <div className="eg-users-modal__actions">
+                <Button variant="secondary"
                   onClick={() => setDeleteModal({ open: false, user: null })}
                   disabled={busy}
-                >
-                  Cancelar
-                </button>
-                <button className="btnSmall danger" onClick={deleteUser} disabled={busy}>
-                  {busy ? "Eliminando…" : "Eliminar"}
-                </button>
+                >Cancelar</Button>
+                <Button variant="danger" onClick={deleteUser} loading={busy}>Eliminar usuario</Button>
               </div>
             </>
           ) : null}
@@ -1844,617 +1365,3 @@ export default function Users() {
     </div>
   );
 }
-
-const goldenStyles: Record<string, any> = {
-  activeBox: {
-    border: "1px solid #a16207",
-    background: "rgba(161,98,7,0.12)",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 14,
-  },
-
-  activeTitle: {
-    fontSize: 17,
-    fontWeight: 800,
-    color: "#fbbf24",
-    marginBottom: 8,
-  },
-
-  activeMeta: {
-    fontSize: 13.5,
-    color: "#cbd5e1",
-    lineHeight: 1.7,
-  },
-
-  rejectedBox: {
-    border: "1px solid #991b1b",
-    background: "rgba(153,27,27,0.12)",
-    borderRadius: 14,
-    padding: 14,
-    color: "#fecaca",
-  },
-
-  confirmBox: {
-    border: "1px solid #334155",
-    borderRadius: 14,
-    padding: 14,
-    color: "#e5e7eb",
-  },
-
-  actions: {
-    display: "flex",
-    gap: 10,
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-    marginTop: 14,
-  },
-
-  dangerBtn: {
-    minHeight: 42,
-    padding: "0 18px",
-    borderRadius: 12,
-    border: "1px solid #b91c1c",
-    background: "#dc2626",
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-
-  linkBtn: {
-    background: "transparent",
-    border: "none",
-    color: "#93c5fd",
-    fontSize: 13.5,
-    fontWeight: 700,
-    cursor: "pointer",
-    padding: 0,
-  },
-};
-
-const styles: Record<string, any> = {
-  page: {
-    width: "100%",
-    minHeight: "100%",
-    height: "100%",
-    background: "#0f172a",
-    color: "#e5e7eb",
-    fontFamily:
-      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    boxSizing: "border-box",
-  },
-
-  pageInner: {
-    width: "100%",
-    maxWidth: "100%",
-    minHeight: "100%",
-    height: "100%",
-    margin: 0,
-    padding: "14px 18px 18px",
-    boxSizing: "border-box",
-    display: "flex",
-    flexDirection: "column",
-  },
-
-  headerWrap: {
-    display: "flex",
-    gap: 16,
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    flexWrap: "wrap",
-    marginBottom: 14,
-  },
-
-  headerText: {
-    flex: "1 1 420px",
-    minWidth: 280,
-  },
-
-  title: {
-    margin: 0,
-    fontSize: 32,
-    fontWeight: 800,
-    color: "#ffffff",
-    lineHeight: 1.1,
-  },
-
-  subtitle: {
-    margin: "8px 0 0 0",
-    fontSize: 14,
-    color: "#94a3b8",
-    maxWidth: 760,
-  },
-
-  headerActions: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  killSwitchRow: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 14,
-    flexWrap: "wrap",
-    marginBottom: 14,
-    padding: "12px 14px",
-    borderRadius: 16,
-    border: "1px solid #1f2937",
-    background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
-    boxSizing: "border-box",
-  },
-
-  killSwitchText: {
-    fontSize: 13.5,
-    color: "#e5e7eb",
-    fontWeight: 600,
-    minWidth: 0,
-  },
-
-  killSwitchControl: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    flexShrink: 0,
-  },
-
-  switch: {
-    width: 62,
-    height: 32,
-    borderRadius: 999,
-    padding: 3,
-    border: "1px solid",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    flexShrink: 0,
-    transition: "background 140ms ease, border-color 140ms ease",
-  },
-
-  switchOn: {
-    background: "rgba(22,101,52,0.55)",
-    borderColor: "#166534",
-  },
-
-  switchOff: {
-    background: "rgba(30,41,59,0.9)",
-    borderColor: "#334155",
-  },
-
-  switchBusy: {
-    opacity: 0.6,
-    cursor: "not-allowed",
-  },
-
-  switchKnob: {
-    width: 24,
-    height: 24,
-    borderRadius: 999,
-    background: "#e5e7eb",
-    boxShadow: "0 2px 6px rgba(0,0,0,0.35)",
-    transition: "transform 140ms ease",
-    display: "block",
-  },
-
-  filtersRow: {
-    display: "grid",
-    gridTemplateColumns: "minmax(260px, 1.8fr) minmax(180px, 220px) minmax(200px, 240px)",
-    gap: 12,
-    marginBottom: 16,
-    alignItems: "center",
-  },
-
-  searchBox: {
-    minWidth: 0,
-  },
-
-  searchInput: {
-    width: "100%",
-    height: 48,
-    borderRadius: 14,
-    boxSizing: "border-box",
-  },
-
-  filterSelect: {
-    width: "100%",
-    height: 48,
-    borderRadius: 14,
-    boxSizing: "border-box",
-  },
-
-  cardsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 12,
-    marginBottom: 18,
-    width: "100%",
-  },
-
-  card: {
-    background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
-    border: "1px solid #1f2937",
-    borderRadius: 16,
-    padding: 14,
-    boxShadow: "0 10px 24px rgba(0,0,0,0.16)",
-    minHeight: 82,
-    boxSizing: "border-box",
-  },
-
-  cardLabel: {
-    display: "block",
-    fontSize: 12,
-    color: "#94a3b8",
-    marginBottom: 8,
-  },
-
-  cardValue: {
-    fontSize: 22,
-    fontWeight: 800,
-    color: "#ffffff",
-    lineHeight: 1,
-  },
-
-  loadingPanel: {
-    border: "1px solid #1f2937",
-    borderRadius: 18,
-    background: "#0b1220",
-    padding: 18,
-    color: "#cbd5e1",
-  },
-
-  tableOuter: {
-    width: "100%",
-    flex: 1,
-    minHeight: 0,
-    overflow: "auto",
-    borderRadius: 18,
-  },
-
-  tableWrap: {
-    width: "100%",
-    minWidth: 1200,
-    border: "1px solid #1f2937",
-    borderRadius: 18,
-    overflow: "hidden",
-    background: "#0b1220",
-    boxSizing: "border-box",
-  },
-
-  tableHeader: {
-    display: "grid",
-    gridTemplateColumns: "2.1fr 2fr 1.2fr 1fr 1.2fr 1.1fr 1fr 1.2fr",
-    gap: 12,
-    padding: "16px 18px",
-    background: "#111827",
-    borderBottom: "1px solid #1f2937",
-    boxSizing: "border-box",
-    alignItems: "center",
-    position: "sticky",
-    top: 0,
-    zIndex: 5,
-  },
-
-  row: {
-    display: "grid",
-    gridTemplateColumns: "2.1fr 2fr 1.2fr 1fr 1.2fr 1.1fr 1fr 1.2fr",
-    gap: 12,
-    padding: "16px 18px",
-    borderBottom: "1px solid #172033",
-    alignItems: "center",
-    boxSizing: "border-box",
-  },
-
-  th: {
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    color: "#94a3b8",
-    fontWeight: 700,
-    minWidth: 0,
-  },
-
-  thCenter: {
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    color: "#94a3b8",
-    fontWeight: 700,
-    textAlign: "center",
-    minWidth: 0,
-  },
-
-  td: {
-    fontSize: 14,
-    color: "#e5e7eb",
-    minWidth: 0,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  tdCenter: {
-    fontSize: 14,
-    color: "#e5e7eb",
-    textAlign: "center",
-    minWidth: 0,
-  },
-
-  colUser: { minWidth: 220 },
-  colMail: { minWidth: 230 },
-  colRole: { minWidth: 150 },
-  colGolden: { minWidth: 120 },
-  colBranch: { minWidth: 150 },
-  colAlias: { minWidth: 140 },
-  colStatus: { minWidth: 120 },
-  colAction: { minWidth: 160 },
-
-  // El span lleva el tooltip; el input queda inerte (pointerEvents: none), así
-  // el click cae en la fila y no toca el estado del ticket.
-  goldenCell: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "default",
-  },
-
-  goldenCheckbox: {
-    width: 17,
-    height: 17,
-    accentColor: "#f59e0b",
-    pointerEvents: "none",
-    margin: 0,
-  },
-
-  userCell: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    minWidth: 0,
-  },
-
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 999,
-    background: "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#fff",
-    fontWeight: 800,
-    fontSize: 16,
-    flexShrink: 0,
-    overflow: "hidden",
-  },
-
-  avatarImg: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover" as const,
-    borderRadius: "50%",
-    display: "block",
-  },
-
-  userTextWrap: {
-    minWidth: 0,
-    overflow: "hidden",
-  },
-
-  userName: {
-    fontWeight: 700,
-    color: "#fff",
-    marginBottom: 2,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  userAliasLine: {
-    fontSize: 13,
-    color: "#94a3b8",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  truncate: {
-    width: "100%",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  centerText: {
-    width: "100%",
-    textAlign: "center" as const,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  roleBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 30,
-    padding: "0 12px",
-    borderRadius: 999,
-    background: "#1e293b",
-    border: "1px solid #334155",
-    fontWeight: 700,
-    fontSize: 12,
-    whiteSpace: "nowrap",
-  },
-
-  statusBadgeActive: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 30,
-    padding: "0 12px",
-    borderRadius: 999,
-    background: "rgba(34,197,94,0.12)",
-    color: "#4ade80",
-    border: "1px solid rgba(34,197,94,0.3)",
-    fontSize: 12,
-    fontWeight: 700,
-    whiteSpace: "nowrap",
-  },
-
-  statusBadgeOff: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 30,
-    padding: "0 12px",
-    borderRadius: 999,
-    background: "rgba(248,113,113,0.12)",
-    color: "#fca5a5",
-    border: "1px solid rgba(248,113,113,0.28)",
-    fontSize: 12,
-    fontWeight: 700,
-    whiteSpace: "nowrap",
-  },
-
-  actionCell: {
-    position: "relative",
-    overflow: "visible",
-  },
-
-  inlineMenu: {
-    position: "absolute",
-    top: "50%",
-    right: "calc(100% + 10px)",
-    transform: "translateY(-50%)",
-    zIndex: 30,
-    width: 270,
-    borderRadius: 16,
-    overflow: "hidden",
-    border: "1px solid #1f2937",
-    background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
-    boxShadow: "0 20px 40px rgba(0,0,0,0.28)",
-  },
-
-  actionBtn: {
-    border: "1px solid rgba(249,115,22,0.35)",
-    borderRadius: 12,
-    background: "linear-gradient(180deg, rgba(249,115,22,0.22) 0%, rgba(249,115,22,0.12) 100%)",
-    color: "#fff",
-    fontWeight: 700,
-    padding: "10px 12px",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    width: "100%",
-    maxWidth: 150,
-    boxShadow: "0 8px 18px rgba(0,0,0,0.18)",
-  },
-
-  emptyState: {
-    padding: 28,
-    textAlign: "center" as const,
-    color: "#94a3b8",
-    fontSize: 15,
-  },
-
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(2,6,23,0.72)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-    zIndex: 1000,
-    boxSizing: "border-box",
-  },
-
-  modal: {
-    width: "100%",
-    maxWidth: 980,
-    maxHeight: "92vh",
-    overflowY: "auto" as const,
-    borderRadius: 22,
-    background: "#0b1220",
-    border: "1px solid #1f2937",
-    boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
-    boxSizing: "border-box",
-  },
-
-  modalHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "center",
-    padding: "22px 22px 0",
-  },
-
-  modalTitle: {
-    margin: 0,
-    fontSize: 24,
-    fontWeight: 800,
-    color: "#fff",
-  },
-
-  portalItem: {
-    width: "100%",
-    justifyContent: "flex-start",
-    borderRadius: 0,
-    padding: "12px 14px",
-    display: "flex",
-    gap: 10,
-    alignItems: "center",
-    background: "transparent",
-    color: "#e5e7eb",
-    border: "none",
-    fontWeight: 600,
-    fontSize: 14,
-    cursor: "pointer",
-  },
-
-  portalDivider: {
-    height: 1,
-    background: "#1f2937",
-  },
-
-  portalItemHover: {
-    background: "rgba(255,255,255,0.05)",
-  },
-
-  portalDangerItem: {
-    color: "#fca5a5",
-  },
-
-  eyeButton: {
-    position: "absolute",
-    right: 10,
-    top: "50%",
-    transform: "translateY(-50%)",
-    background: "transparent",
-    border: "none",
-    padding: 0,
-    cursor: "pointer",
-    color: "#9ca3af",
-  },
-
-  inviteNote: {
-    marginTop: 6,
-    padding: 12,
-    borderRadius: 14,
-    border: "1px solid rgba(56,189,248,0.28)",
-    background: "rgba(56,189,248,0.10)",
-    color: "#bae6fd",
-    fontSize: 13,
-    lineHeight: 1.6,
-  },
-
-  tempPassValue: {
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
-    fontSize: 20,
-    fontWeight: 800,
-    color: "#fff",
-    wordBreak: "break-all" as const,
-    userSelect: "all" as const,
-  },
-};

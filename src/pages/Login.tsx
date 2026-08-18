@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
 type AdminRole = "ADMIN_GENERAL" | "ADMIN" | "GM";
@@ -48,6 +48,11 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  /* Aviso que deja SetPassword al terminar el alta. No usamos el toast del
+     panel porque vive en el componente que se desmonta al navegar acá. */
+  const loc = useLocation();
+  const notice = (loc.state as { notice?: string } | null)?.notice ?? null;
 
   useEffect(() => {
     (async () => {
@@ -124,6 +129,22 @@ export default function Login() {
           
           </div>
         </div>
+
+        {notice && (
+          <div
+            role="status"
+            style={{
+              border: "1px solid rgba(34,197,94,.45)",
+              background: "rgba(34,197,94,.14)",
+              padding: 10,
+              borderRadius: 12,
+              fontSize: 13,
+              marginBottom: 10,
+            }}
+          >
+            {notice}
+          </div>
+        )}
 
         {err && (
           <div

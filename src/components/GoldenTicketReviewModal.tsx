@@ -15,6 +15,7 @@ import {
   type PendingRequest,
 } from "../lib/goldenTickets";
 import type { ToastKind } from "./Toast";
+import { Badge, Button, Card, Modal } from "../ui";
 
 type Mode = "view" | "confirmGrant" | "reject";
 
@@ -181,355 +182,78 @@ export default function GoldenTicketReviewModal({
 
   const reasonTooShort = reason.trim().length < MIN_REASON;
 
+  const footer = mode === "view" ? (
+    <>
+      <Button variant="secondary" onClick={onClose} disabled={busy}>Cancelar</Button>
+      <Button variant="danger" onClick={() => setMode("reject")} disabled={busy}>Rechazar</Button>
+      <Button variant="primary" onClick={() => setMode("confirmGrant")} disabled={busy}>Aprobar Golden Ticket</Button>
+    </>
+  ) : mode === "confirmGrant" ? (
+    <>
+      <Button variant="secondary" onClick={() => setMode("view")} disabled={busy}>Volver</Button>
+      <Button variant="primary" onClick={doGrant} loading={busy}>Confirmar aprobación</Button>
+    </>
+  ) : (
+    <>
+      <Button variant="secondary" onClick={() => setMode("view")} disabled={busy}>Cancelar</Button>
+      <Button variant="danger" onClick={doReject} loading={busy} disabled={reasonTooShort}>Confirmar rechazo</Button>
+    </>
+  );
+
   return createPortal(
-    <div style={styles.overlay} onMouseDown={busy ? undefined : onClose}>
-      <div style={styles.modal} onMouseDown={(e) => e.stopPropagation()}>
-        <div style={styles.header}>
-          <div style={styles.headerUser}>
-            {request.photo_url ? (
-              <img src={request.photo_url} alt="" style={styles.avatar} />
-            ) : (
-              <div style={{ ...styles.avatar, ...styles.avatarFallback }}>
-                {name.charAt(0).toUpperCase()}
-              </div>
-            )}
-
-            <div style={{ minWidth: 0 }}>
-              <div style={styles.name}>{name}</div>
-              <div style={styles.meta}>
-                {request.alias ? `@${request.alias} · ` : ""}
-                {request.mail ?? "sin mail"}
-              </div>
-              <div style={styles.meta}>
-                Subido {formatRelative(request.rating_screenshot_uploaded_at)}
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            className="ghostBtn"
-            onClick={onClose}
-            disabled={busy}
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div style={styles.body}>
-          {mode === "view" ? (
-            <>
-              <div style={styles.viewer}>
-                {imgLoading ? (
-                  <div style={styles.viewerMsg}>Cargando captura…</div>
-                ) : imgError ? (
-                  <div style={{ ...styles.viewerMsg, color: "#f87171" }}>{imgError}</div>
-                ) : imgUrl ? (
-                  <img src={imgUrl} alt="Captura de la valoración" style={styles.image} />
-                ) : (
-                  <div style={styles.viewerMsg}>Este usuario no tiene captura cargada.</div>
-                )}
-              </div>
-
-              {imgUrl ? (
-                <a
-                  href={imgUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={styles.openLink}
-                >
-                  Abrir en pestaña nueva ↗
-                </a>
-              ) : null}
-
-              <div style={styles.actions}>
-                <button
-                  type="button"
-                  onClick={() => setMode("reject")}
-                  disabled={busy}
-                  style={{ ...styles.btn, ...styles.btnDanger }}
-                >
-                  Rechazar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setMode("confirmGrant")}
-                  disabled={busy}
-                  style={{ ...styles.btn, ...styles.btnSuccess }}
-                >
-                  Aceptar y otorgar Golden Ticket
-                </button>
-              </div>
-            </>
-          ) : null}
-
-          {mode === "confirmGrant" ? (
-            <>
-              <div style={styles.confirmText}>
-                ¿Otorgar Golden Ticket a <b>{name}</b>? Se le habilita en su app y recibe
-                notificación push.
-              </div>
-
-              <div style={styles.actions}>
-                <button
-                  type="button"
-                  onClick={() => setMode("view")}
-                  disabled={busy}
-                  style={{ ...styles.btn, ...styles.btnGhost }}
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="button"
-                  onClick={doGrant}
-                  disabled={busy}
-                  style={{ ...styles.btn, ...styles.btnSuccess }}
-                >
-                  {busy ? "Otorgando…" : "Confirmar"}
-                </button>
-              </div>
-            </>
-          ) : null}
-
-          {mode === "reject" ? (
-            <>
-              <label style={styles.label} htmlFor="gt-reject-reason">
-                Motivo del rechazo
-              </label>
-
-              <textarea
-                id="gt-reject-reason"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Ej: la captura no muestra la valoración de la app."
-                rows={4}
-                disabled={busy}
-                style={styles.textarea}
-              />
-
-              <div style={styles.hint}>
-                {reasonTooShort
-                  ? `Mínimo ${MIN_REASON} caracteres. El usuario lo va a ver en la app.`
-                  : "El usuario lo va a ver en la app."}
-              </div>
-
-              <div style={styles.actions}>
-                <button
-                  type="button"
-                  onClick={() => setMode("view")}
-                  disabled={busy}
-                  style={{ ...styles.btn, ...styles.btnGhost }}
-                >
-                  Volver
-                </button>
-
-                <button
-                  type="button"
-                  onClick={doReject}
-                  disabled={busy || reasonTooShort}
-                  style={{
-                    ...styles.btn,
-                    ...styles.btnDanger,
-                    ...(reasonTooShort ? styles.btnDisabled : null),
-                  }}
-                >
-                  {busy ? "Rechazando…" : "Confirmar rechazo"}
-                </button>
-              </div>
-            </>
-          ) : null}
-        </div>
+    <Modal
+      open
+      title="Revisar Golden Ticket"
+      description="Verificá la captura antes de aprobar o rechazar la solicitud."
+      size="lg"
+      panelClassName="eg-golden-review"
+      onClose={busy ? () => undefined : onClose}
+      footer={footer}
+    >
+      <div className="eg-golden-review__user">
+        <span className="eg-golden-review__avatar">
+          {request.photo_url ? <img src={request.photo_url} alt="" /> : (name.charAt(0) || "U").toUpperCase()}
+        </span>
+        <span className="eg-golden-review__identity">
+          <strong>{name}</strong>
+          <small>{request.alias ? `@${request.alias}` : "sin alias"} · {request.mail ?? "sin mail"}</small>
+        </span>
+        <span className="eg-golden-review__meta">
+          <Badge tone="warning" small>Pendiente</Badge>
+          <small title={request.rating_screenshot_uploaded_at || undefined}>Subido {formatRelative(request.rating_screenshot_uploaded_at)}</small>
+        </span>
       </div>
-    </div>,
+
+      {mode === "view" && <>
+        <section className="eg-golden-review__capture">
+          <div className="eg-golden-review__section-title"><strong>Captura enviada</strong>{imgUrl && <a href={imgUrl} target="_blank" rel="noreferrer">Abrir en pestaña nueva ↗</a>}</div>
+          <div className="eg-golden-review__viewer">
+            {imgLoading ? (
+              <div className="eg-golden-review__feedback">Cargando captura...</div>
+            ) : imgError ? (
+              <div className="eg-golden-review__feedback is-error"><strong>No se pudo cargar la captura.</strong><span>{imgError}</span></div>
+            ) : imgUrl ? (
+              <img src={imgUrl} alt="Captura de la valoración" />
+            ) : (
+              <div className="eg-golden-review__feedback">Este usuario no tiene captura cargada.</div>
+            )}
+          </div>
+        </section>
+      </>}
+
+      {mode === "confirmGrant" && <Card padding="md" className="eg-golden-review__confirmation">
+        <strong>Confirmar aprobación</strong>
+        <p>¿Querés otorgar el Golden Ticket a <b>{name}</b>? Se habilitará en su app y se intentará enviar la notificación existente.</p>
+      </Card>}
+
+      {mode === "reject" && <div className="eg-golden-review__reject">
+        <label className="eg-field" htmlFor="gt-reject-reason">
+          <span className="eg-field__label">Motivo del rechazo</span>
+          <textarea id="gt-reject-reason" className="eg-input eg-golden-review__textarea" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Ej: la captura no muestra la valoración de la app." rows={4} disabled={busy} />
+          <span className={`eg-field__help${reasonTooShort ? " is-error" : ""}`}>{reasonTooShort ? `Mínimo ${MIN_REASON} caracteres. El usuario lo va a ver en la app.` : "El usuario lo va a ver en la app."}</span>
+        </label>
+      </div>}
+    </Modal>,
     document.body
   );
 }
-
-const styles: Record<string, any> = {
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(2,6,23,0.72)",
-    zIndex: 11000,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 18,
-  },
-
-  modal: {
-    width: "min(760px, 100%)",
-    maxHeight: "92vh",
-    display: "flex",
-    flexDirection: "column",
-    background: "#0b1220",
-    border: "1px solid #1f2937",
-    borderRadius: 18,
-    boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
-    color: "#e5e7eb",
-    overflow: "hidden",
-  },
-
-  header: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-    padding: 18,
-    borderBottom: "1px solid #1f2937",
-  },
-
-  headerUser: {
-    display: "flex",
-    gap: 12,
-    alignItems: "center",
-    minWidth: 0,
-  },
-
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 999,
-    objectFit: "cover",
-    border: "1px solid #1f2937",
-    flexShrink: 0,
-  },
-
-  avatarFallback: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "#111827",
-    fontWeight: 800,
-    color: "#94a3b8",
-  },
-
-  name: {
-    fontSize: 16,
-    fontWeight: 800,
-    color: "#ffffff",
-  },
-
-  meta: {
-    fontSize: 12.5,
-    color: "#94a3b8",
-    marginTop: 2,
-    wordBreak: "break-word",
-  },
-
-  body: {
-    padding: 18,
-    overflow: "auto",
-  },
-
-  viewer: {
-    width: "100%",
-    minHeight: 220,
-    maxHeight: "52vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "#020617",
-    border: "1px solid #1f2937",
-    borderRadius: 14,
-    overflow: "hidden",
-  },
-
-  viewerMsg: {
-    padding: 24,
-    color: "#94a3b8",
-    fontSize: 13.5,
-    textAlign: "center",
-  },
-
-  image: {
-    maxWidth: "100%",
-    maxHeight: "52vh",
-    objectFit: "contain",
-    display: "block",
-  },
-
-  openLink: {
-    display: "inline-block",
-    marginTop: 10,
-    fontSize: 12.5,
-    color: "#93c5fd",
-    textDecoration: "none",
-  },
-
-  actions: {
-    display: "flex",
-    gap: 10,
-    justifyContent: "flex-end",
-    flexWrap: "wrap",
-    marginTop: 18,
-  },
-
-  btn: {
-    minHeight: 44,
-    padding: "0 18px",
-    borderRadius: 12,
-    border: "1px solid transparent",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-
-  btnSuccess: {
-    background: "#16a34a",
-    borderColor: "#15803d",
-    color: "#ffffff",
-  },
-
-  btnDanger: {
-    background: "#dc2626",
-    borderColor: "#b91c1c",
-    color: "#ffffff",
-  },
-
-  btnGhost: {
-    background: "transparent",
-    borderColor: "#334155",
-    color: "#cbd5e1",
-  },
-
-  btnDisabled: {
-    opacity: 0.5,
-    cursor: "not-allowed",
-  },
-
-  confirmText: {
-    fontSize: 14.5,
-    lineHeight: 1.6,
-    color: "#e5e7eb",
-  },
-
-  label: {
-    display: "block",
-    fontSize: 13,
-    color: "#cbd5e1",
-    marginBottom: 8,
-  },
-
-  textarea: {
-    width: "100%",
-    boxSizing: "border-box",
-    background: "#0f172a",
-    border: "1px solid #1f2937",
-    borderRadius: 12,
-    color: "#e5e7eb",
-    padding: 12,
-    fontSize: 14,
-    fontFamily: "inherit",
-    resize: "vertical",
-  },
-
-  hint: {
-    marginTop: 6,
-    fontSize: 12,
-    color: "#94a3b8",
-  },
-};

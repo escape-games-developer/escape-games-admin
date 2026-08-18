@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import AdminLayout from "./layout/AdminLayout";
 
@@ -75,6 +75,43 @@ function RequirePerm({
   return <>{children}</>;
 }
 
+/*
+  404 real. Antes esto era <Navigate to="/salas" replace />, y eso hacía que una
+  ruta faltante se viera exactamente igual que un rebote por permisos: si el
+  bundle desplegado no traía /set-password, el invite terminaba en /salas (o en
+  /login si no había sesión) sin ninguna pista de que la ruta no existía. Un
+  404 explícito deja el problema a la vista en lugar de disfrazarlo.
+*/
+function NotFound() {
+  const logged = !!localStorage.getItem("eg_admin_role");
+
+  return (
+    <div className="authWrap">
+      <div className="authCard" style={{ textAlign: "center" }}>
+        <div style={{ fontWeight: 900, fontSize: 40, lineHeight: 1 }}>404</div>
+
+        <div style={{ fontWeight: 700, fontSize: 16, marginTop: 8 }}>
+          Esta página no existe
+        </div>
+
+        <div style={{ opacity: 0.8, fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>
+          La ruta <code>{window.location.pathname}</code> no está registrada en el
+          panel. Si llegaste desde un mail o un link reciente, avisale al equipo:
+          puede ser una versión vieja publicada.
+        </div>
+
+        <Link
+          to={logged ? "/salas" : "/login"}
+          className="btnSmall"
+          style={{ display: "inline-block", marginTop: 14, textDecoration: "none" }}
+        >
+          {logged ? "Volver al panel" : "Ir al login"}
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -141,7 +178,7 @@ export default function AppRoutes() {
 
       </Route>
 
-      <Route path="*" element={<Navigate to="/salas" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

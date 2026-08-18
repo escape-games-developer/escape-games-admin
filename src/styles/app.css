@@ -18,20 +18,16 @@ body,
   height:100%;
   min-height:100%;
   margin:0;
+  background-color:#0b111b;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
 
 a{ color:inherit; text-decoration:none; }
 
-/* ✅ Fondo global */
+/* Fondo global sólido: evita el flash de la imagen durante el arranque. */
 body{
   color: var(--txt);
-  background-color: var(--bg);
-  background-image: url("../assets/Escape-Games-Admin-fondo.png");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
+  background-color:#0b111b;
 }
 
 /* =========================
@@ -432,6 +428,12 @@ body.adminWide .page{
   align-items:center;
   justify-content:center;
   padding:18px;
+  background-color:var(--bg);
+  background-image:url("../assets/Escape-Games-Admin-fondo.png");
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+  background-attachment:fixed;
 }
 .authCard{
   width:min(420px, 92vw);

@@ -6,11 +6,29 @@ import { TEMPLATE_URLS } from "../lib/imageTemplates";
 import { readImageSize, aspectMatches } from "../lib/imageAspect";
 import { useToasts, ToastStack } from "../components/Toast";
 import GoldenTicketManagementModal from "../components/GoldenTicketManagementModal";
+import RoomStepNavigation, { type RoomStepKey } from "../components/rooms/RoomStepNavigation";
+import RoomImageField from "../components/rooms/RoomImageField";
 import {
   fetchGrantedCount,
   GOLDEN_TICKET_IMAGE_URL,
   GOLDEN_TICKET_LIMIT,
 } from "../lib/goldenTickets";
+import {
+  ActionMenu,
+  Badge,
+  Button,
+  Card,
+  DataTable,
+  EmptyState,
+  Input,
+  Modal,
+  PageHeader,
+  SearchInput,
+  Select,
+  StatCard,
+  Toggle,
+  type DataTableColumn,
+} from "../ui";
 
 type RoomCategory = "WOW" | "CLASICO" | "DESPEDIDA";
 
@@ -491,12 +509,11 @@ type ImageSlot = "card" | "banner";
 
 const ROOM_IMAGE_SPECS: Record<
   ImageSlot,
-  { aspect: number; ratioLabel: string; sizeLabel: string; w: number; h: number; templateUrl: string }
+  { aspect: number; ratioLabel: string; w: number; h: number; templateUrl: string }
 > = {
   card: {
     aspect: ROOM_CARD_ASPECT,
     ratioLabel: "1:1",
-    sizeLabel: "1200 × 1200 px (cuadrado)",
     w: 1200,
     h: 1200,
     templateUrl: TEMPLATE_URLS.roomCard,
@@ -504,118 +521,11 @@ const ROOM_IMAGE_SPECS: Record<
   banner: {
     aspect: ROOM_BANNER_ASPECT,
     ratioLabel: "2.4:1",
-    sizeLabel: "1440 × 600 px (aspect 2.4:1)",
     w: 1440,
     h: 600,
     templateUrl: TEMPLATE_URLS.roomBanner,
   },
 };
-
-/**
- * Previa del recorte final: caja con el aspect exacto de la app y un overlay
- * punteado marcando los bordes de esa caja. Lo que se ve acá es lo que se ve
- * en la app (el crop siempre es centrado, no hay reencuadre del lado cliente).
- */
-function CropPreview({ slot, src }: { slot: ImageSlot; src: string }) {
-  const spec = ROOM_IMAGE_SPECS[slot];
-  const title = slot === "banner" ? "Banner (vista previa de sala)" : "Card (listado)";
-
-  return (
-    <div>
-      <div style={{ fontSize: 12, opacity: 0.72, marginBottom: 6 }}>
-        {title} — {spec.ratioLabel}
-      </div>
-
-      <div
-        style={{
-          position: "relative",
-          width: "100%",
-          aspectRatio: String(spec.aspect),
-          borderRadius: 16,
-          overflow: "hidden",
-          border: "1px solid rgba(255,255,255,.12)",
-          background: "rgba(0,0,0,.25)",
-        }}
-      >
-        {src ? (
-          <img
-            src={src}
-            alt={`Previa ${slot}`}
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          />
-        ) : (
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              textAlign: "center",
-              padding: 16,
-              fontSize: 12,
-              opacity: 0.7,
-            }}
-          >
-            Sin imagen {slot === "banner" ? "de banner" : "de card"}.
-          </div>
-        )}
-
-        {/* Bordes de la caja esperada */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            border: "1px dashed rgba(125,211,252,.55)",
-            borderRadius: 16,
-            pointerEvents: "none",
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
-/** Helper text + link de plantilla + aviso de aspect, por slot. */
-function ImageSpecHelp({ slot, warning }: { slot: ImageSlot; warning?: string }) {
-  const spec = ROOM_IMAGE_SPECS[slot];
-
-  return (
-    <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-      <div style={{ fontSize: 12, opacity: 0.78 }}>
-        Medidas requeridas: <b>{spec.sizeLabel}</b>
-      </div>
-
-      {spec.templateUrl ? (
-        <a
-          href={spec.templateUrl}
-          download
-          target="_blank"
-          rel="noreferrer"
-          style={{ fontSize: 12, color: "#7dd3fc", textDecoration: "none", width: "fit-content" }}
-        >
-          📐 Descargar plantilla
-        </a>
-      ) : null}
-
-      {warning ? (
-        <div
-          style={{
-            fontSize: 12,
-            lineHeight: 1.4,
-            color: "#fca5a5",
-            border: "1px solid #991b1b",
-            background: "rgba(63,18,20,.55)",
-            borderRadius: 10,
-            padding: "8px 10px",
-          }}
-        >
-          ⚠️ {warning}
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 type CropModalState = {
   open: boolean;
@@ -700,17 +610,17 @@ function applyAspectFromAnchor(rect: CropRect, nat: NatImg, handle: Handle, aspe
    haya secciones cerradas.
 ========================= */
 
-type SectionKey = "general" | "categoria" | "imagenes" | "contacto" | "records";
+type SectionKey = RoomStepKey;
 
 const FORM_SECTIONS: { key: SectionKey; title: string; hint: string }[] = [
-  { key: "general", title: "General", hint: "Nombre, sucursal, estado y descripción" },
+  { key: "general", title: "Información general", hint: "Nombre, sucursal, estado y descripción" },
   {
     key: "categoria",
-    title: "Categoría y dificultad",
+    title: "Configuración del juego",
     hint: "Tipo, nivel, temáticas, jugadores y puntaje",
   },
-  { key: "imagenes", title: "Imágenes", hint: "Card 1200×1200 y banner 1440×600" },
-  { key: "contacto", title: "Contacto y reserva", hint: "Teléfono, link de reserva y QR único" },
+  { key: "imagenes", title: "Imágenes de la sala", hint: "Card 1200×1200 y banner 1440×600" },
+  { key: "contacto", title: "Contacto y reserva", hint: "Teléfono, URL de reserva y QR único" },
   { key: "records", title: "Récords históricos", hint: "Mejores tiempos publicados (MM:SS)" },
 ];
 
@@ -743,30 +653,25 @@ const formRowStyle = (min: number): React.CSSProperties => ({
   gap: 14,
 });
 
-/* Multi-open: abrir una sección no cierra las otras. */
-const INITIAL_SECTIONS: Record<SectionKey, boolean> = {
-  general: true,
-  categoria: false,
-  imagenes: false,
-  contacto: false,
-  records: false,
-};
-
 function FormSection({
   title,
   hint,
   open,
   onToggle,
   children,
+  stepMode = false,
 }: {
   title: string;
   hint: string;
   open: boolean;
   onToggle: () => void;
   children: React.ReactNode;
+  stepMode?: boolean;
 }) {
+  if (stepMode && !open) return null;
+
   return (
-    <section
+    <section className={stepMode ? "eg-room-step-panel" : undefined}
       style={{
         border: "1px solid rgba(255,255,255,.08)",
         borderRadius: 8,
@@ -774,7 +679,13 @@ function FormSection({
         overflow: "hidden",
       }}
     >
-      <button
+      {stepMode && (
+        <header className="eg-room-step-panel__header">
+          <strong>{title}</strong>
+          <span>{hint}</span>
+        </header>
+      )}
+      {!stepMode && <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
@@ -821,7 +732,7 @@ function FormSection({
             />
           </svg>
         </span>
-      </button>
+      </button>}
 
       {open ? (
         <div className="egSectionBody" style={{ padding: 20 }}>
@@ -1068,16 +979,17 @@ const [cropTarget, setCropTarget] = useState<ImageSlot | null>(null);
     category: string;
   } | null>(null);
 
-  /* Acordeón del form de sala: multi-open, sin persistir. */
-  const [openSections, setOpenSections] =
-    useState<Record<SectionKey, boolean>>(INITIAL_SECTIONS);
+  const [activeRoomStep, setActiveRoomStep] = useState<SectionKey>("general");
+  const [visitedRoomSteps, setVisitedRoomSteps] = useState<SectionKey[]>(["general"]);
+
+  const changeRoomStep = (step: SectionKey) => {
+    setActiveRoomStep(step);
+    setVisitedRoomSteps((previous) => previous.includes(step) ? previous : [...previous, step]);
+  };
 
   /* Para poder saltar al campo que falló la validación aunque su sección esté
      cerrada. */
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
-
-  const toggleSection = (key: SectionKey) =>
-    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const setFieldRef = (key: string) => (el: HTMLElement | null) => {
     fieldRefs.current[key] = el;
@@ -1088,9 +1000,7 @@ const [cropTarget, setCropTarget] = useState<ImageSlot | null>(null);
    * la validación bloquea el hilo, así que el timeout corre recién cuando el
    * usuario lo cierra: para entonces React ya montó la sección.
    */
-  const focusFormField = (section: SectionKey, field: string) => {
-    setOpenSections((prev) => (prev[section] ? prev : { ...prev, [section]: true }));
-
+  const focusFormField = (field: string) => {
     setTimeout(() => {
       const el = fieldRefs.current[field];
       if (!el) return;
@@ -1103,7 +1013,8 @@ const [cropTarget, setCropTarget] = useState<ImageSlot | null>(null);
 
   /** Corta el submit avisando y llevando al campo culpable. */
   const failField = (section: SectionKey, field: string, message: string) => {
-    focusFormField(section, field);
+    changeRoomStep(section);
+    focusFormField(field);
     alert(message);
   };
 
@@ -1545,6 +1456,8 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
   const closeModal = () => {
   setOpen(false);
   setEditing(null);
+  setActiveRoomStep("general");
+  setVisitedRoomSteps(["general"]);
 
   setEditingCardPhotoFile(null);
   setEditingBannerPhotoFile(null);
@@ -1620,7 +1533,8 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
     setTempBannerPreviewUrl(null);
     setCropTarget(null);
 
-    setOpenSections(INITIAL_SECTIONS);
+    setActiveRoomStep("general");
+    setVisitedRoomSteps(["general"]);
     fieldRefs.current = {};
 
     setOpen(true);
@@ -1700,7 +1614,8 @@ const menuDangerHoverOff = (el: HTMLButtonElement) => {
     setTempBannerPreviewUrl(null);
     setCropTarget(null);
 
-    setOpenSections(INITIAL_SECTIONS);
+    setActiveRoomStep("general");
+    setVisitedRoomSteps(["general"]);
     fieldRefs.current = {};
 
     setOpen(true);
@@ -1744,6 +1659,38 @@ const onPickBannerImage = () => {
       setCropModal(null);
     };
     img.src = url;
+  };
+
+  const editCurrentImage = async (slot: ImageSlot) => {
+    if (!editing || !canManageRoomFull) return;
+
+    const pendingFile = slot === "card" ? editingCardPhotoFile : editingBannerPhotoFile;
+    if (pendingFile) {
+      setCropTarget(slot);
+      openCropperForFile(pendingFile, slot);
+      return;
+    }
+
+    const src = slot === "card" ? editing.cardPhoto : editing.bannerPhoto;
+    if (!src) {
+      if (slot === "card") onPickCardImage();
+      else onPickBannerImage();
+      return;
+    }
+
+    try {
+      const response = await fetch(src);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const extension = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+      const file = new File([blob], `room-${slot}.${extension}`, { type: blob.type || "image/jpeg" });
+      setCropTarget(slot);
+      openCropperForFile(file, slot);
+    } catch (error) {
+      console.error("open existing image crop failed", error);
+      setCropTarget(null);
+      toast("error", "No pude abrir esta imagen para recortarla. Podés reemplazarla por un archivo nuevo.");
+    }
   };
 
   const onFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
@@ -2394,13 +2341,150 @@ const statCardStyle: React.CSSProperties = {
     });
   };
 
+  type RoomsListRow = { kind: "room"; room: Room } | { kind: "golden" };
+
+  const roomRows: RoomsListRow[] = filtered.map((room) => ({ kind: "room", room }));
+  const pinnedRows: RoomsListRow[] = canSeeGoldenTickets ? [{ kind: "golden" }] : [];
+  const isEditingRoom = editing ? items.some((item) => item.id === editing.id) : false;
+
+  const columns: DataTableColumn<RoomsListRow>[] = [
+    {
+      key: "room",
+      header: "Sala",
+      className: "eg-rooms__name-column",
+      render: (row) => {
+        if (row.kind === "golden") {
+          return (
+            <div className="eg-room-cell">
+              <div className="eg-room-thumb is-golden">
+                {goldenImgFailed ? (
+                  <span>GT</span>
+                ) : (
+                  <img src={GOLDEN_TICKET_IMAGE_URL} alt="Golden Ticket" onError={() => setGoldenImgFailed(true)} />
+                )}
+              </div>
+              <div className="eg-room-cell__copy">
+                <strong>Golden Ticket</strong>
+                <span>{goldenGranted == null ? `— / ${GOLDEN_TICKET_LIMIT} otorgados` : `${goldenGranted} / ${GOLDEN_TICKET_LIMIT} otorgados`}</span>
+              </div>
+            </div>
+          );
+        }
+
+        const room = row.room;
+        return (
+          <div className="eg-room-cell">
+            <div className="eg-room-thumb">
+              <img
+                src={room.cardPhoto || room.bannerPhoto || "https://picsum.photos/seed/placeholder/900/520"}
+                alt={room.name}
+                onError={(event) => { event.currentTarget.src = "https://picsum.photos/seed/placeholder/900/520"; }}
+              />
+            </div>
+            <div className="eg-room-cell__copy">
+              <strong title={room.name}>{room.name || "—"}</strong>
+              {room.tags.length > 0 && (
+                <span className="eg-room-tags">
+                  {room.tags.slice(0, 3).map((tag) => <span key={tag}>{tag}</span>)}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: "branch",
+      header: "Sucursal",
+      render: (row) => row.kind === "room"
+        ? row.room.branch || (row.room.branch_id ? branchesById.get(row.room.branch_id) || "—" : "—")
+        : "—",
+    },
+    {
+      key: "category",
+      header: "Categoría",
+      render: (row) => row.kind === "golden"
+        ? <Badge tone="warning" small>GOLDEN</Badge>
+        : <Badge tone={row.room.category === "WOW" ? "accent" : "neutral"} small>{CAT_LABEL[row.room.category] || row.room.category}</Badge>,
+    },
+    {
+      key: "level",
+      header: "Nivel",
+      render: (row) => row.kind === "room"
+        ? <Badge tone={row.room.level === "AVANZADO" ? "warning" : row.room.level === "INTERMEDIO" ? "info" : "neutral"} small>{LEVEL_LABEL[row.room.level] || row.room.level}</Badge>
+        : "—",
+    },
+    {
+      key: "players",
+      header: "Jugadores",
+      render: (row) => row.kind === "room" ? <strong className="eg-table__compact">{row.room.playersMin}–{row.room.playersMax}</strong> : "—",
+    },
+    {
+      key: "difficulty",
+      header: "Dificultad",
+      render: (row) => row.kind === "room" ? <strong className="eg-table__compact">{row.room.difficulty}/10</strong> : "—",
+    },
+    {
+      key: "records",
+      header: "Récords",
+      render: (row) => row.kind === "room"
+        ? <span className="eg-room-records" title={`Récord 1: ${row.room.record1}\nRécord 2: ${row.room.record2}`}><span>🏆 {row.room.record1}</span><span>🥈 {row.room.record2}</span></span>
+        : "—",
+    },
+    {
+      key: "points",
+      header: "Puntos",
+      render: (row) => row.kind === "room" ? <strong className="eg-table__compact">{row.room.points}/3</strong> : "—",
+    },
+    {
+      key: "status",
+      header: "Estado",
+      render: (row) => row.kind === "golden"
+        ? <Badge tone="success" dot small>ACTIVA</Badge>
+        : <Badge tone={row.room.active ? "success" : "neutral"} dot small>{row.room.active ? "ACTIVA" : "INACTIVA"}</Badge>,
+    },
+    {
+      key: "actions",
+      header: "Acciones",
+      align: "center",
+      render: (row) => {
+        if (row.kind === "golden") {
+          return (
+            <span onClick={(event) => event.stopPropagation()}>
+              <Button variant="ghost" size="sm" icon="qr" title="Gestionar Golden Tickets" onClick={() => setGoldenOpen(true)} />
+            </span>
+          );
+        }
+
+        const room = row.room;
+        const canTouchRoom = !me.isBranchScoped || !me.branchId || room.branch_id === me.branchId;
+        const qrValue = room.qrCode.trim() || makeRoomQr(room.id);
+        return (
+          <span onClick={(event) => event.stopPropagation()}>
+            <ActionMenu
+              items={[
+                ...(canManageRoomFull ? [{ key: "edit", label: "Editar", icon: "edit" as const, disabled: saving, onSelect: () => canTouchRoom ? startEditFull(room) : alert("No podés editar salas de otra sucursal.") }] : []),
+                ...(canManageRoomFull ? [{ key: "description", label: "Ver descripción", icon: "eye" as const, disabled: !room.description, onSelect: () => room.description && setDescModal({ title: room.name || "Descripción", text: room.description }) }] : []),
+                { key: "qr", label: "Ver QR (copiar / imprimir)", icon: "qr" as const, onSelect: () => openQr(room, qrValue) },
+                ...(canManageRoomFull ? [{ key: "reserve", label: "Abrir link reserva", icon: "link" as const, disabled: !room.reserveUrl, onSelect: () => room.reserveUrl && window.open(room.reserveUrl, "_blank", "noopener,noreferrer") }] : []),
+                ...(canEditRankings ? [{ key: "records", label: "Editar récords", icon: "records" as const, onSelect: () => canTouchRoom ? openRecordsEditor(room) : alert("No podés editar salas de otra sucursal.") }] : []),
+                ...(canManageRoomFull ? [{ key: "active", label: room.active ? "Desactivar" : "Activar", icon: "toggle" as const, separatorBefore: true, disabled: saving, onSelect: () => canTouchRoom ? void toggleActive(room.id) : alert("No podés cambiar estado de otra sucursal.") }] : []),
+                ...(canManageRoomFull ? [{ key: "delete", label: "Borrar", icon: "trash" as const, danger: true, disabled: saving, onSelect: () => canTouchRoom ? void deleteRoom(room) : alert("No podés borrar salas de otra sucursal.") }] : []),
+              ]}
+            />
+          </span>
+        );
+      },
+    },
+  ];
+
 return (
   <div
     style={{
       width: "100%",
-      minHeight: "100vh",
-      background: "#0f172a",
-      color: "#e5e7eb",
+      minHeight: 0,
+      background: "transparent",
+      color: "var(--eg-text)",
       boxSizing: "border-box",
     }}
   >
@@ -2408,14 +2492,55 @@ return (
       style={{
         width: "100%",
         maxWidth: "100%",
-        minHeight: "100vh",
+        minHeight: 0,
         margin: 0,
-        padding: "14px 18px 18px",
+        padding: 0,
         boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
       }}
     >
+      <section className="eg-rooms">
+        <PageHeader
+          title="Salas"
+          subtitle="Administrá las salas disponibles en todas las sucursales."
+          action={canCreateRoom ? <Button variant="primary" icon="plus" onClick={startCreate}>Nueva sala</Button> : undefined}
+        />
+
+        <Card padding="sm" className="eg-rooms__toolbar">
+          <SearchInput value={q} onChange={(event) => setQ(event.target.value)} placeholder="Buscar por nombre o sucursal..." aria-label="Buscar salas" />
+          {!me.isBranchScoped ? (
+            <Select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)} aria-label="Filtrar por sucursal">
+              <option value="">Todas las sucursales</option>
+              {branches.map((branch) => <option key={branch.id} value={branch.name}>{branch.name}</option>)}
+            </Select>
+          ) : (
+            <Input value={myBranchName ? `Sucursal: ${myBranchName}` : "Sucursal: sin asignar"} readOnly aria-label="Sucursal asignada" />
+          )}
+        </Card>
+
+        <div className="eg-stat-grid eg-rooms__stats">
+          <StatCard value={totals.totalRooms} label="Salas visibles" />
+          <StatCard value={totals.activeRooms} label="Salas activas" tone="success" />
+          <StatCard value={totals.inactiveRooms} label="Salas inactivas" tone="danger" />
+        </div>
+
+        <DataTable
+          columns={columns}
+          rows={roomRows}
+          pinnedRows={pinnedRows}
+          rowKey={(row) => row.kind === "golden" ? "golden-ticket" : row.room.id}
+          loading={loading}
+          loadingLabel="Cargando salas..."
+          empty={<EmptyState title="No encontramos salas con estos filtros." description="Probá cambiando la búsqueda o la sucursal seleccionada." icon="search" />}
+          rowClassName={(row) => row.kind === "golden" ? "eg-table__golden" : undefined}
+          isRowClickable={(row) => row.kind === "golden"}
+          onRowClick={(row) => { if (row.kind === "golden") setGoldenOpen(true); }}
+        />
+      </section>
+
+      {false && (
+      <div aria-hidden="true">
       <div
         style={{
           display: "flex",
@@ -2973,6 +3098,9 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
         </div>
       </div>
 
+      </div>
+      )}
+
       {descModal ? (
         <>
           <div className="backdrop show" onMouseDown={() => setDescModal(null)} />
@@ -3222,6 +3350,7 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
       onMouseDown={closeModal}
     >
       <div
+        className="eg-room-form"
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           width: "min(1180px, calc(100vw - 32px))",
@@ -3236,7 +3365,7 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
           flexDirection: "column",
         }}
       >
-        <div
+        <div className="eg-room-form__header"
           style={{
             padding: "18px 22px",
             borderBottom: "1px solid rgba(255,255,255,.08)",
@@ -3247,6 +3376,9 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
           }}
         >
           <div>
+            <div className="eg-room-form__breadcrumb">
+              <span>Salas</span><span aria-hidden="true">/</span><strong>{isEditingRoom ? "Editar sala" : "Nueva sala"}</strong>
+            </div>
             <h2
               style={{
                 margin: 0,
@@ -3255,30 +3387,15 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                 color: "#fff",
               }}
             >
-              {items.some((x) => x.id === editing.id) ? "Editar sala" : "Nueva sala"}
+              {isEditingRoom ? "Editar sala" : "Nueva sala"}
             </h2>
             <div style={{ marginTop: 4, fontSize: 13, color: "#94a3b8" }}>
-              Configuración general de la sala
+              {isEditingRoom
+                ? "Actualizá la información de la sala conservando su configuración."
+                : "Completá la información necesaria para publicar la sala."}
             </div>
           </div>
 
-          <button
-            type="button"
-            className="ghostBtn"
-            onClick={closeModal}
-            aria-label="Cerrar"
-            style={{
-              width: 40,
-              height: 40,
-              minWidth: 40,
-              borderRadius: 12,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            ✕
-          </button>
         </div>
 
         {/* Los file inputs viven fuera del acordeón: tienen que seguir montados
@@ -3298,108 +3415,61 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
           onChange={onFileChange}
         />
 
-        <div
+        <div className="eg-room-form__layout"
           style={{
             padding: 22,
             overflowY: "auto",
             overflowX: "hidden",
             display: "flex",
-            flexDirection: "column",
-            gap: 12,
+            gap: 0,
           }}
         >
+          <RoomStepNavigation active={activeRoomStep} visited={visitedRoomSteps} onChange={changeRoomStep} />
+          <div className="eg-room-form__content">
           {/* ---------- 1. GENERAL ---------- */}
           <FormSection
             title={FORM_SECTIONS[0].title}
             hint={FORM_SECTIONS[0].hint}
-            open={openSections.general}
-            onToggle={() => toggleSection("general")}
+            open={activeRoomStep === "general"}
+            onToggle={() => changeRoomStep("general")}
+            stepMode
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={formRowStyle(220)}>
-                <label style={formFieldStyle}>
-                  <span style={formLabelStyle}>Nombre</span>
-                  <input
-                    ref={setFieldRef("name")}
-                    className="input"
-                    value={editing.name}
-                    onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                  />
-                </label>
+                <Input
+                  ref={(element) => setFieldRef("name")(element)}
+                  id="room-name"
+                  label="Nombre de la sala"
+                  value={editing.name}
+                  onChange={(event) => setEditing({ ...editing, name: event.target.value })}
+                />
 
-                <label style={formFieldStyle}>
-                  <span style={formLabelStyle}>Sucursal</span>
-                  <select
-                    ref={setFieldRef("branch")}
-                    className="input"
-                    value={editing.branch}
-                    onChange={(e) => {
-                      const name = e.target.value;
-                      const bid = branchesByName.get(name) || null;
-                      setEditing({ ...editing, branch: name, branch_id: bid });
-                    }}
-                    disabled={me.isBranchScoped}
-                  >
+                <Select
+                  ref={(element) => setFieldRef("branch")(element)}
+                  id="room-branch"
+                  label="Sucursal"
+                  value={editing.branch}
+                  onChange={(event) => {
+                    const name = event.target.value;
+                    const bid = branchesByName.get(name) || null;
+                    setEditing({ ...editing, branch: name, branch_id: bid });
+                  }}
+                  disabled={me.isBranchScoped}
+                >
                     {branches.map((b) => (
                       <option key={b.id} value={b.name}>
                         {b.name}
                       </option>
                     ))}
-                  </select>
-                </label>
+                </Select>
 
                 <div style={formFieldStyle}>
                   <span style={formLabelStyle}>Estado</span>
-
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={editing.active}
-                    onClick={() => setEditing({ ...editing, active: !editing.active })}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 10,
-                      height: 42,
-                      padding: "0 14px",
-                      borderRadius: 12,
-                      border: "1px solid rgba(255,255,255,.12)",
-                      background: "rgba(255,255,255,.04)",
-                      color: "#e2e8f0",
-                      font: "inherit",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        position: "relative",
-                        width: 38,
-                        height: 22,
-                        flex: "0 0 auto",
-                        borderRadius: 999,
-                        background: editing.active ? "#16a34a" : "rgba(255,255,255,.18)",
-                        transition: "background .18s ease",
-                      }}
-                    >
-                      <span
-                        style={{
-                          position: "absolute",
-                          top: 3,
-                          left: editing.active ? 19 : 3,
-                          width: 16,
-                          height: 16,
-                          borderRadius: "50%",
-                          background: "#fff",
-                          transition: "left .18s ease",
-                        }}
-                      />
-                    </span>
-
-                    {editing.active ? "Activa" : "Inactiva"}
-                  </button>
+                  <Toggle
+                    label={editing.active ? "Activa" : "Inactiva"}
+                    checked={editing.active}
+                    onChange={(event) => setEditing({ ...editing, active: event.target.checked })}
+                  />
                 </div>
               </div>
 
@@ -3420,8 +3490,9 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
           <FormSection
             title={FORM_SECTIONS[1].title}
             hint={FORM_SECTIONS[1].hint}
-            open={openSections.categoria}
-            onToggle={() => toggleSection("categoria")}
+            open={activeRoomStep === "categoria"}
+            onToggle={() => changeRoomStep("categoria")}
+            stepMode
           >
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={formRowStyle(220)}>
@@ -3623,119 +3694,38 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
           <FormSection
             title={FORM_SECTIONS[2].title}
             hint={FORM_SECTIONS[2].hint}
-            open={openSections.imagenes}
-            onToggle={() => toggleSection("imagenes")}
+            open={activeRoomStep === "imagenes"}
+            onToggle={() => changeRoomStep("imagenes")}
+            stepMode
           >
-            <div style={formRowStyle(300)}>
-              {/* Card */}
-              <div ref={setFieldRef("cardPhoto")} style={formPanelStyle}>
-                <div style={{ ...formLabelStyle, marginBottom: 10 }}>
-                  Imagen para card (listado)
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className="btnSmall"
-                    onClick={onPickCardImage}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                  >
-                    <Icon name="image" size={16} />
-                    Elegir
-                  </button>
-
-                  {editing.cardPhoto ? (
-                    <button type="button" className="ghostBtn" onClick={removeCardImage}>
-                      Quitar
-                    </button>
-                  ) : (
-                    <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
-                  )}
-                </div>
-
-                <ImageSpecHelp slot="card" warning={aspectWarn.card} />
-
-                <div style={{ ...formLabelStyle, margin: "14px 0 10px 0" }}>Previa card</div>
-
-                {editing.cardPhoto ? (
-                  <div
-                    style={{
-                      borderRadius: 16,
-                      overflow: "hidden",
-                      border: "1px solid rgba(255,255,255,.12)",
-                      background: "rgba(0,0,0,.25)",
-                    }}
-                  >
-                    <img
-                      src={editing.cardPhoto}
-                      alt="Preview card"
-                      style={{
-                        width: "100%",
-                        height: "clamp(200px, 30vh, 320px)",
-                        objectFit: "contain",
-                        display: "block",
-                        background: "#000",
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      minHeight: 160,
-                      borderRadius: 16,
-                      border: "1px dashed rgba(255,255,255,.18)",
-                      background: "rgba(255,255,255,.03)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textAlign: "center",
-                      padding: 20,
-                      opacity: 0.75,
-                    }}
-                  >
-                    Acá se va a ver la previa de la imagen card.
-                  </div>
-                )}
-
-                <div style={{ marginTop: 12 }}>
-                  <CropPreview slot="card" src={editing.cardPhoto} />
-                </div>
+            <div className="eg-room-images-grid">
+              <div ref={setFieldRef("cardPhoto")}>
+                <RoomImageField
+                  kind="card"
+                  title="Imagen para card"
+                  format="1200 × 1200 px · 1:1"
+                  src={editing.cardPhoto}
+                  warning={aspectWarn.card}
+                  templateUrl={ROOM_IMAGE_SPECS.card.templateUrl}
+                  disabled={!canManageRoomFull}
+                  onSelect={onPickCardImage}
+                  onEdit={() => void editCurrentImage("card")}
+                  onRemove={removeCardImage}
+                />
               </div>
 
-              {/* Banner */}
-              <div style={formPanelStyle}>
-                <div style={{ ...formLabelStyle, marginBottom: 10 }}>
-                  Imagen para banner (vista previa)
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    className="btnSmall"
-                    onClick={onPickBannerImage}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
-                  >
-                    <Icon name="image" size={16} />
-                    Elegir
-                  </button>
-
-                  {editing.bannerPhoto ? (
-                    <button type="button" className="ghostBtn" onClick={removeBannerImage}>
-                      Quitar
-                    </button>
-                  ) : (
-                    <span style={{ opacity: 0.76, fontSize: 12 }}>Sin imagen</span>
-                  )}
-                </div>
-
-                <ImageSpecHelp slot="banner" warning={aspectWarn.banner} />
-
-                <div style={{ ...formLabelStyle, margin: "14px 0 10px 0" }}>
-                  Previa del recorte final
-                </div>
-
-                <CropPreview slot="banner" src={editing.bannerPhoto} />
-              </div>
+              <RoomImageField
+                kind="banner"
+                title="Imagen para banner"
+                format="1440 × 600 px · 2.4:1"
+                src={editing.bannerPhoto}
+                warning={aspectWarn.banner}
+                templateUrl={ROOM_IMAGE_SPECS.banner.templateUrl}
+                disabled={!canManageRoomFull}
+                onSelect={onPickBannerImage}
+                onEdit={() => void editCurrentImage("banner")}
+                onRemove={removeBannerImage}
+              />
             </div>
           </FormSection>
 
@@ -3743,8 +3733,9 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
           <FormSection
             title={FORM_SECTIONS[3].title}
             hint={FORM_SECTIONS[3].hint}
-            open={openSections.contacto}
-            onToggle={() => toggleSection("contacto")}
+            open={activeRoomStep === "contacto"}
+            onToggle={() => changeRoomStep("contacto")}
+            stepMode
           >
             <div style={formRowStyle(240)}>
               <label style={formFieldStyle}>
@@ -3770,6 +3761,16 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                 />
               </label>
 
+              <div className="eg-room-form__qr-card">
+                <div className="eg-room-form__qr-canvas">
+                  <QRCodeCanvas value={(editing.qrCode || "").trim() || makeRoomQr(editing.id)} size={128} marginSize={2} />
+                </div>
+                <div>
+                  <strong>QR único de la sala</strong>
+                  <span>El código se guarda junto con el resto de la sala.</span>
+                </div>
+              </div>
+
               <label style={formFieldStyle}>
                 <span style={formLabelStyle}>QR único</span>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8 }}>
@@ -3782,44 +3783,22 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                     style={{ minWidth: 0, fontFamily: "monospace" }}
                   />
 
-                  <button
-                    type="button"
-                    className="ghostBtn"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="refresh"
                     onClick={() => setEditing({ ...editing, qrCode: makeRoomQr(editing.id) })}
                     title="Regenerar QR"
-                    style={{
-                      width: 42,
-                      minWidth: 42,
-                      height: 42,
-                      padding: 0,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderRadius: 12,
-                    }}
-                  >
-                    <Icon name="refresh" size={18} />
-                  </button>
+                  />
 
-                  <button
-                    type="button"
-                    className="ghostBtn"
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="copy"
                     onClick={() => editing.qrCode && copy(editing.qrCode)}
                     disabled={!editing.qrCode}
                     title="Copiar QR"
-                    style={{
-                      width: 42,
-                      minWidth: 42,
-                      height: 42,
-                      padding: 0,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderRadius: 12,
-                    }}
-                  >
-                    <Icon name="copy" size={18} />
-                  </button>
+                  />
                 </div>
               </label>
             </div>
@@ -3829,8 +3808,9 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
           <FormSection
             title={FORM_SECTIONS[4].title}
             hint={FORM_SECTIONS[4].hint}
-            open={openSections.records}
-            onToggle={() => toggleSection("records")}
+            open={activeRoomStep === "records"}
+            onToggle={() => changeRoomStep("records")}
+            stepMode
           >
             <div style={formRowStyle(220)}>
               <label style={formFieldStyle}>
@@ -3860,9 +3840,10 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
               Formato válido: <b>MM:SS</b> (ej: 08:45).
             </div>
           </FormSection>
+          </div>
         </div>
 
-        <div
+        <div className="eg-room-form__footer"
           style={{
             padding: "18px 22px",
             borderTop: "1px solid rgba(255,255,255,.08)",
@@ -3871,12 +3852,41 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
             gap: 10,
           }}
         >
-          <button className="ghostBtn" onClick={closeModal} disabled={saving}>
-            Cancelar
-          </button>
-          <button className="btnSmall" onClick={save} disabled={saving}>
-            {saving ? "Guardando…" : "Guardar"}
-          </button>
+          <div className="eg-room-form__footer-start">
+            {activeRoomStep !== FORM_SECTIONS[0].key && (
+              <Button
+                variant="secondary"
+                icon="chevronLeft"
+                disabled={saving}
+                onClick={() => {
+                  const index = FORM_SECTIONS.findIndex((section) => section.key === activeRoomStep);
+                  if (index > 0) changeRoomStep(FORM_SECTIONS[index - 1].key);
+                }}
+              >
+                Anterior
+              </Button>
+            )}
+          </div>
+
+          <div className="eg-room-form__footer-end">
+            <Button variant="secondary" onClick={closeModal} disabled={saving}>Cancelar</Button>
+            {activeRoomStep !== FORM_SECTIONS[FORM_SECTIONS.length - 1].key ? (
+              <Button
+                variant="primary"
+                iconRight="chevronRight"
+                onClick={() => {
+                  const index = FORM_SECTIONS.findIndex((section) => section.key === activeRoomStep);
+                  if (index < FORM_SECTIONS.length - 1) changeRoomStep(FORM_SECTIONS[index + 1].key);
+                }}
+              >
+                Siguiente
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={() => void save()} disabled={saving} loading={saving}>
+                {isEditingRoom ? "Guardar cambios" : "Crear sala"}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -3884,18 +3894,22 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
 ) : null}
 
 {cropModal?.open ? (
-  <>
-    <div className="backdrop show" onMouseDown={closeCropModal} style={{ zIndex: 9998 }} />
-    <div className="modalCenter" onMouseDown={closeCropModal} style={{ zIndex: 9999 }}>
-      <div className="modalBox" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 980 }}>
-        <div className="modalHead">
-          <div className="modalTitle">Recortar imagen</div>
-          <button className="iconBtn" onClick={closeCropModal} aria-label="Cerrar">
-            ✕
-          </button>
-        </div>
-
-        <div className="modalBody">
+  <Modal
+    open
+    size="lg"
+    title={cropTarget === "banner" ? "Editar imagen de banner" : "Editar imagen de card"}
+    description={`Formato recomendado: ${ROOM_IMAGE_SPECS[cropTarget ?? "card"].w} × ${ROOM_IMAGE_SPECS[cropTarget ?? "card"].h} px`}
+    onClose={closeCropModal}
+    footer={
+      <>
+        <Button variant="secondary" onClick={closeCropModal}>Cancelar</Button>
+        <Button variant="primary" onClick={() => void confirmCrop()} disabled={!natImg || !cropRect}>
+          Aplicar recorte
+        </Button>
+      </>
+    }
+  >
+        <div className="eg-room-cropper">
           <div style={{ opacity: 0.78, fontSize: 12, marginBottom: 10 }}>
             Recorte fijado a <b>{ROOM_IMAGE_SPECS[cropTarget ?? "card"].ratioLabel}</b> — se exporta a{" "}
             <b>
@@ -3972,18 +3986,7 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
             )}
           </div>
         </div>
-
-        <div className="modalFoot">
-          <button className="ghostBtn" onClick={closeCropModal}>
-            Cancelar
-          </button>
-          <button className="btnSmall" onClick={confirmCrop} disabled={!natImg || !cropRect}>
-            Usar recorte
-          </button>
-        </div>
-      </div>
-    </div>
-  </>
+  </Modal>
 ) : null}
 
 <GoldenTicketManagementModal

@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { Badge, Button, Card, DataTable, EmptyState, Modal, PageHeader, SearchInput, StatCard, type DataTableColumn } from "../ui";
 
 type UserRoom = {
   id: string;
@@ -30,13 +31,6 @@ function getHandicapLabel(value: number) {
   if (value <= 30) return "Avanzado";
   if (value <= 70) return "Intermedio";
   return "Inicial";
-}
-
-function getHandicapBadgeStyle(value: number): React.CSSProperties {
-  if (value <= 0) return styles.badgeHof;
-  if (value <= 30) return styles.badgeAvanzado;
-  if (value <= 70) return styles.badgeIntermedio;
-  return styles.badgeInicial;
 }
 
 function formatDate(dateString: string | null | undefined) {
@@ -193,815 +187,93 @@ export default function UserProgressPage() {
     };
   }, [filteredUsers]);
 
+  const progressColumns: DataTableColumn<UserProgressItem>[] = [
+    {
+      key: "user",
+      header: "Usuario",
+      className: "eg-progress-table__user-col",
+      render: (user) => <div className="eg-progress-user"><ProgressAvatar user={user} /><span><strong>{formatFullName(user)}</strong><small>{user.mail || "—"}</small></span></div>,
+    },
+    { key: "alias", header: "Alias", render: (user) => <span className="eg-progress-muted">{user.alias ? `@${user.alias}` : "—"}</span> },
+    { key: "rooms", header: "Salas realizadas", align: "center", render: (user) => <strong className="eg-progress-number">{user.completedRoomsCount}</strong> },
+    { key: "keys", header: "Llaves", align: "center", render: (user) => <span className="eg-progress-keys">{user.totalKeys}</span> },
+    { key: "handicap", header: "Handicap", align: "center", render: (user) => <Badge tone={user.handicap <= 0 ? "warning" : user.handicap <= 30 ? "success" : user.handicap <= 70 ? "info" : "neutral"} small>{user.handicap}</Badge> },
+    { key: "level", header: "Nivel", align: "center", render: (user) => <span className="eg-progress-level"><Badge tone={user.handicap <= 0 ? "warning" : "neutral"} small>{getHandicapLabel(user.handicap)}</Badge>{user.handicap <= 0 && <Badge tone="accent" small>Hall of Fame</Badge>}</span> },
+    { key: "actions", header: "Acciones", align: "center", render: (user) => <Button variant="ghost" size="sm" iconRight="chevronRight" onClick={() => setSelectedUser(user)}>Ver progreso</Button> },
+  ];
+
   return (
-    <div style={styles.page}>
-      <div style={styles.pageInner}>
-        <div style={styles.headerWrap}>
-          <div style={styles.headerText}>
-            <h1 style={styles.title}>Progreso de Usuarios</h1>
-            <p style={styles.subtitle}></p>
-          </div>
+    <div className="eg-progress-page">
+      <PageHeader title="Progreso de Usuarios" subtitle="Seguimiento del avance y rendimiento de los usuarios." />
 
-          <div style={styles.searchBox}>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre, alias o mail"
-              style={styles.searchInput}
-            />
-          </div>
-        </div>
+      <Card padding="sm" className="eg-progress-filters">
+        <SearchInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nombre, alias o email..." aria-label="Buscar progreso de usuarios" />
+      </Card>
 
-        <div style={styles.cardsGrid}>
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Usuarios visibles</span>
-            <strong style={styles.cardValue}>{totals.totalUsers}</strong>
-          </div>
-
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Llaves acumuladas</span>
-            <strong style={styles.cardValue}>{totals.totalKeys}</strong>
-          </div>
-
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Salas registradas</span>
-            <strong style={styles.cardValue}>{totals.totalRooms}</strong>
-          </div>
-
-          <div style={styles.card}>
-            <span style={styles.cardLabel}>Hall of Fame</span>
-            <strong style={styles.cardValue}>{totals.hallOfFame}</strong>
-          </div>
-        </div>
-
-        <div style={styles.tableOuter}>
-          <div style={styles.tableWrap}>
-            <div style={styles.tableHeader}>
-              <div style={styles.th}>Nombre</div>
-              <div style={styles.th}>Mail</div>
-              <div style={styles.th}>Alias</div>
-              <div style={styles.thCenter}>Salas realizadas</div>
-              <div style={styles.thCenter}>Llaves</div>
-              <div style={styles.thCenter}>Handicap</div>
-              <div style={styles.thCenter}>Detalle</div>
-            </div>
-
-            <div style={styles.tableBody}>
-              {loading ? (
-                <div style={styles.emptyState}>Cargando usuarios...</div>
-              ) : filteredUsers.length === 0 ? (
-                <div style={styles.emptyState}>No se encontraron usuarios.</div>
-              ) : (
-                filteredUsers.map((user, index) => (
-                  <div
-                    key={user.id}
-                    style={{
-                      ...styles.row,
-                      ...(index === filteredUsers.length - 1 ? styles.lastRow : {}),
-                    }}
-                  >
-                    <div style={styles.td}>
-                      <div style={styles.userCell}>
-                        <div style={styles.avatar}>
-                          {user.photoUrl ? (
-                            <img
-                              src={user.photoUrl}
-                              alt={formatFullName(user)}
-                              style={styles.avatarImg}
-                            />
-                          ) : (
-                            user.alias?.slice(0, 1).toUpperCase() ||
-                            user.nombre?.slice(0, 1).toUpperCase() ||
-                            "U"
-                          )}
-                        </div>
-
-                        <div style={styles.userTextWrap}>
-                          <div style={styles.userName}>{formatFullName(user)}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={styles.td}>{user.mail || "-"}</div>
-
-                    <div style={styles.td}>
-                      <div style={styles.userAlias}>@{user.alias || "-"}</div>
-                    </div>
-
-                    <div style={styles.tdCenter}>{user.completedRoomsCount}</div>
-
-                    <div style={styles.tdCenter}>{user.totalKeys}</div>
-
-                    <div style={styles.tdCenter}>
-                      <span style={getHandicapBadgeStyle(user.handicap)}>
-                        {user.handicap}
-                      </span>
-                    </div>
-
-                    <div style={styles.tdCenter}>
-                      <button
-                        style={styles.actionBtn}
-                        onClick={() => setSelectedUser(user)}
-                      >
-                        Ver detalle
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+      <div className="eg-progress-stats">
+        <StatCard value={totals.totalUsers} label="Usuarios visibles" loading={loading} />
+        <StatCard value={totals.totalKeys} label="Llaves acumuladas" tone="accent" loading={loading} />
+        <StatCard value={totals.totalRooms} label="Salas registradas" loading={loading} />
+        <StatCard value={totals.hallOfFame} label="Hall of Fame" tone="warning" loading={loading} />
       </div>
 
-      {selectedUser && (
-        <div style={styles.overlay} onClick={() => setSelectedUser(null)}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <div>
-                <h2 style={styles.modalTitle}>Detalle del usuario</h2>
-                <p style={styles.modalSubtitle}>
-                  Información general, llaves y salas realizadas.
-                </p>
-              </div>
+      <Card padding="none" className="eg-progress-table-card">
+        <DataTable
+          columns={progressColumns}
+          rows={filteredUsers}
+          rowKey={(user) => user.id}
+          loading={loading}
+          loadingLabel="Cargando usuarios..."
+          empty={<EmptyState icon="progress" title="No se encontraron usuarios" description="Probá modificando la búsqueda." />}
+        />
+      </Card>
 
-              <button
-                style={styles.closeBtn}
-                onClick={() => setSelectedUser(null)}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={styles.detailUserTop}>
-              <div style={styles.detailAvatarWrap}>
-                <div style={styles.detailAvatar}>
-                  {selectedUser.photoUrl ? (
-                    <img
-                      src={selectedUser.photoUrl}
-                      alt={formatFullName(selectedUser)}
-                      style={styles.detailAvatarImg}
-                    />
-                  ) : (
-                    selectedUser.alias?.slice(0, 1).toUpperCase() ||
-                    selectedUser.nombre?.slice(0, 1).toUpperCase() ||
-                    "U"
-                  )}
-                </div>
-              </div>
-
-              <div style={styles.detailTop}>
-                <div style={styles.detailBlock}>
-                  <span style={styles.detailLabel}>Nombre</span>
-                  <strong style={styles.detailValue}>
-                    {formatFullName(selectedUser)}
-                  </strong>
-                </div>
-
-                <div style={styles.detailBlock}>
-                  <span style={styles.detailLabel}>Alias</span>
-                  <strong style={styles.detailValue}>@{selectedUser.alias || "-"}</strong>
-                </div>
-
-                <div style={styles.detailBlock}>
-                  <span style={styles.detailLabel}>Salas realizadas</span>
-                  <strong style={styles.detailValue}>
-                    {selectedUser.completedRoomsCount}
-                  </strong>
-                </div>
-
-                <div style={styles.detailBlock}>
-                  <span style={styles.detailLabel}>Llaves</span>
-                  <strong style={styles.detailValue}>{selectedUser.totalKeys}</strong>
-                </div>
-
-                <div style={styles.detailBlock}>
-                  <span style={styles.detailLabel}>Handicap</span>
-                  <strong style={styles.detailValue}>{selectedUser.handicap}</strong>
-                </div>
-              </div>
-            </div>
-
-            <div style={styles.statsGrid}>
-              <div style={styles.statCard}>
-                <span style={styles.statLabel}>Llaves</span>
-                <strong style={styles.statValue}>{selectedUser.totalKeys}</strong>
-              </div>
-
-              <div style={styles.statCard}>
-                <span style={styles.statLabel}>Salas realizadas</span>
-                <strong style={styles.statValue}>
-                  {selectedUser.completedRoomsCount}
-                </strong>
-              </div>
-
-              <div style={styles.statCard}>
-                <span style={styles.statLabel}>Handicap</span>
-                <strong style={styles.statValue}>{selectedUser.handicap}</strong>
-              </div>
-
-              <div style={styles.statCard}>
-                <span style={styles.statLabel}>Nivel</span>
-                <strong style={styles.statValue}>
-                  {getHandicapLabel(selectedUser.handicap)}
-                </strong>
-              </div>
-            </div>
-
-            <div style={styles.roomsSection}>
-              <div style={styles.roomsHeader}>
-                <h3 style={styles.roomsTitle}>Salas realizadas</h3>
-                <span style={styles.roomsCount}>
-                  {selectedUser.rooms.length} registradas
-                </span>
-              </div>
-
-              {selectedUser.rooms.length === 0 ? (
-                <div style={styles.noRooms}>
-                  Este usuario todavía no tiene salas registradas.
-                </div>
-              ) : (
-                <div style={styles.roomsList}>
-                  {selectedUser.rooms.map((room) => (
-                    <div key={room.id} style={styles.roomItem}>
-                      <div>
-                        <div style={styles.roomName}>{room.name}</div>
-                        <div style={styles.roomMeta}>{room.completedAt}</div>
-                      </div>
-                      <span style={styles.roomTag}>Completada</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+      <Modal
+        open={Boolean(selectedUser)}
+        title="Detalle del usuario"
+        description="Información general y progreso registrado."
+        size="lg"
+        panelClassName="eg-user-progress-modal"
+        onClose={() => setSelectedUser(null)}
+      >
+        {selectedUser && <>
+          <div className="eg-user-progress__identity">
+            <ProgressAvatar user={selectedUser} large />
+            <div className="eg-user-progress__identity-copy">
+              <strong>{formatFullName(selectedUser)}</strong>
+              <span>{selectedUser.alias ? `@${selectedUser.alias}` : "sin alias"} · {selectedUser.mail || "sin email"}</span>
+              <div><Badge tone={selectedUser.handicap <= 0 ? "warning" : "neutral"} small>{getHandicapLabel(selectedUser.handicap)}</Badge>{selectedUser.handicap <= 0 && <Badge tone="accent" small>Hall of Fame</Badge>}</div>
             </div>
           </div>
-        </div>
-      )}
+
+          <div className="eg-user-progress__stats">
+            <StatCard value={selectedUser.handicap} label="Handicap" tone={selectedUser.handicap <= 0 ? "warning" : "neutral"} />
+            <StatCard value={selectedUser.totalKeys} label="Llaves" tone="accent" />
+            <StatCard value={selectedUser.completedRoomsCount} label="Salas realizadas" />
+            <StatCard value={getHandicapLabel(selectedUser.handicap)} label="Nivel" />
+          </div>
+
+          <section className="eg-user-progress__history">
+            <div className="eg-user-progress__history-head"><h3>Salas realizadas</h3><span>{selectedUser.rooms.length} registradas</span></div>
+            {selectedUser.rooms.length === 0 ? (
+              <EmptyState icon="rooms" title="Todavía no tiene salas registradas" description="Las salas completadas aparecerán acá." />
+            ) : (
+              <div className="eg-user-progress__rooms">
+                {selectedUser.rooms.map((room) => <div key={room.id} className="eg-user-progress__room">
+                  <span className="eg-user-progress__room-thumb" aria-hidden="true">EG</span>
+                  <span className="eg-user-progress__room-copy"><strong>{room.name}</strong><small>Completada {room.completedAt}</small></span>
+                  <Badge tone="success" small>Completada</Badge>
+                </div>)}
+              </div>
+            )}
+          </section>
+        </>}
+      </Modal>
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    width: "100%",
-    minHeight: "100vh",
-    height: "100vh",
-    background: "#0f172a",
-    color: "#e5e7eb",
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-    fontFamily:
-      'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    boxSizing: "border-box",
-  },
-
-  pageInner: {
-    width: "100%",
-    flex: 1,
-    minHeight: 0,
-    display: "flex",
-    flexDirection: "column",
-    padding: "14px 18px 18px",
-    boxSizing: "border-box",
-    overflow: "hidden",
-  },
-
-  headerWrap: {
-    display: "flex",
-    gap: 16,
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    flexWrap: "wrap",
-    marginBottom: 24,
-    width: "100%",
-    flexShrink: 0,
-  },
-
-  headerText: {
-    flex: "1 1 420px",
-    minWidth: 280,
-  },
-
-  title: {
-    margin: 0,
-    fontSize: 32,
-    fontWeight: 800,
-    color: "#ffffff",
-    lineHeight: 1.1,
-  },
-
-  subtitle: {
-    margin: "8px 0 0 0",
-    fontSize: 14,
-    color: "#94a3b8",
-    maxWidth: 760,
-  },
-
-  searchBox: {
-    minWidth: 300,
-    width: "100%",
-    maxWidth: 460,
-    flex: "0 1 460px",
-  },
-
-  searchInput: {
-    width: "100%",
-    height: 48,
-    borderRadius: 14,
-    border: "1px solid #334155",
-    background: "#111827",
-    color: "#ffffff",
-    padding: "0 14px",
-    outline: "none",
-    fontSize: 14,
-    boxSizing: "border-box",
-  },
-
-  cardsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 12,
-    marginBottom: 18,
-    width: "100%",
-    flexShrink: 0,
-  },
-
-  card: {
-    background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
-    border: "1px solid #1f2937",
-    borderRadius: 16,
-    padding: 14,
-    boxShadow: "0 10px 24px rgba(0,0,0,0.16)",
-    minHeight: 82,
-    boxSizing: "border-box",
-  },
-
-  cardLabel: {
-    display: "block",
-    fontSize: 12,
-    color: "#94a3b8",
-    marginBottom: 8,
-  },
-
-  cardValue: {
-    fontSize: 22,
-    fontWeight: 800,
-    color: "#ffffff",
-    lineHeight: 1,
-  },
-
-  tableOuter: {
-    width: "100%",
-    flex: 1,
-    minHeight: 0,
-    overflow: "hidden",
-    borderRadius: 18,
-  },
-
-  tableWrap: {
-    width: "100%",
-    flex: 1,
-    minHeight: 0,
-    height: "100%",
-    border: "1px solid #1f2937",
-    borderRadius: 18,
-    overflow: "hidden",
-    background: "#0b1220",
-    boxSizing: "border-box",
-    display: "flex",
-    flexDirection: "column",
-  },
-
-  tableHeader: {
-    display: "grid",
-    gridTemplateColumns: "2.2fr 2fr 1.4fr 1fr 0.9fr 1fr 1fr",
-    gap: 12,
-    padding: "16px 18px",
-    background: "#111827",
-    borderBottom: "1px solid #1f2937",
-    boxSizing: "border-box",
-    alignItems: "center",
-    flexShrink: 0,
-  },
-
-  tableBody: {
-    flex: 1,
-    minHeight: 0,
-    overflow: "auto",
-    display: "flex",
-    flexDirection: "column",
-    background: "#0b1220",
-  },
-
-  th: {
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    color: "#94a3b8",
-    fontWeight: 700,
-    minWidth: 0,
-  },
-
-  thCenter: {
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    color: "#94a3b8",
-    fontWeight: 700,
-    textAlign: "center",
-    minWidth: 0,
-  },
-
-  row: {
-    display: "grid",
-    gridTemplateColumns: "2.2fr 2fr 1.4fr 1fr 0.9fr 1fr 1fr",
-    gap: 12,
-    padding: "16px 18px",
-    borderBottom: "1px solid #172033",
-    alignItems: "center",
-    boxSizing: "border-box",
-    background: "#0b1220",
-    flexShrink: 0,
-  },
-
-  lastRow: {
-    borderBottom: "none",
-  },
-
-  td: {
-    fontSize: 14,
-    color: "#e5e7eb",
-    minWidth: 0,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  },
-
-  tdCenter: {
-    fontSize: 14,
-    color: "#e5e7eb",
-    textAlign: "center",
-    minWidth: 0,
-  },
-
-  userCell: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    minWidth: 0,
-  },
-
-  userTextWrap: {
-    minWidth: 0,
-    overflow: "hidden",
-  },
-
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 999,
-    background: "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#fff",
-    fontWeight: 800,
-    fontSize: 16,
-    flexShrink: 0,
-    overflow: "hidden",
-  },
-
-  avatarImg: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-  },
-
-  userName: {
-    fontWeight: 700,
-    color: "#fff",
-    marginBottom: 2,
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  userAlias: {
-    fontSize: 13,
-    color: "#94a3b8",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-
-  actionBtn: {
-    border: "1px solid rgba(249,115,22,0.35)",
-    borderRadius: 12,
-    background:
-      "linear-gradient(180deg, rgba(249,115,22,0.22) 0%, rgba(249,115,22,0.12) 100%)",
-    color: "#fff",
-    fontWeight: 700,
-    padding: "10px 12px",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    width: "100%",
-    maxWidth: 150,
-    boxShadow: "0 8px 18px rgba(0,0,0,0.18)",
-    fontSize: 13,
-  },
-
-  badgeHof: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 28,
-    padding: "0 10px",
-    borderRadius: 999,
-    fontWeight: 700,
-    fontSize: 12,
-    background: "rgba(250,199,117,0.15)",
-    color: "#fac775",
-    border: "1px solid rgba(250,199,117,0.35)",
-  },
-
-  badgeAvanzado: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 28,
-    padding: "0 10px",
-    borderRadius: 999,
-    fontWeight: 700,
-    fontSize: 12,
-    background: "rgba(133,183,235,0.15)",
-    color: "#85b7eb",
-    border: "1px solid rgba(133,183,235,0.35)",
-  },
-
-  badgeIntermedio: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 28,
-    padding: "0 10px",
-    borderRadius: 999,
-    fontWeight: 700,
-    fontSize: 12,
-    background: "rgba(93,202,165,0.15)",
-    color: "#5dcaa5",
-    border: "1px solid rgba(93,202,165,0.35)",
-  },
-
-  badgeInicial: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 28,
-    padding: "0 10px",
-    borderRadius: 999,
-    fontWeight: 700,
-    fontSize: 12,
-    background: "#1e293b",
-    color: "#94a3b8",
-    border: "1px solid #334155",
-  },
-
-  emptyState: {
-    flex: 1,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 28,
-    textAlign: "center",
-    color: "#94a3b8",
-    fontSize: 15,
-    background: "#0b1220",
-  },
-
-  overlay: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(2,6,23,0.72)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-    zIndex: 1000,
-    boxSizing: "border-box",
-  },
-
-  modal: {
-    width: "100%",
-    maxWidth: 1180,
-    maxHeight: "92vh",
-    overflowY: "auto",
-    borderRadius: 22,
-    background: "#0b1220",
-    border: "1px solid #1f2937",
-    boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
-    padding: 22,
-    boxSizing: "border-box",
-  },
-
-  modalHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-    marginBottom: 22,
-  },
-
-  modalTitle: {
-    margin: 0,
-    fontSize: 24,
-    fontWeight: 800,
-    color: "#fff",
-  },
-
-  modalSubtitle: {
-    margin: "6px 0 0 0",
-    color: "#94a3b8",
-    fontSize: 14,
-  },
-
-  closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: "50%",
-    border: "0.5px solid #334155",
-    background: "#111827",
-    color: "#94a3b8",
-    fontSize: 20,
-    lineHeight: 1,
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  detailUserTop: {
-    display: "grid",
-    gridTemplateColumns: "140px minmax(0,1fr)",
-    gap: 18,
-    marginBottom: 20,
-    alignItems: "start",
-  },
-
-  detailAvatarWrap: {
-    display: "flex",
-    justifyContent: "center",
-  },
-
-  detailAvatar: {
-    width: 120,
-    height: 120,
-    borderRadius: "50%",
-    overflow: "hidden",
-    background: "linear-gradient(135deg, #f97316 0%, #fb923c 100%)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#fff",
-    fontSize: 36,
-    fontWeight: 800,
-  },
-
-  detailAvatarImg: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-  },
-
-  detailTop: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-    marginBottom: 20,
-  },
-
-  detailBlock: {
-    background: "#111827",
-    border: "1px solid #1f2937",
-    borderRadius: 16,
-    padding: 16,
-  },
-
-  detailLabel: {
-    display: "block",
-    fontSize: 12,
-    color: "#94a3b8",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    fontWeight: 700,
-  },
-
-  detailValue: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: 700,
-    wordBreak: "break-word",
-  },
-
-  statsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-    marginBottom: 20,
-  },
-
-  statCard: {
-    background: "linear-gradient(180deg, #111827 0%, #0f172a 100%)",
-    border: "1px solid #1f2937",
-    borderRadius: 18,
-    padding: 18,
-  },
-
-  statLabel: {
-    display: "block",
-    fontSize: 13,
-    color: "#94a3b8",
-    marginBottom: 10,
-  },
-
-  statValue: {
-    fontSize: 26,
-    fontWeight: 800,
-    color: "#fff",
-  },
-
-  roomsSection: {
-    background: "#111827",
-    border: "1px solid #1f2937",
-    borderRadius: 18,
-    padding: 18,
-  },
-
-  roomsHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    marginBottom: 14,
-    flexWrap: "wrap",
-  },
-
-  roomsTitle: {
-    margin: 0,
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: 800,
-  },
-
-  roomsCount: {
-    fontSize: 13,
-    color: "#94a3b8",
-  },
-
-  roomsList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-  },
-
-  roomItem: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center",
-    background: "#0b1220",
-    border: "1px solid #1f2937",
-    borderRadius: 14,
-    padding: 14,
-    flexWrap: "wrap",
-  },
-
-  roomName: {
-    color: "#fff",
-    fontWeight: 700,
-    marginBottom: 4,
-  },
-
-  roomMeta: {
-    color: "#94a3b8",
-    fontSize: 13,
-  },
-
-  roomTag: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 30,
-    padding: "0 12px",
-    borderRadius: 999,
-    background: "rgba(34,197,94,0.12)",
-    color: "#4ade80",
-    border: "1px solid rgba(34,197,94,0.3)",
-    fontSize: 12,
-    fontWeight: 700,
-  },
-
-  noRooms: {
-    color: "#94a3b8",
-    fontSize: 14,
-    padding: "8px 0",
-  },
-};
+function ProgressAvatar({ user, large = false }: { user: UserProgressItem; large?: boolean }) {
+  const initial = user.alias?.slice(0, 1) || user.nombre?.slice(0, 1) || "U";
+  return <span className={`eg-progress-avatar${large ? " eg-progress-avatar--large" : ""}`}>{user.photoUrl ? <img src={user.photoUrl} alt="" /> : initial.toUpperCase()}</span>;
+}

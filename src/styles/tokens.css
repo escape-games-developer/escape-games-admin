@@ -25,6 +25,7 @@
   --eg-text: #e8edf5;
   --eg-text-dim: #8b9ab0;
   --eg-text-faint: #5f6d82;
+  --eg-text-inverse: #ffffff;
 
   /* ---- Marca y semánticos ---- */
   --eg-accent: #ff6a00;
@@ -68,11 +69,13 @@
   --eg-h-row: 64px;
   --eg-h-nav-item: 46px;
   --eg-h-topbar: 62px;
+  --eg-control-icon: 18px;
 
   /* ---- Layout ---- */
-  --eg-sidebar-w: 252px;
-  --eg-sidebar-w-collapsed: 76px;
+  --eg-sidebar-w: 236px;
+  --eg-sidebar-w-collapsed: 72px;
   --eg-content-pad: 28px;
+  --eg-content-max: 1600px;
 
   /* ---- Tipografía ---- */
   --eg-fs-xs: 11px;

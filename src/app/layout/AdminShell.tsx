@@ -112,7 +112,7 @@ export default function AdminShell({
       )}
 
       <div className="eg-shell__main">
-        <AdminTopbar crumbs={crumbs} userName={userName} onOpenMenu={() => setMobileOpen(true)} />
+        <AdminTopbar crumbs={crumbs} onOpenMenu={() => setMobileOpen(true)} />
         <main className="eg-shell__content">{children}</main>
       </div>
     </div>

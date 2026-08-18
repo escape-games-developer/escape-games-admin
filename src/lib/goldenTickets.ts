@@ -48,6 +48,91 @@ export type PendingRequest = {
   rating_screenshot_uploaded_at: string | null;
 };
 
+/** Una fila de `profiles` que efectivamente recibió un Golden Ticket. */
+export type GrantedTicket = {
+  id: string;
+  alias: string | null;
+  nombre: string | null;
+  apellido: string | null;
+  mail: string | null;
+  photo_url: string | null;
+  active: boolean;
+  number: number | null;
+  source: GoldenTicketSource;
+  grantedAt: string | null;
+  expiresAt: string | null;
+  redeemedAt: string | null;
+};
+
+export type GrantedTicketStatus = "ACTIVE" | "REDEEMED" | "EXPIRED" | "REVOKED";
+
+export function goldenTicketStatus(t: GrantedTicket): GrantedTicketStatus {
+  if (t.redeemedAt) return "REDEEMED";
+
+  const exp = t.expiresAt ? new Date(t.expiresAt).getTime() : NaN;
+  if (Number.isFinite(exp) && exp < Date.now()) return "EXPIRED";
+
+  return t.active ? "ACTIVE" : "REVOKED";
+}
+
+export function describeGrantedTicketStatus(status: GrantedTicketStatus): string {
+  switch (status) {
+    case "ACTIVE":
+      return "Vigente";
+    case "REDEEMED":
+      return "Canjeado";
+    case "EXPIRED":
+      return "Vencido";
+    case "REVOKED":
+      return "Deshabilitado";
+  }
+}
+
+export type StatusBreakdown = Record<GrantedTicketStatus, number>;
+
+export function countByStatus(tickets: GrantedTicket[]): StatusBreakdown {
+  const acc: StatusBreakdown = { ACTIVE: 0, REDEEMED: 0, EXPIRED: 0, REVOKED: 0 };
+  for (const t of tickets) acc[goldenTicketStatus(t)] += 1;
+  return acc;
+}
+
+/**
+ * Texto del desglose por estado, omitiendo los que están en 0.
+ * Hoy todos los tickets otorgados están vigentes: mostrar "0 canjeados · 0
+ * vencidos" era ruido que sugería estados que no existen todavía.
+ */
+export function describeStatusBreakdown(breakdown: StatusBreakdown): string {
+  const order: GrantedTicketStatus[] = ["ACTIVE", "REDEEMED", "EXPIRED", "REVOKED"];
+  const labels: Record<GrantedTicketStatus, string> = {
+    ACTIVE: "vigentes",
+    REDEEMED: "canjeados",
+    EXPIRED: "vencidos",
+    REVOKED: "deshabilitados",
+  };
+
+  return order
+    .filter((s) => breakdown[s] > 0)
+    .map((s) => `${breakdown[s]} ${labels[s]}`)
+    .join(" · ");
+}
+
+/**
+ * Cuántos quedan del cupo de 100. El cupo lo consume SOLO RATING_APPROVAL;
+ * los IN_ROOM_QR no tienen tope y no entran acá.
+ */
+export function goldenTicketsAvailable(approvalGranted: number): number {
+  const left = GOLDEN_TICKET_LIMIT - approvalGranted;
+
+  if (left < 0) {
+    console.warn(
+      `[goldenTickets] otorgados por aprobación (${approvalGranted}) supera el cupo de ${GOLDEN_TICKET_LIMIT}. Muestro 0 disponibles.`
+    );
+    return 0;
+  }
+
+  return left;
+}
+
 export type GoldenTicketInfo = {
   active: boolean;
   number: number | null;
@@ -118,14 +203,60 @@ export function fullName(p: {
    LECTURAS
 ======================= */
 
-export async function fetchGrantedCount(): Promise<number> {
-  const { count, error } = await supabase
+const GRANTED_TICKET_COLUMNS =
+  "id, alias, nombre, apellido, mail, photo_url, golden_ticket_active, golden_ticket_number, golden_ticket_source, golden_ticket_granted_at, golden_ticket_expires_at, golden_ticket_redeemed_at";
+
+function mapGrantedTicket(row: any): GrantedTicket {
+  return {
+    id: row.id,
+    alias: row.alias ?? null,
+    nombre: row.nombre ?? null,
+    apellido: row.apellido ?? null,
+    mail: row.mail ?? null,
+    photo_url: row.photo_url ?? null,
+    active: row.golden_ticket_active === true,
+    number:
+      typeof row.golden_ticket_number === "number" ? row.golden_ticket_number : null,
+    source: normalizeGoldenTicketSource(row.golden_ticket_source),
+    grantedAt: row.golden_ticket_granted_at ?? null,
+    expiresAt: row.golden_ticket_expires_at ?? null,
+    redeemedAt: row.golden_ticket_redeemed_at ?? null,
+  };
+}
+
+async function fetchTicketsBySource(
+  source: Exclude<GoldenTicketSource, null>
+): Promise<GrantedTicket[]> {
+  const { data, error } = await supabase
     .from("profiles")
-    .select("id", { count: "exact", head: true })
-    .eq("golden_ticket_active", true);
+    .select(GRANTED_TICKET_COLUMNS)
+    .eq("golden_ticket_source", source)
+    .order("golden_ticket_granted_at", { ascending: false });
 
   if (error) throw error;
-  return count ?? 0;
+  return ((data as any[]) ?? []).map(mapGrantedTicket);
+}
+
+/**
+ * Tickets otorgados por aprobación de captura de valoración.
+ * Son los únicos que consumen el cupo de 100 y los únicos que tienen número.
+ */
+export async function fetchApprovalTickets(): Promise<GrantedTicket[]> {
+  return fetchTicketsBySource("RATING_APPROVAL");
+}
+
+/**
+ * Tickets obtenidos escaneando el QR en sala. No tienen tope ni número
+ * (`golden_ticket_number` es NULL en todas estas filas).
+ */
+export async function fetchQrTickets(): Promise<GrantedTicket[]> {
+  return fetchTicketsBySource("IN_ROOM_QR");
+}
+
+/** Cuántos del cupo de 100 se consumieron. Sólo cuenta RATING_APPROVAL. */
+export async function fetchGrantedCount(): Promise<number> {
+  const rows = await fetchApprovalTickets();
+  return rows.length;
 }
 
 export async function fetchPendingRequests(): Promise<PendingRequest[]> {
