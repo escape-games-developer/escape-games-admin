@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { Button, Input } from "../ui";
+import logo from "../assets/escape-logo.png";
 
 type AdminRole = "ADMIN_GENERAL" | "ADMIN" | "GM";
 
@@ -113,109 +115,52 @@ export default function Login() {
   };
 
   return (
-    <div className="authWrap">
-      <div className="authCard">
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
-          <img
-            src={new URL("../assets/escape-logo.png", import.meta.url).toString()}
-            alt="Escape Games"
-            style={{ height: 64 }}
-          />
-        </div>
-
-        <div style={{ textAlign: "center", marginBottom: 8 }}>
-          <div style={{ fontWeight: 900, fontSize: 18 }}>Acceso Administrador</div>
-          <div style={{ opacity: 0.8, fontSize: 12 }}>
-          
-          </div>
-        </div>
+    <main className="eg-auth-shell">
+      <section className="eg-auth-card" aria-labelledby="login-title">
+        <img className="eg-auth-logo" src={logo} alt="Escape Games" />
+        <header className="eg-auth-heading">
+          <h1 id="login-title">Acceso Administrador</h1>
+          <p>Ingresá con tus credenciales para administrar Escape Games.</p>
+        </header>
 
         {notice && (
-          <div
-            role="status"
-            style={{
-              border: "1px solid rgba(34,197,94,.45)",
-              background: "rgba(34,197,94,.14)",
-              padding: 10,
-              borderRadius: 12,
-              fontSize: 13,
-              marginBottom: 10,
-            }}
-          >
-            {notice}
-          </div>
+          <div className="eg-auth-alert is-success" role="status">{notice}</div>
         )}
 
         {err && (
-          <div
-            style={{
-              border: "1px solid rgba(255,60,60,.45)",
-              background: "rgba(255,60,60,.14)",
-              padding: 10,
-              borderRadius: 12,
-              fontSize: 13,
-              marginBottom: 10,
-            }}
-          >
-            {err}
-          </div>
+          <div className="eg-auth-alert is-error" role="alert">{err}</div>
         )}
 
-        <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <label className="field">
-            <span className="label">Email</span>
-            <input
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              inputMode="email"
-              placeholder="admin@escapegames.com.ar"
-            />
-          </label>
+        <form className="eg-auth-form" onSubmit={onSubmit}>
+          <Input id="login-email" label="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" inputMode="email" placeholder="admin@escapegames.com.ar" />
 
-          <label className="field">
-            <span className="label">Contraseña</span>
-
-            <div style={{ position: "relative" }}>
-              <input
-                className="input"
+          <label className="eg-field" htmlFor="login-password">
+            <span className="eg-field__label">Contraseña</span>
+            <div className="eg-auth-password">
+              <Input
+                id="login-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 type={showPass ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="••••••••"
-                style={{ paddingRight: 42 }}
+                className="eg-auth-password__input"
               />
 
               <button
                 type="button"
                 onClick={() => setShowPass((v) => !v)}
                 aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
-                style={{
-                  position: "absolute",
-                  right: 10,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "transparent",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  color: "#9ca3af",
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = "#e5e7eb")}
-                onMouseLeave={(e) => (e.currentTarget.style.color = "#9ca3af")}
+                className="eg-auth-password__toggle"
               >
                 {showPass ? <EyeOpenIcon /> : <EyeClosedIcon />}
               </button>
             </div>
           </label>
 
-          <button className="btnSmall" type="submit" disabled={busy}>
-            {busy ? "Entrando..." : "Entrar"}
-          </button>
+          <Button type="submit" variant="primary" fullWidth loading={busy}>Entrar</Button>
         </form>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

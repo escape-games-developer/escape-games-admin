@@ -9,6 +9,53 @@
 @import "../styles/tokens.css";
 
 /* =========================================================================
+   AUTH
+   ========================================================================= */
+.eg-auth-shell {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: var(--eg-sp-6);
+  background: var(--eg-bg);
+  color: var(--eg-text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.eg-auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--eg-sp-5);
+  width: min(460px, 100%);
+  padding: var(--eg-sp-8);
+  border: 1px solid var(--eg-border-strong);
+  border-radius: var(--eg-radius-lg);
+  background: var(--eg-sidebar);
+  box-shadow: var(--eg-shadow);
+}
+
+.eg-auth-logo { width: min(220px, 72%); height: auto; margin: 0 auto; object-fit: contain; }
+.eg-auth-heading { text-align: center; }
+.eg-auth-heading h1 { margin: 0; color: var(--eg-text); font-size: var(--eg-fs-title); line-height: 1.2; }
+.eg-auth-heading p { margin: var(--eg-sp-2) 0 0; color: var(--eg-text-dim); font-size: var(--eg-fs-base); line-height: 1.5; }
+.eg-auth-form { display: flex; flex-direction: column; gap: var(--eg-sp-4); }
+.eg-auth-password { position: relative; }
+.eg-auth-password__input { padding-right: 46px; }
+.eg-auth-password__toggle { position: absolute; top: 50%; right: var(--eg-sp-2); display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: var(--eg-radius-sm); transform: translateY(-50%); background: transparent; color: var(--eg-text-dim); cursor: pointer; }
+.eg-auth-password__toggle:hover { background: var(--eg-surface-2); color: var(--eg-text); }
+.eg-auth-password__toggle:focus-visible { outline: 2px solid var(--eg-accent); outline-offset: 1px; }
+.eg-auth-alert { padding: var(--eg-sp-3); border: 1px solid var(--eg-border-strong); border-radius: var(--eg-radius-sm); font-size: var(--eg-fs-base); line-height: 1.45; }
+.eg-auth-alert.is-error { border-color: var(--eg-danger); background: var(--eg-danger-soft); color: var(--eg-text); }
+.eg-auth-alert.is-success { border-color: var(--eg-success); background: var(--eg-success-soft); color: var(--eg-text); }
+.eg-auth-state { padding: var(--eg-sp-4) 0; color: var(--eg-text-dim); font-size: var(--eg-fs-base); line-height: 1.6; text-align: center; }
+.eg-auth-state--invalid { display: flex; flex-direction: column; align-items: center; gap: var(--eg-sp-4); }
+
+@media (max-width: 560px) {
+  .eg-auth-shell { padding: var(--eg-sp-4); }
+  .eg-auth-card { padding: var(--eg-sp-5); }
+  .eg-auth-heading h1 { font-size: 22px; }
+}
+
+/* =========================================================================
    SHELL
    ========================================================================= */
 
@@ -1390,6 +1437,33 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
 .eg-rooms .eg-table tbody td:last-child { background: var(--eg-surface); }
 .eg-rooms .eg-table tbody tr:hover td:last-child { background: var(--eg-surface-2); }
 .eg-rooms .eg-table__golden td:last-child { background: #292419; }
+
+/* Diálogos secundarios de Salas ---------------------------------------- */
+.eg-room-description-modal { max-width: 680px; }
+.eg-room-description { display: grid; gap: var(--eg-sp-2); }
+.eg-room-description > span { color: var(--eg-text-dim); font-size: var(--eg-fs-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.eg-room-description > p { margin: 0; color: var(--eg-text-secondary, var(--eg-text)); font-size: var(--eg-fs-md); line-height: 1.65; white-space: pre-wrap; }
+.eg-room-qr-modal { max-width: 720px; }
+.eg-room-qr-modal .eg-modal__body { overflow: visible; }
+.eg-room-qr-modal .eg-modal__footer { flex-wrap: wrap; }
+.eg-room-qr { display: flex; flex-direction: column; align-items: center; gap: var(--eg-sp-4); text-align: center; }
+.eg-room-qr__identity { display: grid; gap: var(--eg-sp-1); }
+.eg-room-qr__identity > span { color: var(--eg-accent); font-size: var(--eg-fs-xs); font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.eg-room-qr__identity > strong { color: var(--eg-text); font-size: var(--eg-fs-lg); }
+.eg-room-qr__identity > small { color: var(--eg-text-dim); font-size: var(--eg-fs-sm); }
+.eg-room-qr__canvas { max-width: 100%; padding: var(--eg-sp-3); overflow: hidden; border: 1px solid var(--eg-border-strong); border-radius: var(--eg-radius); background: var(--eg-text-inverse); line-height: 0; }
+.eg-room-qr__image { display: block; width: min(320px, 62vw); height: min(320px, 62vw); }
+.eg-room-qr__code { max-width: 100%; overflow-wrap: anywhere; color: var(--eg-text-secondary, var(--eg-text)); font-size: var(--eg-fs-base); }
+.eg-room-records-modal { max-width: 620px; }
+.eg-room-records-form { display: grid; grid-template-columns: 1fr 1fr; gap: var(--eg-sp-4); }
+.eg-room-records-form > p { grid-column: 1 / -1; margin: 0; color: var(--eg-text-dim); font-size: var(--eg-fs-sm); }
+.eg-room-records-form > p strong { color: var(--eg-text); }
+
+@media (max-width: 600px) {
+  .eg-room-qr-modal .eg-modal__footer .eg-btn { flex: 1 1 100%; }
+  .eg-room-records-form { grid-template-columns: 1fr; }
+  .eg-room-records-form > p { grid-column: auto; }
+}
 
 @media (max-width: 1100px) {
   .eg-rooms__toolbar { grid-template-columns: minmax(220px, 1fr) 220px; }

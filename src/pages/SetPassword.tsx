@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { Button, Input } from "../ui";
+import logo from "../assets/escape-logo.png";
 
 const MIN_PASS = 8;
 
@@ -188,60 +190,47 @@ export default function SetPassword() {
   };
 
   return (
-    <div className="authWrap">
-      <div className="authCard">
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
-          <img
-            src={new URL("../assets/escape-logo.png", import.meta.url).toString()}
-            alt="Escape Games"
-            style={{ height: 64 }}
-          />
-        </div>
-
-        <div style={{ textAlign: "center", marginBottom: 12 }}>
-          <div style={{ fontWeight: 900, fontSize: 18 }}>Configurá tu contraseña</div>
-          {mail ? (
-            <div style={{ opacity: 0.8, fontSize: 12, marginTop: 4 }}>{mail}</div>
-          ) : null}
-        </div>
+    <main className="eg-auth-shell">
+      <section className="eg-auth-card" aria-labelledby="password-title">
+        <img className="eg-auth-logo" src={logo} alt="Escape Games" />
+        <header className="eg-auth-heading">
+          <h1 id="password-title">Crear nueva contraseña</h1>
+          <p>{mail || "Configurá una contraseña segura para acceder al panel."}</p>
+        </header>
 
         {err && (
-          <div style={styles.errorBox}>{err}</div>
+          <div className="eg-auth-alert is-error" role="alert">{err}</div>
         )}
 
         {okMsg && (
-          <div style={styles.okBox}>{okMsg}</div>
+          <div className="eg-auth-alert is-success" role="status">{okMsg}</div>
         )}
 
         {phase === "checking" ? (
-          <div style={{ textAlign: "center", opacity: 0.8, fontSize: 13, padding: "12px 0" }}>
+          <div className="eg-auth-state">
             Validando invitación…
           </div>
         ) : phase === "invalid" ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <div style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.9 }}>
+          <div className="eg-auth-state eg-auth-state--invalid">
+            <div>
               El link de invitación no es válido o ya venció. Pedile a un Admin General
               que te reenvíe la invitación.
             </div>
-
-            <button className="btnSmall" type="button" onClick={() => nav("/login", { replace: true })}>
-              Ir al login
-            </button>
+            <Button variant="primary" onClick={() => nav("/login", { replace: true })}>Ir al login</Button>
           </div>
         ) : (
-          <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <label className="field">
-              <span className="label">Nueva contraseña</span>
-
-              <div style={{ position: "relative" }}>
-                <input
-                  className="input"
+          <form className="eg-auth-form" onSubmit={onSubmit}>
+            <label className="eg-field" htmlFor="new-password">
+              <span className="eg-field__label">Nueva contraseña</span>
+              <div className="eg-auth-password">
+                <Input
+                  id="new-password"
                   value={pass1}
                   onChange={(e) => setPass1(e.target.value)}
                   type={showPass1 ? "text" : "password"}
                   autoComplete="new-password"
                   placeholder={`Mínimo ${MIN_PASS} caracteres`}
-                  style={{ paddingRight: 42 }}
+                  className="eg-auth-password__input"
                   autoFocus
                 />
 
@@ -249,76 +238,41 @@ export default function SetPassword() {
                   type="button"
                   onClick={() => setShowPass1((v) => !v)}
                   aria-label={showPass1 ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  style={styles.eyeButton}
+                  className="eg-auth-password__toggle"
                 >
                   {showPass1 ? <EyeOpenIcon /> : <EyeClosedIcon />}
                 </button>
               </div>
             </label>
 
-            <label className="field">
-              <span className="label">Repetir contraseña</span>
-
-              <div style={{ position: "relative" }}>
-                <input
-                  className="input"
+            <label className="eg-field" htmlFor="repeat-password">
+              <span className="eg-field__label">Repetir contraseña</span>
+              <div className="eg-auth-password">
+                <Input
+                  id="repeat-password"
                   value={pass2}
                   onChange={(e) => setPass2(e.target.value)}
                   type={showPass2 ? "text" : "password"}
                   autoComplete="new-password"
                   placeholder="••••••••"
-                  style={{ paddingRight: 42 }}
+                  className="eg-auth-password__input"
                 />
 
                 <button
                   type="button"
                   onClick={() => setShowPass2((v) => !v)}
                   aria-label={showPass2 ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  style={styles.eyeButton}
+                  className="eg-auth-password__toggle"
                 >
                   {showPass2 ? <EyeOpenIcon /> : <EyeClosedIcon />}
                 </button>
               </div>
             </label>
 
-            <button className="btnSmall" type="submit" disabled={busy}>
-              {busy ? "Guardando…" : "Guardar y entrar"}
-            </button>
+            <Button type="submit" variant="primary" fullWidth loading={busy}>Guardar y entrar</Button>
           </form>
         )}
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
-
-const styles: Record<string, any> = {
-  errorBox: {
-    border: "1px solid rgba(255,60,60,.45)",
-    background: "rgba(255,60,60,.14)",
-    padding: 10,
-    borderRadius: 12,
-    fontSize: 13,
-    marginBottom: 10,
-  },
-
-  okBox: {
-    border: "1px solid rgba(34,197,94,.45)",
-    background: "rgba(34,197,94,.14)",
-    padding: 10,
-    borderRadius: 12,
-    fontSize: 13,
-    marginBottom: 10,
-  },
-
-  eyeButton: {
-    position: "absolute",
-    right: 10,
-    top: "50%",
-    transform: "translateY(-50%)",
-    background: "transparent",
-    border: "none",
-    padding: 0,
-    cursor: "pointer",
-    color: "#9ca3af",
-  },
-};

@@ -3101,87 +3101,35 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
       </div>
       )}
 
-      {descModal ? (
-        <>
-          <div className="backdrop show" onMouseDown={() => setDescModal(null)} />
-          <div className="modalCenter" onMouseDown={() => setDescModal(null)}>
-            <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
-              <div className="modalHead">
-                <div className="modalTitle">{descModal.title || "Descripción"}</div>
-                <button className="iconBtn" onClick={() => setDescModal(null)} aria-label="Cerrar">
-                  ✕
-                </button>
-              </div>
-              <div className="modalBody">
-                <div style={{ textAlign: "left", whiteSpace: "pre-wrap", lineHeight: 1.45, fontSize: 14 }}>
-                  {descModal.text}
-                </div>
-              </div>
-              <div className="modalFoot">
-                <button className="ghostBtn" onClick={() => setDescModal(null)}>
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      ) : null}
+      <Modal open={!!descModal} title={descModal?.title || "Descripción"} size="md" panelClassName="eg-room-description-modal" onClose={() => setDescModal(null)}>
+        <section className="eg-room-description">
+          <span>Descripción</span>
+          <p>{descModal?.text}</p>
+        </section>
+      </Modal>
 
      {qrModal ? (
-  <>
-    <div className="backdrop show" onMouseDown={() => setQrModal(null)} />
-    <div
-      className="modalCenter"
-      onMouseDown={() => setQrModal(null)}
-      style={{ alignItems: "center" }}
-    >
-      <div
-        className="modalBox"
-        onMouseDown={(e) => e.stopPropagation()}
-        style={{ width: "min(600px, 94vw)", maxWidth: 600 }}
+      <Modal
+        open
+        title={`QR de ${qrModal.name}`}
+        size="lg"
+        panelClassName="eg-room-qr-modal"
+        onClose={() => setQrModal(null)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => downloadRoomQrPng(qrModal.exportCanvasId, qrModal)}>Descargar PNG</Button>
+            <Button variant="secondary" onClick={() => printRoomQrSheet(qrModal.exportCanvasId, qrModal)}>Imprimir</Button>
+            <Button variant="primary" onClick={() => void copy(qrModal.value).then(() => toast("success", "Link del QR copiado"))}>Copiar link</Button>
+          </>
+        }
       >
-        <div className="modalHead">
-          <div className="modalTitle">QR de {qrModal.name}</div>
-          <button className="iconBtn" onClick={() => setQrModal(null)} aria-label="Cerrar">
-            ✕
-          </button>
-        </div>
-
-        {/* Sin scroll interno: el contenido está acotado a mano. */}
-        <div
-          className="modalBody"
-          style={{
-            overflow: "visible",
-            maxHeight: "none",
-            padding: "20px 16px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            textAlign: "center",
-          }}
-        >
-          <h2
-            style={{
-              margin: "0 0 16px 0",
-              fontSize: 24,
-              fontWeight: 900,
-              lineHeight: 1.2,
-              color: "#fff",
-            }}
-          >
-            {qrModal.name}
-          </h2>
-
-          <div
-            style={{
-              borderRadius: 14,
-              overflow: "hidden",
-              border: "1px solid rgba(255,255,255,.12)",
-              background: "#fff",
-              padding: 12,
-              lineHeight: 0,
-            }}
-          >
+        <section className="eg-room-qr">
+          <div className="eg-room-qr__identity">
+            <span>QR de la sala</span>
+            <strong>{qrModal.name}</strong>
+            {roomQrMetaLine(qrModal) && <small>{roomQrMetaLine(qrModal)}</small>}
+          </div>
+          <div className="eg-room-qr__canvas">
             <QRCodeCanvas
               id={qrModal.canvasId}
               value={qrModal.value}
@@ -3189,31 +3137,10 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
               includeMargin
               bgColor="#ffffff"
               fgColor="#000000"
-              style={{
-                width: "min(320px, 62vw)",
-                height: "min(320px, 62vw)",
-                display: "block",
-              }}
+              className="eg-room-qr__image"
             />
           </div>
-
-          <div
-            style={{
-              marginTop: 14,
-              fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-              fontSize: 13,
-              color: "#cbd5e1",
-              wordBreak: "break-all",
-            }}
-          >
-            {qrModal.code}
-          </div>
-
-          {roomQrMetaLine(qrModal) ? (
-            <div style={{ marginTop: 6, fontSize: 13, color: "#94a3b8" }}>
-              {roomQrMetaLine(qrModal)}
-            </div>
-          ) : null}
+          <code className="eg-room-qr__code">{qrModal.code}</code>
 
           {/* Copia oculta a 480px: es la que se exporta e imprime, para que el
               PNG no salga de escalar el QR chico de pantalla. */}
@@ -3237,92 +3164,32 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
               fgColor="#000000"
             />
           </div>
-        </div>
-
-        <div className="modalFoot" style={{ justifyContent: "center", flexWrap: "wrap" }}>
-          <button
-            className="ghostBtn"
-            onClick={() => downloadRoomQrPng(qrModal.exportCanvasId, qrModal)}
-          >
-            Descargar PNG
-          </button>
-
-          <button
-            className="ghostBtn"
-            onClick={() => printRoomQrSheet(qrModal.exportCanvasId, qrModal)}
-          >
-            Imprimir
-          </button>
-
-          <button
-            className="ghostBtn"
-            onClick={async () => {
-              await copy(qrModal.value);
-              toast("success", "Link del QR copiado");
-            }}
-          >
-            Copiar link
-          </button>
-        </div>
-      </div>
-    </div>
-  </>
+        </section>
+      </Modal>
 ) : null}
 
-{recordsModal ? (
-  <>
-    <div className="backdrop show" onMouseDown={() => setRecordsModal(null)} />
-    <div className="modalCenter" onMouseDown={() => setRecordsModal(null)}>
-      <div className="modalBox" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="modalHead">
-          <div className="modalTitle">Editar récords</div>
-          <button className="iconBtn" onClick={() => setRecordsModal(null)} aria-label="Cerrar">
-            ✕
-          </button>
-        </div>
-
-        <div className="modalBody">
-          <div className="formGrid2">
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span className="label">Récord 1 (MM:SS)</span>
-              <input
-                className="input"
-                value={recordsModal.record1}
-                onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))}
-                placeholder="12:34"
-                inputMode="numeric"
-              />
-            </label>
-
-            <label className="field" style={{ gridColumn: "1 / -1" }}>
-              <span className="label">Récord 2 (MM:SS)</span>
-              <input
-                className="input"
-                value={recordsModal.record2}
-                onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))}
-                placeholder="14:10"
-                inputMode="numeric"
-              />
-            </label>
-
-            <div style={{ gridColumn: "1 / -1", opacity: 0.75, fontSize: 12 }}>
-              Formato válido: <b>MM:SS</b> (ej: 08:45).
-            </div>
-          </div>
-        </div>
-
-        <div className="modalFoot">
-          <button className="ghostBtn" onClick={() => setRecordsModal(null)} disabled={saving}>
-            Cancelar
-          </button>
-          <button className="btnSmall" onClick={saveRecords} disabled={saving}>
-            {saving ? "Guardando…" : "Guardar"}
-          </button>
-        </div>
-      </div>
+<Modal
+  open={!!recordsModal}
+  title="Editar récords"
+  description="Actualizá los mejores tiempos publicados para esta sala."
+  size="md"
+  panelClassName="eg-room-records-modal"
+  onClose={() => !saving && setRecordsModal(null)}
+  footer={
+    <>
+      <Button variant="secondary" onClick={() => setRecordsModal(null)} disabled={saving}>Cancelar</Button>
+      <Button variant="primary" onClick={saveRecords} loading={saving}>Guardar</Button>
+    </>
+  }
+>
+  {recordsModal && (
+    <div className="eg-room-records-form">
+      <Input id="room-record-1" label="Récord 1" value={recordsModal.record1} onChange={(e) => setRecordsModal((p) => (p ? { ...p, record1: e.target.value } : p))} placeholder="12:34" inputMode="numeric" />
+      <Input id="room-record-2" label="Récord 2" value={recordsModal.record2} onChange={(e) => setRecordsModal((p) => (p ? { ...p, record2: e.target.value } : p))} placeholder="14:10" inputMode="numeric" />
+      <p>Formato válido: <strong>MM:SS</strong> (ej: 08:45).</p>
     </div>
-  </>
-) : null}
+  )}
+</Modal>
 
 {open && editing ? (
   <>
