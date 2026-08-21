@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
@@ -292,6 +292,7 @@ function CropperModal({
 
   const [natImg, setNatImg] = useState<NatImg | null>(null);
   const [cropRect, setCropRect] = useState<CropRect | null>(null);
+  const cropGenerationRef = useRef(0);
 
   const dragModeRef = useRef<DragMode>(null);
   const dragHandleRef = useRef<Handle | null>(null);
@@ -299,6 +300,7 @@ function CropperModal({
   const cursorRef = useRef<string>("default");
 
   useEffect(() => {
+    cropGenerationRef.current += 1;
     if (!open) {
       setNatImg(null);
       setCropRect(null);
@@ -314,7 +316,9 @@ function CropperModal({
     setCropRect(null);
 
     const img = new Image();
+    let cancelled = false;
     img.onload = () => {
+      if (cancelled) return;
       const nat = { w: img.naturalWidth || 1, h: img.naturalHeight || 1 };
       setNatImg(nat);
 
@@ -337,10 +341,17 @@ function CropperModal({
       setCropRect(clampRectToImage(init, nat, 80));
     };
     img.onerror = () => {
+      if (cancelled) return;
       alert("No pude leer la imagen para recortar.");
       onClose();
     };
     img.src = sourceUrl;
+
+    return () => {
+      cancelled = true;
+      img.onload = null;
+      img.onerror = null;
+    };
   }, [open, sourceUrl, onClose]);
 
   const getContainBox = () => {
@@ -576,6 +587,7 @@ function CropperModal({
 
   const confirmCrop = async () => {
     if (!sourceUrl || !natImg || !cropRect) return;
+    const generation = cropGenerationRef.current;
 
     try {
       const img = new Image();
@@ -584,6 +596,7 @@ function CropperModal({
         img.onerror = () => reject(new Error("No pude cargar la imagen para recortar."));
         img.src = sourceUrl;
       });
+      if (generation !== cropGenerationRef.current) return;
 
       const rect = clampRectToImage(cropRect, natImg, 80);
 
@@ -605,9 +618,10 @@ function CropperModal({
           0.9
         );
       });
+      if (generation !== cropGenerationRef.current) return;
 
       const file = new File([blob], toJpegName(originalFileName), { type: "image/jpeg" });
-      const previewUrl = URL.createObjectURL(blob);
+      const previewUrl = URL.createObjectURL(file);
 
       onConfirm(file, previewUrl);
     } catch (err: any) {
@@ -831,11 +845,13 @@ export default function News() {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [editingImageFile, setEditingImageFile] = useState<File | null>(null);
   const [tempPreviewUrl, setTempPreviewUrl] = useState<string | null>(null);
+  const tempPreviewUrlRef = useRef<string | null>(null);
 
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSourceUrl, setCropSourceUrl] = useState<string | null>(null);
   const cropTempObjectUrlRef = useRef<string | null>(null);
   const cropOriginalNameRef = useRef<string>("image.jpg");
+  const cropRequestRef = useRef(0);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<NewsItem | null>(null);
@@ -931,7 +947,7 @@ export default function News() {
 
     return () => {
       mounted = false;
-      if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
+      if (tempPreviewUrlRef.current) URL.revokeObjectURL(tempPreviewUrlRef.current);
       if (cropTempObjectUrlRef.current) {
         URL.revokeObjectURL(cropTempObjectUrlRef.current);
         cropTempObjectUrlRef.current = null;
@@ -1057,7 +1073,8 @@ export default function News() {
     };
   }, [menuOpenId]);
 
-  const closeCrop = () => {
+  const closeCrop = useCallback(() => {
+    cropRequestRef.current += 1;
     setCropOpen(false);
     setCropSourceUrl(null);
 
@@ -1065,15 +1082,17 @@ export default function News() {
       URL.revokeObjectURL(cropTempObjectUrlRef.current);
       cropTempObjectUrlRef.current = null;
     }
-  };
+  }, []);
 
   const closeModal = () => {
     setOpen(false);
     setEditing(null);
     setSendPushOnSave(true);
     setEditingImageFile(null);
+    setAspectWarn(undefined);
 
-    if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
+    if (tempPreviewUrlRef.current) URL.revokeObjectURL(tempPreviewUrlRef.current);
+    tempPreviewUrlRef.current = null;
     setTempPreviewUrl(null);
 
     if (fileRef.current) fileRef.current.value = "";
@@ -1086,9 +1105,12 @@ export default function News() {
 
   const startCreate = () => {
     if (!canManageNews) return;
+    closeCrop();
     setEditing(defaultNews());
     setEditingImageFile(null);
-    if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
+    setAspectWarn(undefined);
+    if (tempPreviewUrlRef.current) URL.revokeObjectURL(tempPreviewUrlRef.current);
+    tempPreviewUrlRef.current = null;
     setTempPreviewUrl(null);
     if (fileRef.current) fileRef.current.value = "";
     setSendPushOnSave(true);
@@ -1097,6 +1119,7 @@ export default function News() {
 
   const startEdit = (n: NewsItem) => {
     if (!canManageNews) return;
+    closeCrop();
 
     setEditing({
       ...n,
@@ -1106,7 +1129,9 @@ export default function News() {
     });
 
     setEditingImageFile(null);
-    if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
+    setAspectWarn(undefined);
+    if (tempPreviewUrlRef.current) URL.revokeObjectURL(tempPreviewUrlRef.current);
+    tempPreviewUrlRef.current = null;
     setTempPreviewUrl(null);
     if (fileRef.current) fileRef.current.value = "";
 
@@ -1120,12 +1145,13 @@ export default function News() {
   const onPickImage = () => fileRef.current?.click();
 
   const setLocalPreview = (url: string) => {
-    if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
+    if (tempPreviewUrlRef.current) URL.revokeObjectURL(tempPreviewUrlRef.current);
+    tempPreviewUrlRef.current = url;
     setTempPreviewUrl(url);
-    setEditing((prev) => (prev ? { ...prev, image: url } : prev));
   };
 
   const openCropperWithUrl = async (url: string, originalName = "image.jpg") => {
+    const requestId = ++cropRequestRef.current;
     try {
       if (!url) return;
 
@@ -1137,6 +1163,7 @@ export default function News() {
       }
 
       if (!/^https?:\/\//i.test(url)) {
+        if (requestId !== cropRequestRef.current) return;
         setCropSourceUrl(url);
         setCropOpen(true);
         return;
@@ -1146,18 +1173,21 @@ export default function News() {
       if (!res.ok) throw new Error("No pude descargar la imagen para recortarla.");
 
       const blob = await res.blob();
+      if (requestId !== cropRequestRef.current) return;
       const objUrl = URL.createObjectURL(blob);
       cropTempObjectUrlRef.current = objUrl;
 
       setCropSourceUrl(objUrl);
       setCropOpen(true);
     } catch (e: any) {
+      if (requestId !== cropRequestRef.current) return;
       console.error(e);
       alert(e?.message || "No pude abrir el recorte de esa imagen.");
     }
   };
 
   const onFileChange: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+    const requestId = ++cropRequestRef.current;
     const file = e.target.files?.[0] || null;
     if (!file) return;
 
@@ -1174,6 +1204,7 @@ export default function News() {
     } catch {
       return toast("error", "No pude leer la imagen.");
     }
+    if (requestId !== cropRequestRef.current) return;
 
     const ratio = size.w / size.h;
 
@@ -1191,21 +1222,25 @@ export default function News() {
 
     cropOriginalNameRef.current = file.name;
 
+    if (cropTempObjectUrlRef.current) URL.revokeObjectURL(cropTempObjectUrlRef.current);
     const url = URL.createObjectURL(file);
-    setLocalPreview(url);
+    cropTempObjectUrlRef.current = url;
 
     /* Se abre igual: el recorte está bloqueado a 2.4:1 y se exporta a
        1440×600, así que el resultado siempre sale correcto. */
-    openCropperWithUrl(url, file.name);
+    setCropSourceUrl(url);
+    setCropOpen(true);
   };
 
   const removeImage = () => {
     setEditingImageFile(null);
 
-    if (tempPreviewUrl) URL.revokeObjectURL(tempPreviewUrl);
+    if (tempPreviewUrlRef.current) URL.revokeObjectURL(tempPreviewUrlRef.current);
+    tempPreviewUrlRef.current = null;
     setTempPreviewUrl(null);
 
     setEditing((prev) => (prev ? { ...prev, image: "" } : prev));
+    setAspectWarn(undefined);
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -1547,17 +1582,17 @@ export default function News() {
           <section className="eg-news-form__section eg-news-form__section--image">
             <div className="eg-news-form__heading"><span>Imagen</span><small>{NEWS_SIZE_LABEL}</small></div>
             <div
-              className={`eg-news-image-field${editing.image ? " has-image" : ""}`}
+              className={`eg-news-image-field${(tempPreviewUrl || editing.image) ? " has-image" : ""}`}
               role="button"
               tabIndex={0}
-              aria-label={editing.image ? "Cambiar imagen" : "Seleccionar imagen"}
+              aria-label={(tempPreviewUrl || editing.image) ? "Cambiar imagen" : "Seleccionar imagen"}
               onClick={onPickImage}
               onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onPickImage(); } }}
             >
-              {editing.image ? <img src={editing.image} alt="Vista previa de la novedad" /> : <div className="eg-news-image-field__empty"><UiIcon name="image" size={28} /><strong>Seleccioná una imagen</strong><span>JPG, PNG o WebP · {NEWS_RATIO_LABEL}</span></div>}
-              {editing.image && <div className="eg-news-image-field__actions" onClick={(event) => event.stopPropagation()}>
+              {(tempPreviewUrl || editing.image) ? <img src={tempPreviewUrl || editing.image} alt="Vista previa de la novedad" /> : <div className="eg-news-image-field__empty"><UiIcon name="image" size={28} /><strong>Seleccioná una imagen</strong><span>{NEWS_SIZE_LABEL}</span></div>}
+              {(tempPreviewUrl || editing.image) && <div className="eg-news-image-field__actions" onClick={(event) => event.stopPropagation()}>
                 <Button variant="secondary" size="sm" icon="image" onClick={onPickImage}>Cambiar imagen</Button>
-                <Button variant="secondary" size="sm" icon="edit" onClick={() => openCropperWithUrl(editing.image, cropOriginalNameRef.current)}>Editar recorte</Button>
+                <Button variant="secondary" size="sm" icon="edit" onClick={() => openCropperWithUrl(tempPreviewUrl || editing.image, cropOriginalNameRef.current)}>Editar recorte</Button>
                 <Button variant="ghost" size="sm" icon="trash" onClick={removeImage}>Quitar</Button>
               </div>}
             </div>
@@ -1896,14 +1931,14 @@ const styles: Record<string, any> = {
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    zIndex: 1000,
+    zIndex: 10010,
     boxSizing: "border-box",
   },
 
   modalCenter: {
     position: "fixed",
     inset: 0,
-    zIndex: 1001,
+    zIndex: 10011,
     display: "flex",
     justifyContent: "center",
     alignItems: "center",

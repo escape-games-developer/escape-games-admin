@@ -28,10 +28,12 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   if (!label && !hint && !error) return input;
   return (
     <label className="eg-field" htmlFor={id}>
-      {label && <span className="eg-field__label">{label}</span>}
+      {/* `title`: donde el layout recorta el texto con puntos suspensivos, el
+          contenido completo sigue disponible en el tooltip nativo. */}
+      {label && <span className="eg-field__label" title={label}>{label}</span>}
       {input}
       {(error || hint) && (
-        <span id={`${id}-help`} className={`eg-field__help${error ? " is-error" : ""}`}>
+        <span id={`${id}-help`} className={`eg-field__help${error ? " is-error" : ""}`} title={error || hint}>
           {error || hint}
         </span>
       )}

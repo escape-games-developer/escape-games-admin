@@ -11,6 +11,11 @@ import Users from ".././pages/Users";
 import UserProgressPage from ".././pages/UserProgressPage";
 import GoldenTicketAdmin from ".././pages/GoldenTicketAdmin";
 import UiPreview from ".././pages/UiPreview";
+import IntranetPage from ".././pages/IntranetPage";
+import CalendarPage from ".././pages/CalendarPage";
+import ChatPage from ".././pages/ChatPage";
+import SettingsPage from ".././pages/SettingsPage";
+import SectionGuard from ".././components/SectionGuard";
 
 type UserRole = "CLIENT" | "GM" | "ADMIN" | "ADMIN_GENERAL";
 
@@ -131,11 +136,24 @@ export default function AppRoutes() {
       <Route element={<AdminLayout />}>
         <Route path="/" element={<Navigate to="/salas" replace />} />
 
+        {/*
+          Dos capas por ruta, y las dos tienen que pasar:
+
+            · RequireRole / RequirePerm → permisos de siempre, por usuario.
+              No se tocan ni se debilitan.
+            · SectionGuard             → habilitación de la sección para el
+              rol, configurable desde Ajustes. Puede sacar acceso, nunca darlo.
+
+          Esto es lo que hace que escribir la URL a mano tampoco funcione: no
+          alcanza con esconder el ítem del sidebar.
+        */}
         <Route
           path="/salas"
           element={
             <RequireRole allow={["ADMIN_GENERAL", "ADMIN", "GM"]}>
-              <Rooms />
+              <SectionGuard section="rooms">
+                <Rooms />
+              </SectionGuard>
             </RequireRole>
           }
         />
@@ -144,7 +162,9 @@ export default function AppRoutes() {
           path="/novedades"
           element={
             <RequirePerm permKey="canManageNews">
-              <News />
+              <SectionGuard section="news">
+                <News />
+              </SectionGuard>
             </RequirePerm>
           }
         />
@@ -153,7 +173,9 @@ export default function AppRoutes() {
           path="/usuarios"
           element={
             <RequirePerm permKey="canManageUsers">
-              <Users />
+              <SectionGuard section="users">
+                <Users />
+              </SectionGuard>
             </RequirePerm>
           }
         />
@@ -162,7 +184,9 @@ export default function AppRoutes() {
           path="/golden-tickets"
           element={
             <RequirePerm permKey="canManageUsers">
-              <GoldenTicketAdmin />
+              <SectionGuard section="golden_ticket">
+                <GoldenTicketAdmin />
+              </SectionGuard>
             </RequirePerm>
           }
         />
@@ -171,7 +195,30 @@ export default function AppRoutes() {
           path="/usuarios/progreso"
           element={
             <RequireRole allow={["ADMIN_GENERAL", "ADMIN"]}>
-              <UserProgressPage />
+              <SectionGuard section="user_progress">
+                <UserProgressPage />
+              </SectionGuard>
+            </RequireRole>
+          }
+        />
+
+        <Route path="/admin/intranet/cotizador" element={<SectionGuard section="intranet_quote"><IntranetPage section="cotizador" /></SectionGuard>} />
+        <Route path="/admin/intranet/mensajes" element={<SectionGuard section="intranet_messages"><IntranetPage section="mensajes" /></SectionGuard>} />
+        <Route path="/admin/intranet/objeciones" element={<SectionGuard section="intranet_objections"><IntranetPage section="objeciones" /></SectionGuard>} />
+        <Route path="/admin/intranet/respond-io" element={<SectionGuard section="intranet_respond_io"><IntranetPage section="respond-io" /></SectionGuard>} />
+        <Route path="/admin/calendario" element={<SectionGuard section="calendar"><CalendarPage /></SectionGuard>} />
+
+        {/* Chat interno. Etapa de UI: no toca datos, así que su único gate es
+            la habilitación de sección. */}
+        <Route path="/chat" element={<SectionGuard section="chat"><ChatPage /></SectionGuard>} />
+
+        {/* Ajustes: solo Admin General, ni por URL. La RLS lo respalda del
+            lado de la base, así que esconder la pantalla no es la defensa. */}
+        <Route
+          path="/ajustes"
+          element={
+            <RequireRole allow={["ADMIN_GENERAL"]}>
+              <SettingsPage />
             </RequireRole>
           }
         />

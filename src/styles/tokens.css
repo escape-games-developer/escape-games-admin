@@ -84,6 +84,9 @@
   --eg-fs-md: 14px;
   --eg-fs-lg: 16px;
   --eg-fs-title: 26px;
+  /* Titulo de pantalla del admin. Mas chico que --eg-fs-title, que es el del
+     login: la densidad del panel es otra. */
+  --eg-fs-page-title: 22px;
   --eg-fs-stat: 24px;
 
   /* ---- Sombras: discretas, sin glow ---- */

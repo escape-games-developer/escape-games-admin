@@ -1,0 +1,11 @@
+IMÁGENES PARA INSTRUCTIVO RESPOND.IO
+
+Copiar esta carpeta dentro del proyecto en:
+
+public/instructivos/respondio/
+
+Luego las imágenes se pueden utilizar directamente en React/Vite así:
+
+<img src="/instructivos/respondio/01-vista-general.png" alt="Vista general de Respond.io" />
+
+No usar rutas locales de Windows (C:\...), blob URLs ni imports desde /mnt/data.

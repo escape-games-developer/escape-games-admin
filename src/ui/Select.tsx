@@ -26,10 +26,12 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
   if (!label && !hint && !error) return control;
   return (
     <label className="eg-field" htmlFor={id}>
-      {label && <span className="eg-field__label">{label}</span>}
+      {/* `title`: donde el layout recorta el texto con puntos suspensivos, el
+          contenido completo sigue disponible en el tooltip nativo. */}
+      {label && <span className="eg-field__label" title={label}>{label}</span>}
       {control}
       {(error || hint) && (
-        <span id={`${id}-help`} className={`eg-field__help${error ? " is-error" : ""}`}>
+        <span id={`${id}-help`} className={`eg-field__help${error ? " is-error" : ""}`} title={error || hint}>
           {error || hint}
         </span>
       )}

@@ -82,8 +82,31 @@
 .eg-shell__content {
   flex: 1;
   min-width: 0;
-  padding: var(--eg-content-pad);
+  /* Arriba menos aire que a los costados: acerca el título al breadcrumb de la
+     topbar, que es lo que hace que el encabezado arranque a la altura del
+     Cotizador. Los costados y el pie no se tocan. */
+  padding: var(--eg-sp-4) var(--eg-content-pad) var(--eg-content-pad);
   overflow-x: clip;
+}
+
+.eg-admin-boot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--eg-sp-3);
+  min-height: 100vh;
+  background: var(--eg-bg);
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-base);
+}
+
+.eg-admin-boot__spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--eg-border-strong);
+  border-top-color: var(--eg-accent);
+  border-radius: var(--eg-radius-pill);
+  animation: eg-spin .7s linear infinite;
 }
 
 /* Novedades ------------------------------------------------------------ */
@@ -149,8 +172,8 @@
 .eg-news-modal .eg-news-editor__textarea { height: 72px; min-height: 72px; }
 .eg-news-form__section--image { grid-template-columns: 1fr; gap: 8px !important; }
 .eg-news-form__section--image .eg-news-form__heading { flex-direction: row; align-items: baseline; gap: 8px; }
-.eg-news-image-field { height: 180px; min-height: 0; cursor: pointer; }
-.eg-news-image-field.has-image { aspect-ratio: auto; }
+.eg-news-image-field { height: auto; min-height: 180px; cursor: pointer; }
+.eg-news-image-field.has-image { aspect-ratio: 12 / 5; min-height: 0; }
 .eg-news-image-field:focus-visible { border-color: var(--eg-accent); box-shadow: 0 0 0 3px var(--eg-accent-soft); outline: 0; }
 @media (max-width: 1180px) { .eg-news-filters { grid-template-columns: minmax(240px, 1fr) repeat(2, minmax(145px, .6fr)); } .eg-news-filters > :nth-last-child(-n+2) { grid-column: span 1; } }
 @media (max-width: 860px) { .eg-news-filters { grid-template-columns: 1fr 1fr; } .eg-news-filters > :first-child { grid-column: 1 / -1; } .eg-news-stats { grid-template-columns: 1fr 1fr; } .eg-news-form__section { grid-template-columns: 1fr; gap: var(--eg-space-3); } .eg-news-form__grid { grid-template-columns: 1fr 1fr; } .eg-news-form__grid > :first-child, .eg-news-form__grid > :nth-child(4) { grid-column: 1 / -1; } .eg-news-image-warning, .eg-news-template { margin-left: 0; } }
@@ -438,91 +461,6 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
   color: var(--eg-text);
 }
 
-.eg-sidebar__profile {
-  display: flex;
-  align-items: center;
-  gap: var(--eg-sp-3);
-  padding: var(--eg-sp-4);
-  margin: var(--eg-sp-3);
-  background: var(--eg-surface);
-  border: 1px solid var(--eg-border);
-  border-radius: var(--eg-radius);
-  flex-shrink: 0;
-}
-
-.eg-sidebar.is-collapsed .eg-sidebar__profile {
-  justify-content: center;
-  padding: var(--eg-sp-2);
-}
-
-.eg-sidebar__profile-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  gap: 2px;
-}
-
-.eg-sidebar__profile-name {
-  font-size: var(--eg-fs-base);
-  font-weight: 600;
-  color: var(--eg-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.eg-sidebar__profile-role {
-  font-size: var(--eg-fs-sm);
-  color: var(--eg-text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.eg-sidebar__gm-code {
-  display: flex;
-  align-items: center;
-  gap: var(--eg-sp-1);
-  min-width: 0;
-  color: var(--eg-text-dim);
-  font-size: var(--eg-fs-xs);
-  line-height: 1.35;
-}
-
-.eg-sidebar__gm-code > strong {
-  overflow: hidden;
-  color: var(--eg-text);
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.eg-sidebar__gm-label { flex: 0 0 auto; }
-
-.eg-sidebar__gm-code > button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  padding: 0;
-  border: 0;
-  border-radius: var(--eg-radius-sm);
-  background: transparent;
-  color: var(--eg-text-dim);
-  cursor: pointer;
-}
-
-.eg-sidebar__gm-code > button:hover,
-.eg-sidebar__gm-code > button:focus-visible {
-  background: var(--eg-surface-3);
-  color: var(--eg-accent);
-  outline: 0;
-}
-
-.eg-sidebar__gm-copied { color: var(--eg-success); white-space: nowrap; }
-
 .eg-avatar {
   display: inline-flex;
   align-items: center;
@@ -551,6 +489,15 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
   overflow-y: auto;
   flex: 1;
 }
+
+/**
+ * Los ítems no se comprimen. Es un flex column con alto acotado, así que por
+ * defecto `flex-shrink: 1` los aplastaba cuando el contenido no entraba: al
+ * abrir Intranet las filas de 46px caían a 24px y la navegación entera se veía
+ * apretada. Con esto conservan su alto y, si no entran, scrollea el `nav`
+ * (que ya tiene `overflow-y: auto`), que es el comportamiento correcto.
+ */
+.eg-sidebar__nav > * { flex-shrink: 0; }
 
 /* ---- Item de navegación ---- */
 
@@ -715,9 +662,128 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
 .eg-topbar__right {
   display: flex;
   align-items: center;
-  gap: var(--eg-sp-4);
+  gap: var(--eg-sp-3);
+  min-width: 0;
   margin-left: auto;
 }
+
+/**
+ * Barra de usuario del header.
+ *
+ * Es la misma información que antes ocupaba una tarjeta arriba del sidebar,
+ * ahora en línea: avatar · nombre · puesto · código GM. Sin fondo ni borde a
+ * propósito — tiene que leerse como parte de la topbar, no como una card.
+ */
+.eg-userbar {
+  display: flex;
+  align-items: center;
+  gap: var(--eg-sp-2);
+  min-width: 0;
+}
+
+.eg-userbar__name {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--eg-text);
+  font-size: var(--eg-fs-base);
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.eg-userbar__role {
+  display: flex;
+  align-items: center;
+  gap: var(--eg-sp-2);
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-base);
+  white-space: nowrap;
+}
+
+/* Separador sutil entre identidad, puesto y código. */
+.eg-userbar__sep {
+  width: 1px;
+  height: 18px;
+  flex: 0 0 1px;
+  background: var(--eg-border);
+}
+
+.eg-userbar__gm {
+  display: flex;
+  align-items: center;
+  gap: var(--eg-sp-1);
+  min-width: 0;
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-sm);
+}
+
+.eg-userbar__gm > strong {
+  overflow: hidden;
+  color: var(--eg-text);
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.eg-userbar__gm-label { flex: 0 0 auto; }
+
+.eg-userbar__gm > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--eg-radius-sm);
+  background: transparent;
+  color: var(--eg-text-dim);
+  cursor: pointer;
+}
+
+.eg-userbar__gm > button:hover,
+.eg-userbar__gm > button:focus-visible {
+  background: var(--eg-surface-2);
+  color: var(--eg-accent);
+  outline: 0;
+}
+
+.eg-userbar__gm-copied { color: var(--eg-success); white-space: nowrap; }
+
+/**
+ * Prioridad al angostar la ventana: primero se va el código GM, después el
+ * puesto y por último el nombre. Avatar y acciones (mensajes, campana) no se
+ * ocultan nunca, y el dato completo queda en el tooltip de la barra.
+ */
+@media (max-width: 1024px) { .eg-userbar__gm { display: none; } }
+@media (max-width: 899px) { .eg-userbar__role { display: none; } }
+@media (max-width: 680px) { .eg-userbar__name { display: none; } }
+
+/* Botón de acción de la topbar (mensajes, notificaciones). Uno solo para todos:
+   el del chat usa esta misma clase. */
+.eg-topbar__action {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 1px solid transparent;
+  border-radius: var(--eg-radius-sm);
+  background: transparent;
+  color: var(--eg-text-dim);
+  cursor: pointer;
+  transition: background var(--eg-t-fast), color var(--eg-t-fast);
+}
+
+.eg-topbar__action:hover,
+.eg-topbar__action.is-active {
+  background: var(--eg-surface-2);
+  color: var(--eg-text);
+}
+
+.eg-topbar__action:focus-visible { outline: 2px solid var(--eg-accent); outline-offset: 1px; }
 
 .eg-status {
   display: inline-flex;
@@ -762,11 +828,21 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
    PAGE HEADER
    ========================================================================= */
 
+/**
+ * Encabezado de pantalla. Único para todo el admin: el formato salió del
+ * Cotizador (título más chico, descripción más compacta y poco aire debajo)
+ * y desde acá lo heredan Salas, Novedades, Usuarios, Golden Ticket, Progreso,
+ * Calendario y el resto. No hay estilos de título por pantalla.
+ *
+ * El margen de abajo es chico a propósito: casi todas las vistas son un grid
+ * con su propio `gap`, así que el margen se suma a ese gap. Las que no tienen
+ * gap propio se compensan más abajo, en un único lugar.
+ */
 .eg-pagehead {
   display: flex;
   align-items: flex-start;
   gap: var(--eg-sp-4);
-  margin-bottom: var(--eg-sp-6);
+  margin-bottom: var(--eg-sp-1);
 }
 
 .eg-pagehead__text {
@@ -775,7 +851,7 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
 
 .eg-pagehead__title {
   margin: 0;
-  font-size: var(--eg-fs-title);
+  font-size: var(--eg-fs-page-title);
   font-weight: 700;
   line-height: 1.2;
   color: var(--eg-text);
@@ -783,13 +859,20 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
 
 .eg-pagehead__sub {
   margin: var(--eg-sp-1) 0 0;
-  font-size: var(--eg-fs-md);
+  font-size: var(--eg-fs-base);
   color: var(--eg-text-dim);
 }
 
 .eg-pagehead__action {
   margin-left: auto;
   flex-shrink: 0;
+}
+
+/* Vistas sin `gap` propio en su contenedor: acá el margen del encabezado es
+   toda la separación con el contenido, así que lleva el valor completo. */
+.eg-news-page > .eg-pagehead,
+.eg-calendar-page > .eg-pagehead {
+  margin-bottom: var(--eg-sp-5);
 }
 
 /* =========================================================================
@@ -1092,6 +1175,58 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
   left: 0;
 }
 
+.eg-navitem--group { flex-shrink: 0; }
+
+.eg-navitem__chevron {
+  display: inline-flex;
+  margin-left: auto;
+  transition: transform var(--eg-t-fast);
+}
+
+.eg-navgroup.is-open .eg-navitem__chevron { transform: rotate(90deg); }
+
+.eg-navgroup__children {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--eg-t-fast);
+}
+
+.eg-navgroup.is-open .eg-navgroup__children { grid-template-rows: 1fr; }
+/* Grid para separar los subitems entre sí. Los márgenes de los extremos van en
+   los hijos, no acá: adentro del `overflow: hidden` se recortan al plegar. */
+.eg-navgroup__children-inner { display: grid; gap: 6px; min-height: 0; overflow: hidden; }
+
+/**
+ * Subitem del menú. Es secundario por indentación, color y punto — no por
+ * achicar la tipografía: a 12px se leía diminuto al lado de los 14px del resto
+ * del menú. Queda un escalón por debajo (13px) y con alto propio.
+ */
+.eg-navsubitem {
+  display: flex;
+  align-items: center;
+  gap: var(--eg-sp-2);
+  min-height: 40px;
+  margin-left: 32px;
+  padding: 8px var(--eg-sp-3);
+  border-radius: var(--eg-radius);
+  color: var(--eg-text-faint);
+  font-size: var(--eg-fs-base);
+  line-height: 1.3;
+  text-decoration: none;
+  transition: background var(--eg-t-fast), color var(--eg-t-fast);
+}
+
+/* Aire con el ítem que abre el grupo y con el que sigue abajo (Calendario). */
+.eg-navsubitem:first-child { margin-top: 6px; }
+.eg-navsubitem:last-child { margin-bottom: 8px; }
+
+.eg-navsubitem:hover { background: var(--eg-surface); color: var(--eg-text); }
+.eg-navsubitem.is-active { background: var(--eg-surface-2); color: var(--eg-text); font-weight: 600; }
+.eg-navsubitem__dot { width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: currentColor; opacity: .55; }
+.eg-navsubitem.is-active .eg-navsubitem__dot { background: var(--eg-accent); opacity: 1; }
+
+.eg-placeholder { display: grid; gap: var(--eg-sp-5); }
+
 .eg-actions__menu--portal {
   position: fixed;
   right: auto;
@@ -1151,7 +1286,6 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
 
   .eg-sidebar__logo,
   .eg-sidebar__brand-mark,
-  .eg-sidebar__profile-text,
   .eg-navitem__label {
     display: none;
   }
@@ -1163,7 +1297,6 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
     letter-spacing: 0.06em;
   }
 
-  .eg-sidebar__profile,
   .eg-navitem {
     justify-content: center;
   }
@@ -1192,7 +1325,6 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
 
   .eg-sidebar__logo,
   .eg-sidebar__brand-mark,
-  .eg-sidebar__profile-text,
   .eg-navitem__label {
     display: initial;
   }
@@ -1201,7 +1333,6 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
     content: none;
   }
 
-  .eg-sidebar__profile,
   .eg-navitem {
     justify-content: flex-start;
   }
@@ -1415,7 +1546,6 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
    ROOMS LIST
    ========================================================================= */
 .eg-rooms { display: flex; flex-direction: column; gap: var(--eg-sp-4); min-width: 0; }
-.eg-rooms .eg-pagehead { margin-bottom: var(--eg-sp-1); }
 .eg-rooms__toolbar { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(210px, 280px); gap: var(--eg-sp-3); }
 .eg-rooms__stats { grid-template-columns: repeat(3, minmax(170px, 1fr)); }
 .eg-rooms__name-column { min-width: 260px; }
@@ -1616,3 +1746,252 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
   .eg-room-images-grid { grid-template-columns: 1fr; }
   .eg-room-image-field__zone--card { max-width: 280px; }
 }
+
+/* =========================================================================
+   INTRANET — COTIZADOR
+
+   Excepción de estilo pedida para esta sección: los campos de carga van rectos
+   (border-radius 0). Los botones NO entran en la excepción: usan el radio del
+   Design System (`--eg-radius`, vía `.eg-btn`), el mismo de “Nueva sala” o
+   “Nueva novedad”, así el botón principal se ve igual en todo el admin. Las
+   Cards mantienen el radio del resto del panel.
+   ========================================================================= */
+.eg-cotizador { display: grid; gap: var(--eg-sp-4); min-width: 0; }
+
+.eg-cotizador .eg-input,
+.eg-cotizador .eg-select,
+.eg-cotizador-modal .eg-input,
+.eg-cotizador-modal .eg-select { border-radius: 0; }
+
+/* Banda de precios sin confirmar. Sin botón de cerrar a propósito. */
+.eg-cotizador__banda { display: grid; gap: 2px; padding: var(--eg-sp-3) var(--eg-sp-4); border: 1px solid var(--eg-danger); background: var(--eg-danger-soft); }
+.eg-cotizador__banda strong { color: var(--eg-danger); font-size: var(--eg-fs-md); letter-spacing: .01em; }
+.eg-cotizador__banda span { color: var(--eg-text-dim); font-size: var(--eg-fs-sm); line-height: 1.45; }
+
+.eg-cotizador__columns { display: grid; grid-template-columns: minmax(0, 58fr) minmax(340px, 42fr); gap: var(--eg-sp-4); align-items: start; }
+.eg-cotizador__panel { display: grid; gap: var(--eg-sp-3); padding: var(--eg-sp-4) !important; }
+.eg-cotizador__cabecera { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: var(--eg-sp-4); align-items: start; }
+.eg-cotizador__sep { height: 1px; background: var(--eg-border); }
+
+/* Cartel de adulto en sala. Alto fijo: solo cambia el texto y el color.
+   El margen de arriba lo alinea con el control, no con la etiqueta. */
+.eg-cotizador__sala { display: flex; align-items: center; min-height: var(--eg-h-input); margin-top: 26px; padding: var(--eg-sp-2) var(--eg-sp-4); border: 1px solid var(--eg-border-strong); font-size: var(--eg-fs-md); font-weight: 600; line-height: 1.35; }
+.eg-cotizador__sala.is-warning { border-color: var(--eg-warning); background: var(--eg-warning-soft); color: var(--eg-warning); }
+.eg-cotizador__sala.is-muted { color: var(--eg-text-dim); font-weight: 500; }
+
+/* Grilla de 3 columnas. Escaparty ocupa 2 filas y deja libre la última celda;
+   Juego social ocupa 1 fila. */
+.eg-cotizador__campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--eg-sp-3); align-items: start; }
+
+.eg-cotizador__readonly { color: var(--eg-text-dim); cursor: default; }
+.eg-cotizador__readonly:hover { background: var(--eg-bg); }
+.eg-cotizador__readonly:focus { border-color: var(--eg-border-strong); box-shadow: none; }
+
+/* Alto reservado para dos avisos: el total de abajo no se mueve. */
+.eg-cotizador__avisos { display: grid; align-content: start; gap: var(--eg-sp-2); }
+.eg-cotizador__aviso { display: flex; align-items: center; margin: 0; min-height: 44px; padding: var(--eg-sp-2) var(--eg-sp-3); border: 1px solid var(--eg-border-strong); font-size: var(--eg-fs-base); line-height: 1.4; }
+.eg-cotizador__aviso.is-info { border-color: rgba(77, 148, 255, .34); background: var(--eg-info-soft); color: var(--eg-text); }
+.eg-cotizador__aviso.is-warning { border-color: rgba(245, 166, 35, .34); background: var(--eg-warning-soft); color: var(--eg-text); }
+.eg-cotizador__aviso.is-danger { border-color: rgba(255, 77, 79, .34); background: var(--eg-danger-soft); color: var(--eg-text); }
+
+.eg-cotizador__total { display: grid; gap: var(--eg-sp-3); padding: var(--eg-sp-4); border: 1px solid var(--eg-border); background: var(--eg-surface-2); }
+.eg-cotizador__detalle { display: grid; gap: var(--eg-sp-2); margin: 0; padding: 0; list-style: none; }
+.eg-cotizador__detalle li { display: flex; align-items: baseline; justify-content: space-between; gap: var(--eg-sp-4); color: var(--eg-text-dim); font-size: var(--eg-fs-base); }
+.eg-cotizador__detalle strong { color: var(--eg-text); font-variant-numeric: tabular-nums; }
+.eg-cotizador__total-final { display: flex; align-items: baseline; justify-content: space-between; gap: var(--eg-sp-4); padding-top: var(--eg-sp-3); border-top: 1px solid var(--eg-border); }
+.eg-cotizador__total-final span { color: var(--eg-text-dim); font-size: var(--eg-fs-sm); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.eg-cotizador__total-final strong { color: var(--eg-accent); font-size: var(--eg-fs-stat); font-variant-numeric: tabular-nums; }
+
+/* Modal de valores base. Mismo molde que .eg-users-form. */
+.eg-cotizador-form { display: grid; gap: var(--eg-sp-5); }
+.eg-cotizador-form__section { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: var(--eg-sp-5); padding-bottom: var(--eg-sp-5); border-bottom: 1px solid var(--eg-border); }
+.eg-cotizador-form__section:last-child { padding-bottom: 0; border-bottom: 0; }
+.eg-cotizador-form__heading { display: flex; flex-direction: column; gap: 4px; }
+.eg-cotizador-form__heading strong { color: var(--eg-text); font-size: var(--eg-fs-sm); text-transform: uppercase; letter-spacing: .04em; }
+.eg-cotizador-form__heading span { color: var(--eg-text-dim); font-size: var(--eg-fs-xs); line-height: 1.4; }
+.eg-cotizador-form__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.eg-cotizador-form__spacer { min-height: 0; }
+.eg-cotizador-form__wide { grid-column: 1 / -1; }
+.eg-cotizador-form__nota { margin: var(--eg-sp-1) 0 var(--eg-sp-3); color: var(--eg-text-dim); font-size: var(--eg-fs-xs); line-height: 1.4; }
+/* Tabla de precios de Juego social: una celda por tamaño de grupo. */
+.eg-cotizador-precios { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.eg-cotizador-form__section--flag { align-items: center; }
+
+/* Preview en vivo de la escalera, al lado del decremento. */
+.eg-cotizador-preview { display: grid; gap: var(--eg-sp-3); padding: var(--eg-sp-3); border: 1px solid var(--eg-border); background: var(--eg-surface); }
+.eg-cotizador-preview__tabla { width: 100%; border-collapse: collapse; font-size: var(--eg-fs-sm); font-variant-numeric: tabular-nums; }
+.eg-cotizador-preview__tabla th { padding: var(--eg-sp-1) var(--eg-sp-2); color: var(--eg-text-dim); font-size: var(--eg-fs-xs); font-weight: 700; text-align: right; white-space: nowrap; }
+.eg-cotizador-preview__tabla thead th:first-child, .eg-cotizador-preview__tabla tbody th { text-align: left; }
+.eg-cotizador-preview__tabla tbody th { color: var(--eg-text); }
+.eg-cotizador-preview__tabla td { padding: var(--eg-sp-1) var(--eg-sp-2); border-top: 1px solid var(--eg-border); color: var(--eg-text); text-align: right; white-space: nowrap; }
+.eg-cotizador-preview__error { margin: 0; padding: var(--eg-sp-2) var(--eg-sp-3); border: 1px solid rgba(255, 77, 79, .34); background: var(--eg-danger-soft); color: var(--eg-text); font-size: var(--eg-fs-sm); line-height: 1.45; }
+.eg-cotizador-preview__error strong { color: var(--eg-danger); }
+.eg-cotizador-preview__ok { margin: 0; color: var(--eg-success); font-size: var(--eg-fs-sm); line-height: 1.45; }
+
+.eg-cotizador__detalle--cierre { padding-top: var(--eg-sp-3); border-top: 1px solid var(--eg-border); }
+
+.eg-cotizador-respuesta { display: grid; gap: var(--eg-sp-4); position: sticky; top: var(--eg-sp-4); min-width: 0; }
+.eg-cotizador-respuesta__header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--eg-sp-3); }
+.eg-cotizador-respuesta__header h2 { margin: 0; color: var(--eg-text); font-size: var(--eg-fs-md); text-transform: uppercase; letter-spacing: .04em; }
+.eg-cotizador-respuesta__header p { margin: 4px 0 0; color: var(--eg-text-dim); font-size: var(--eg-fs-xs); }
+.eg-cotizador-respuesta__preview { min-height: 290px; padding: var(--eg-sp-4); border: 1px solid var(--eg-border); background: var(--eg-surface-2); }
+.eg-cotizador-respuesta__preview p { margin: 0; color: var(--eg-text); font-size: var(--eg-fs-base); line-height: 1.65; white-space: pre-wrap; }
+.eg-cotizador-respuesta__preview.is-empty { display: grid; place-items: center; text-align: center; }
+.eg-cotizador-respuesta__preview.is-empty p { max-width: 280px; color: var(--eg-text-dim); }
+.eg-cotizador-template__meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--eg-sp-3); margin: 0 0 var(--eg-sp-4); }
+.eg-cotizador-template__meta div { padding: var(--eg-sp-3); border: 1px solid var(--eg-border); background: var(--eg-surface-2); }
+.eg-cotizador-template__meta dt { color: var(--eg-text-dim); font-size: var(--eg-fs-xs); text-transform: uppercase; }
+.eg-cotizador-template__meta dd { margin: 4px 0 0; color: var(--eg-text); font-weight: 600; }
+.eg-cotizador-template__textarea { box-sizing: border-box; width: 100%; min-height: 260px; margin-top: var(--eg-sp-2); padding: var(--eg-sp-3); resize: vertical; border: 1px solid var(--eg-border-strong); border-radius: 0; outline: 0; background: var(--eg-bg); color: var(--eg-text); font: inherit; line-height: 1.55; }
+.eg-cotizador-template__textarea:focus { border-color: var(--eg-accent); }
+.eg-cotizador-template__tokens { display: flex; flex-wrap: wrap; gap: var(--eg-sp-2); margin-top: var(--eg-sp-3); }
+.eg-cotizador-template__tokens button { padding: 6px 9px; border: 1px solid var(--eg-border-strong); background: var(--eg-surface-2); color: var(--eg-text); font: inherit; font-size: var(--eg-fs-xs); cursor: pointer; }
+.eg-cotizador-template__tokens button:hover { border-color: var(--eg-accent); color: var(--eg-accent); }
+.eg-cotizador-template__error { margin: var(--eg-sp-3) 0 0; color: var(--eg-danger); font-size: var(--eg-fs-sm); }
+
+/* Con tres columnas los rótulos largos de acompañantes se aprietan antes que
+   el resto del panel, así que colapsan a una sola antes. */
+@media (max-width: 1024px) {
+  .eg-cotizador__columns { grid-template-columns: 1fr; }
+  .eg-cotizador-respuesta { position: static; }
+  .eg-cotizador__campos { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 860px) {
+  .eg-cotizador__cabecera { grid-template-columns: 1fr; }
+  .eg-cotizador-form__spacer { display: none; }
+  .eg-cotizador-form__section { grid-template-columns: 1fr; gap: var(--eg-sp-3); }
+  .eg-cotizador-form__grid { grid-template-columns: 1fr; }
+  .eg-cotizador-precios { grid-template-columns: 1fr 1fr; }
+  .eg-cotizador-template__meta { grid-template-columns: 1fr; }
+}
+
+/* -------------------------------------------------------------------------
+   MODO COMPACTO POR ALTURA
+
+   Escaparty es la vista más alta del panel y no entraba en una notebook: 875px
+   de contenido contra los ~670px útiles de un 1366×768. El alto no venía de un
+   solo lugar sino de espacios muertos repetidos — gaps de la grilla, padding de
+   las Cards, y sobre todo los rótulos y textos de ayuda, que en columnas de
+   182px se iban a dos y tres líneas (67px solo en el bloque de campos).
+
+   Nada se oculta: los textos se recortan con puntos suspensivos y el texto
+   completo queda en el tooltip nativo. Todo va scopeado a `.eg-cotizador` y
+   apoyado en tokens locales, así ninguna otra pantalla del panel cambia. Por
+   encima de 900px de alto no se activa nada y el diseño queda como estaba.
+   ------------------------------------------------------------------------- */
+@media (max-height: 900px) {
+  /* Arriba se respeta el padding global para que el título arranque a la misma
+     altura que en el resto del admin; lo que se recorta es el resto. */
+  .eg-shell__content:has(.eg-cotizador) { padding: var(--eg-sp-4) var(--eg-content-pad) var(--eg-sp-2); }
+
+  .eg-cotizador {
+    /* Tokens locales: los controles bajan de 42 a 40px sin tocar el resto del
+       panel ni el modal de valores base, que vive fuera de este árbol. */
+    --eg-h-input: 40px;
+    --eg-h-btn: 40px;
+    gap: var(--eg-sp-2);
+  }
+
+  /* La banda pasa a una línea: mismo texto, sin el salto de párrafo. */
+  .eg-cotizador__banda { grid-template-columns: auto minmax(0, 1fr); gap: var(--eg-sp-3); align-items: baseline; padding: var(--eg-sp-2) var(--eg-sp-3); }
+
+  /* El texto de ayuda pasa a una línea: en columnas de 182px se iba a dos y
+     tres. El completo sigue disponible en el tooltip, así que se recorta la
+     altura, no la información. El rótulo se respeta mientras haya lugar. */
+  .eg-cotizador .eg-field { gap: 5px; }
+  .eg-cotizador .eg-field__help { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+  .eg-cotizador__panel { gap: 8px; padding: var(--eg-sp-3) !important; }
+  .eg-cotizador__cabecera { gap: var(--eg-sp-4); }
+  /* Sigue alineado con el control: alto del rótulo (17) + gap del campo (5). */
+  .eg-cotizador__sala { min-height: var(--eg-h-input); margin-top: 22px; padding: var(--eg-sp-2) var(--eg-sp-3); }
+  .eg-cotizador__campos { gap: 14px; }
+
+  /* Sin avisos no se paga el gap de una fila vacía. */
+  .eg-cotizador__avisos:empty { display: none; }
+  .eg-cotizador__aviso { min-height: 38px; }
+
+  .eg-cotizador__total { gap: 7px; padding: var(--eg-sp-3) var(--eg-sp-4) var(--eg-sp-2); }
+  .eg-cotizador__detalle { gap: 5px; }
+  .eg-cotizador__total-final { padding-top: 10px; }
+  .eg-cotizador__total-final strong { font-size: 21px; }
+  .eg-cotizador__detalle--cierre { padding-top: 10px; }
+
+  /* El panel derecho deja de reservar 290px fijos: crece con el mensaje. El
+     max-height es solo la válvula para una plantilla excepcionalmente larga. */
+  .eg-cotizador-respuesta { gap: 9px; padding: var(--eg-sp-4); }
+  .eg-cotizador-respuesta__preview { min-height: 0; max-height: calc(100vh - 330px); padding: 14px; overflow-y: auto; }
+}
+
+/* Notebooks de 768px: los rótulos largos de acompañantes pasan a una línea.
+   Es lo único que se recorta acá; las dimensiones siguen siendo las de arriba. */
+@media (max-height: 800px) {
+  .eg-cotizador .eg-field__label { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+}
+
+/**
+ * Textos completos cuando hay alto para pagarlos.
+ *
+ * Recortar con puntos suspensivos es el último recurso, no el default: apenas
+ * la ventana pasa los 740px de alto, rótulos y ayudas envuelven hasta tres
+ * líneas y se leen enteros. Por debajo no entran — medido: el texto completo
+ * cuesta ~62px y en 1366×768 quedan ~21px libres —, así que ahí siguen en una
+ * línea, con el texto completo en el tooltip.
+ */
+@media (min-height: 740px) and (max-height: 900px) {
+  .eg-cotizador .eg-field__label,
+  .eg-cotizador .eg-field__help {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+    white-space: normal;
+    line-height: 1.3;
+  }
+}
+
+/* Ventanas realmente bajas (navegador con muchas barras, pantallas chicas):
+   se vuelve al ajuste estricto para no generar scroll. */
+@media (max-height: 660px) {
+  .eg-shell__content:has(.eg-cotizador) { padding: var(--eg-sp-4) var(--eg-content-pad) var(--eg-sp-2); }
+  .eg-cotizador { --eg-h-input: 36px; --eg-h-btn: 36px; gap: var(--eg-sp-2); }
+  .eg-cotizador .eg-field { gap: 4px; }
+  .eg-cotizador__sala { margin-top: 21px; padding: var(--eg-sp-1) var(--eg-sp-3); }
+  .eg-cotizador__panel { gap: 5px; padding: var(--eg-sp-2) var(--eg-sp-3) !important; }
+  .eg-cotizador__cabecera { gap: var(--eg-sp-3); }
+  .eg-cotizador__campos { gap: var(--eg-sp-2); }
+  .eg-cotizador__aviso { min-height: 30px; }
+  .eg-cotizador__total { gap: 5px; padding: var(--eg-sp-3) var(--eg-sp-3) var(--eg-sp-2); }
+  .eg-cotizador__detalle { gap: 4px; }
+  .eg-cotizador__total-final { padding-top: var(--eg-sp-2); }
+  .eg-cotizador__detalle--cierre { padding-top: var(--eg-sp-2); }
+  .eg-cotizador-respuesta { gap: var(--eg-sp-2); padding: var(--eg-sp-3); }
+  .eg-cotizador-respuesta__preview { padding: var(--eg-sp-3); }
+}
+
+/* =========================================================================
+   AJUSTES — HABILITACIÓN DE SECCIONES
+
+   Sin estética propia: Card, Toggle y tipografías del sistema. Lo único que
+   define esta hoja es el ritmo de la lista y la sangría de las subsecciones.
+   ========================================================================= */
+.eg-settings { display: grid; gap: var(--eg-sp-4); min-width: 0; }
+.eg-settings__card { display: grid; gap: var(--eg-sp-4); }
+
+.eg-settings__heading { display: grid; gap: var(--eg-sp-1); }
+.eg-settings__heading h2 { margin: 0; color: var(--eg-text); font-size: var(--eg-fs-md); text-transform: uppercase; letter-spacing: .04em; }
+.eg-settings__heading p { margin: 0; color: var(--eg-text-dim); font-size: var(--eg-fs-base); line-height: 1.5; max-width: 62ch; }
+
+.eg-settings__alert { display: grid; gap: 2px; padding: var(--eg-sp-3) var(--eg-sp-4); border: 1px solid var(--eg-danger); background: var(--eg-danger-soft); }
+.eg-settings__alert strong { color: var(--eg-danger); font-size: var(--eg-fs-md); }
+.eg-settings__alert span { color: var(--eg-text-dim); font-size: var(--eg-fs-sm); line-height: 1.45; }
+
+.eg-settings__loading { margin: 0; color: var(--eg-text-dim); font-size: var(--eg-fs-base); }
+
+.eg-settings__list { display: grid; border: 1px solid var(--eg-border); border-radius: var(--eg-radius); overflow: hidden; }
+.eg-settings__row { padding: var(--eg-sp-3) var(--eg-sp-4); border-bottom: 1px solid var(--eg-border); background: var(--eg-surface-2); }
+.eg-settings__row:last-child { border-bottom: 0; }
+/* Subsección de Intranet: se sangra para que se lea la jerarquía. */
+.eg-settings__row.is-child { padding-left: var(--eg-sp-8); background: var(--eg-surface); }
+.eg-settings__row .eg-toggle { width: 100%; }

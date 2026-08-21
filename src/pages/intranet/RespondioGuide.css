@@ -1,0 +1,63 @@
+.rg-page { display: grid; gap: var(--eg-sp-5); min-width: 0; color: var(--eg-text); }
+.rg-page p { margin: 0; color: var(--eg-text-dim); font-size: var(--eg-fs-md); line-height: 1.65; }
+.rg-page code { padding: 2px 6px; border: 1px solid var(--eg-border); border-radius: var(--eg-radius-sm); background: var(--eg-bg); color: var(--eg-text); font-family: inherit; font-weight: 700; }
+.rg-search { max-width: 720px; }
+.rg-layout { display: grid; grid-template-columns: minmax(0, 1fr) 244px; gap: var(--eg-sp-8); align-items: start; }
+.rg-content { min-width: 0; }
+.rg-section { padding: 0 0 48px; margin: 0 0 48px; border-bottom: 1px solid var(--eg-border); scroll-margin-top: 84px; }
+.rg-section:last-child { margin-bottom: 0; }
+.rg-section > * + * { margin-top: var(--eg-sp-4); }
+.rg-section h2 { margin: 0; color: var(--eg-text); font-size: 22px; line-height: 1.3; }
+.rg-section h3 { margin: var(--eg-sp-6) 0 0; color: var(--eg-text); font-size: var(--eg-fs-lg); }
+.rg-section ul { display: grid; gap: var(--eg-sp-2); margin: var(--eg-sp-4) 0 0; padding-left: 24px; color: var(--eg-text-dim); line-height: 1.55; }
+.rg-index { position: sticky; top: calc(var(--eg-h-topbar) + var(--eg-sp-5)); padding-left: var(--eg-sp-5); border-left: 1px solid var(--eg-border); }
+.rg-index > strong { display: block; margin-bottom: var(--eg-sp-3); color: var(--eg-text); font-size: var(--eg-fs-sm); text-transform: uppercase; letter-spacing: .05em; }
+.rg-index nav { display: grid; }
+.rg-index button { min-height: 40px; padding: var(--eg-sp-2); border: 0; border-radius: var(--eg-radius-sm); background: transparent; color: var(--eg-text-dim); font: inherit; font-size: var(--eg-fs-base); text-align: left; cursor: pointer; }
+.rg-index button:hover, .rg-index button:focus-visible { outline: none; background: var(--eg-surface-2); color: var(--eg-accent); }
+.rg-notice { display: grid; gap: var(--eg-sp-2); padding: var(--eg-sp-4); border: 1px solid rgba(77,148,255,.34); border-left: 3px solid var(--eg-info); border-radius: var(--eg-radius-sm); background: var(--eg-info-soft); }
+.rg-notice > strong { color: var(--eg-text); font-size: var(--eg-fs-md); }
+.rg-notice--important { border-color: rgba(245,166,35,.34); border-left-color: var(--eg-warning); background: var(--eg-warning-soft); }
+.rg-notice--danger { border-color: rgba(255,77,79,.4); border-left-color: var(--eg-danger); background: var(--eg-danger-soft); }
+.rg-notice--success { border-color: rgba(62,207,142,.34); border-left-color: var(--eg-success); background: var(--eg-success-soft); }
+.rg-notice div { display: grid; gap: var(--eg-sp-1); }
+.rg-points { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: var(--eg-sp-5); }
+.rg-points > div { padding-left: var(--eg-sp-4); border-left: 2px solid var(--eg-accent-border); }
+.rg-points b { display: block; margin-bottom: var(--eg-sp-1); color: var(--eg-text); }
+.rg-definitions { display: grid; grid-template-columns: 180px minmax(0,1fr); gap: var(--eg-sp-4) var(--eg-sp-5); align-items: start; }
+.rg-definitions h3, .rg-definitions p, .rg-definitions .rg-notice { margin: 0; }
+.rg-definitions .rg-notice { grid-column: 2; }
+.rg-shot { position: relative; display: flex; width: fit-content; max-width: min(100%, 920px); min-height: 44px; max-height: 560px; margin-inline: auto; padding: 0; overflow: hidden; border: 1px solid var(--eg-border-strong); border-radius: var(--eg-radius); background: var(--eg-surface); cursor: zoom-in; }
+.rg-shot img { display: block; width: auto; max-width: 100%; height: auto; max-height: 558px; object-fit: contain; }
+.rg-shot > span { position: absolute; right: var(--eg-sp-3); bottom: var(--eg-sp-3); padding: 6px 9px; border-radius: var(--eg-radius-sm); background: var(--eg-overlay); color: var(--eg-text); font-size: var(--eg-fs-xs); opacity: 0; transition: opacity var(--eg-t-fast); }
+.rg-shot:hover > span, .rg-shot:focus-visible > span { opacity: 1; }
+.rg-shot-pair { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: var(--eg-sp-4); align-items: start; }
+.rg-shot-pair .rg-shot { width: 100%; max-height: 420px; }
+.rg-shot-pair .rg-shot img { width: 100%; max-height: 418px; }
+.rg-media-row { display: grid; grid-template-columns: minmax(220px, 34%) minmax(0, 1fr); gap: var(--eg-sp-6); align-items: start; }
+.rg-media-row--narrow { grid-template-columns: minmax(180px, 26%) minmax(0, 1fr); }
+.rg-media-row .rg-shot { width: 100%; max-height: 640px; margin: 0; }
+.rg-media-row .rg-shot img { width: 100%; max-height: 638px; }
+.rg-media-row .rg-definitions { grid-template-columns: 170px minmax(0, 1fr); }
+.rg-media-row .rg-points { grid-template-columns: 1fr; gap: var(--eg-sp-4); }
+.rg-media-row > .rg-notice, .rg-media-row > p { margin-top: 0; }
+.rg-shot-missing { display: grid; gap: var(--eg-sp-1); min-height: 180px; padding: var(--eg-sp-6); place-content: center; border: 1px dashed var(--eg-border-strong); border-radius: var(--eg-radius); background: var(--eg-surface); color: var(--eg-text-dim); text-align: center; }
+.rg-shot-missing strong { color: var(--eg-warning); }
+.rg-shot-missing code { overflow-wrap: anywhere; }
+.rg-steps { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.rg-steps li { position: relative; display: grid; grid-template-columns: 88px minmax(0,1fr); gap: var(--eg-sp-4); min-height: 64px; padding: var(--eg-sp-3) 0; }
+.rg-steps li:not(:last-child)::after { content: ""; position: absolute; top: 49px; bottom: -15px; left: 39px; width: 1px; background: var(--eg-border-strong); }
+.rg-steps li > span { display: grid; place-items: center; align-self: start; min-height: 34px; border: 1px solid var(--eg-accent-border); border-radius: var(--eg-radius-pill); background: var(--eg-accent-soft); color: var(--eg-accent); font-size: var(--eg-fs-xs); font-weight: 800; }
+.rg-steps li > div { padding-top: 7px; color: var(--eg-text); font-size: var(--eg-fs-md); line-height: 1.5; }
+.rg-cases { display: grid; border-top: 1px solid var(--eg-border); }
+.rg-cases p { display: flex; justify-content: space-between; gap: var(--eg-sp-4); padding: var(--eg-sp-3) 0; border-bottom: 1px solid var(--eg-border); }
+.rg-filter-note, .rg-empty { margin-bottom: var(--eg-sp-6); padding: var(--eg-sp-3) var(--eg-sp-4); border: 1px solid var(--eg-border); border-radius: var(--eg-radius-sm); background: var(--eg-surface); color: var(--eg-text-dim); font-size: var(--eg-fs-base); }
+.rg-filter-note button { min-height: 40px; margin-left: var(--eg-sp-2); border: 0; background: transparent; color: var(--eg-accent); font: inherit; cursor: pointer; }
+.rg-empty { display: grid; gap: var(--eg-sp-2); padding: var(--eg-sp-8); text-align: center; }
+.rg-empty strong { color: var(--eg-text); }
+.rg-lightbox { max-width: min(1400px, calc(100vw - 40px)); }
+.rg-lightbox .eg-modal__body { padding: 0; background: var(--eg-bg); }
+.rg-lightbox img { display: block; width: 100%; max-height: calc(100vh - 130px); object-fit: contain; }
+@media (max-width: 980px) { .rg-layout { display: flex; flex-direction: column-reverse; gap: var(--eg-sp-6); } .rg-index { position: static; width: 100%; padding: var(--eg-sp-4); border: 1px solid var(--eg-border); border-radius: var(--eg-radius); background: var(--eg-surface); } .rg-index nav { grid-template-columns: repeat(2,minmax(0,1fr)); } .rg-content { width: 100%; } }
+@media (max-width: 760px) { .rg-media-row, .rg-media-row--narrow { grid-template-columns: 1fr; } .rg-media-row .rg-shot { width: fit-content; max-width: 100%; max-height: 440px; margin-inline: auto; } .rg-media-row .rg-shot img { width: auto; max-height: 438px; } }
+@media (max-width: 640px) { .rg-page { gap: var(--eg-sp-4); } .rg-index nav, .rg-points, .rg-shot-pair { grid-template-columns: 1fr; } .rg-section { padding-bottom: 36px; margin-bottom: 36px; } .rg-section h2 { font-size: 19px; } .rg-definitions, .rg-media-row .rg-definitions { grid-template-columns: 1fr; gap: var(--eg-sp-2); } .rg-definitions h3 { margin-top: var(--eg-sp-3); } .rg-definitions .rg-notice { grid-column: auto; } .rg-cases p { align-items: flex-start; flex-direction: column; } .rg-shot, .rg-shot-pair .rg-shot { width: 100%; max-height: 380px; } .rg-shot img, .rg-shot-pair .rg-shot img { width: 100%; max-height: 378px; } .rg-media-row .rg-shot { width: fit-content; } .rg-media-row .rg-shot img { width: auto; } .rg-shot > span { display: none; } .rg-steps li { grid-template-columns: 76px minmax(0,1fr); gap: var(--eg-sp-3); } .rg-steps li:not(:last-child)::after { left: 33px; } }

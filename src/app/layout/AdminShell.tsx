@@ -10,6 +10,8 @@ type Props = {
   crumbs: Crumb[];
   userName: string;
   userRole: string;
+  /** Ruta de Ajustes. Sin esto, el ítem del pie queda deshabilitado. */
+  settingsTo?: string;
   onLogout: () => void;
   children: React.ReactNode;
 };
@@ -39,6 +41,7 @@ export default function AdminShell({
   crumbs,
   userName,
   userRole,
+  settingsTo,
   onLogout,
   children,
 }: Props) {
@@ -96,8 +99,7 @@ export default function AdminShell({
         activeKey={activeKey}
         collapsed={collapsed}
         onToggleCollapse={toggleCollapse}
-        userName={userName}
-        userRole={userRole}
+        settingsTo={settingsTo}
         onLogout={onLogout}
         onNavigate={() => setMobileOpen(false)}
       />
@@ -112,7 +114,12 @@ export default function AdminShell({
       )}
 
       <div className="eg-shell__main">
-        <AdminTopbar crumbs={crumbs} onOpenMenu={() => setMobileOpen(true)} />
+        <AdminTopbar
+          crumbs={crumbs}
+          userName={userName}
+          userRole={userRole}
+          onOpenMenu={() => setMobileOpen(true)}
+        />
         <main className="eg-shell__content">{children}</main>
       </div>
     </div>

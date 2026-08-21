@@ -28,6 +28,8 @@ export type IconName =
   | "users"
   | "ticket"
   | "progress"
+  | "intranet"
+  | "calendar"
   | "settings"
   | "logout"
   // Chrome
@@ -35,7 +37,14 @@ export type IconName =
   | "chevronRight"
   | "close"
   | "plus"
-  | "search";
+  | "search"
+  // Chat interno
+  | "chat"
+  | "send"
+  | "attach"
+  | "emoji"
+  | "minimize"
+  | "bell";
 
 type Props = {
   name: IconName;
@@ -264,6 +273,24 @@ export default function Icon({ name, size = 16, className, style }: Props) {
         </svg>
       );
 
+    case "intranet":
+      return (
+        <svg {...common}>
+          <rect x="3" y="7" width="18" height="13" rx="2.5" stroke="currentColor" strokeWidth={S} />
+          <path d="M8 7V5.5A1.5 1.5 0 0 1 9.5 4h5A1.5 1.5 0 0 1 16 5.5V7" stroke="currentColor" strokeWidth={S} />
+          <path d="M3 12h18M10 12v2h4v-2" stroke="currentColor" strokeWidth={S} strokeLinejoin="round" />
+        </svg>
+      );
+
+    case "calendar":
+      return (
+        <svg {...common}>
+          <rect x="3" y="5" width="18" height="16" rx="2.5" stroke="currentColor" strokeWidth={S} />
+          <path d="M8 3v4M16 3v4M3 10h18" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+          <path d="M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+        </svg>
+      );
+
     case "settings":
       return (
         <svg {...common}>
@@ -314,6 +341,75 @@ export default function Icon({ name, size = 16, className, style }: Props) {
         <svg {...common}>
           <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth={S} />
           <path d="m16 16 4 4" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+        </svg>
+      );
+
+    /* ------------------------------ Chat ------------------------------ */
+
+    case "chat":
+      return (
+        <svg {...common}>
+          <path
+            d="M20 12.2a7.2 7.2 0 0 1-7.2 7.2H8.4L4.5 22v-4.2a7.2 7.2 0 0 1 8.3-11.6 7.2 7.2 0 0 1 7.2 6.0Z"
+            stroke="currentColor"
+            strokeWidth={S}
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+
+    case "send":
+      return (
+        <svg {...common}>
+          <path
+            d="M4.5 12 20 4.5 12.5 20l-2-6.5-6-1.5Z"
+            stroke="currentColor"
+            strokeWidth={S}
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+
+    case "attach":
+      return (
+        <svg {...common}>
+          <path
+            d="M18 11.5 12 17.5a4 4 0 0 1-5.6-5.6l6.5-6.5a2.6 2.6 0 0 1 3.7 3.7l-6.5 6.5a1.2 1.2 0 0 1-1.7-1.7l6-6"
+            stroke="currentColor"
+            strokeWidth={S}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      );
+
+    case "emoji":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth={S} />
+          <circle cx="9.4" cy="10.2" r="1" fill="currentColor" />
+          <circle cx="14.6" cy="10.2" r="1" fill="currentColor" />
+          <path d="M8.8 14.2a4 4 0 0 0 6.4 0" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+        </svg>
+      );
+
+    case "minimize":
+      return (
+        <svg {...common}>
+          <path d="M6 15h12" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+        </svg>
+      );
+
+    case "bell":
+      return (
+        <svg {...common}>
+          <path
+            d="M18 16.5H6l1.4-2.1V11a4.6 4.6 0 0 1 9.2 0v3.4L18 16.5Z"
+            stroke="currentColor"
+            strokeWidth={S}
+            strokeLinejoin="round"
+          />
+          <path d="M10.4 19.2a1.9 1.9 0 0 0 3.2 0" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
         </svg>
       );
 

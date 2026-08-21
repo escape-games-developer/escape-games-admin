@@ -110,8 +110,6 @@ export default function UiPreview() {
                 activeKey={activeKey}
                 collapsed={false}
                 onToggleCollapse={noop}
-                userName="Magdiaz"
-                userRole="Admin General"
                 onLogout={noop}
               />
             </div>
@@ -122,8 +120,6 @@ export default function UiPreview() {
                 activeKey={activeKey}
                 collapsed
                 onToggleCollapse={noop}
-                userName="Magdiaz"
-                userRole="Admin General"
                 onLogout={noop}
               />
             </div>
@@ -352,8 +348,6 @@ export default function UiPreview() {
               activeKey={activeKey}
               collapsed={collapsed}
               onToggleCollapse={() => setCollapsed((v) => !v)}
-              userName="Magdiaz"
-              userRole="Admin General"
               onLogout={noop}
             />
           </div>
