@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import AdminSidebar, { type NavItem } from "./AdminSidebar";
 import AdminTopbar, { type Crumb } from "./AdminTopbar";
 
@@ -47,6 +48,26 @@ export default function AdminShell({
 }: Props) {
   const [collapsed, setCollapsed] = useState<boolean>(readCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { pathname } = useLocation();
+  const contentRef = useRef<HTMLElement>(null);
+
+  /**
+   * Entrada suave del contenido al cambiar de sección.
+   *
+   * A propósito NO se usa `key={pathname}`: eso remontaría la página y, en
+   * Intranet (donde varias rutas comparten el mismo componente), dispararía
+   * fetches que hoy no ocurren. Se reinicia la animación a mano — quitar la
+   * clase, forzar un reflow, volver a ponerla — así el sidebar, la topbar y el
+   * árbol de la página quedan intactos. El corte por `prefers-reduced-motion`
+   * está en el CSS.
+   */
+  useLayoutEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    el.classList.remove("is-entering");
+    void el.offsetWidth;
+    el.classList.add("is-entering");
+  }, [pathname]);
 
   const toggleCollapse = useCallback(() => {
     setCollapsed((prev) => {
@@ -120,7 +141,7 @@ export default function AdminShell({
           userRole={userRole}
           onOpenMenu={() => setMobileOpen(true)}
         />
-        <main className="eg-shell__content">{children}</main>
+        <main className="eg-shell__content" ref={contentRef}>{children}</main>
       </div>
     </div>
   );

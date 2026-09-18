@@ -3,7 +3,7 @@ import { QRCodeCanvas } from "qrcode.react";
 
 import type { ToastKind } from "./Toast";
 import {
-  fetchAppConfig,
+  fetchGoldenQrSecret,
   goldenQrValue,
   rotateGoldenQrSecret,
 } from "../lib/appConfig";
@@ -139,8 +139,7 @@ export default function GoldenTicketManagementModal({
     setSecretLoading(true);
 
     try {
-      const cfg = await fetchAppConfig();
-      setSecret(cfg.goldenQrSecret);
+      setSecret(await fetchGoldenQrSecret());
     } catch (err: any) {
       console.error(err);
       setSecret(null);
@@ -179,24 +178,12 @@ export default function GoldenTicketManagementModal({
     setRotating(true);
 
     try {
+      /* El RPC ya devuelve el secret nuevo y `app_config` no lo expone más:
+         se usa ese valor directamente, sin una segunda consulta. */
       const next = await rotateGoldenQrSecret();
+      if (!next) throw new Error("El secret nuevo llegó vacío.");
 
-      /* El RPC devuelve el secret nuevo, pero la fuente de verdad es
-         `app_config`: se relee para que el QR de abajo salga del valor
-         realmente persistido y no de una copia optimista. */
-      let persisted: string | null = null;
-      try {
-        const cfg = await fetchAppConfig();
-        persisted = cfg.goldenQrSecret;
-      } catch (err) {
-        // Si la relectura falla nos quedamos con lo que devolvió el RPC.
-        console.error(err);
-      }
-
-      const applied = persisted || next;
-      if (!applied) throw new Error("El secret nuevo llegó vacío.");
-
-      setSecret(applied);
+      setSecret(next);
       toast("success", "Secret rotado. Los QR anteriores dejaron de funcionar.");
     } catch (err: any) {
       console.error(err);

@@ -23,7 +23,9 @@ export type SectionKey =
   | "intranet_messages"
   | "intranet_objections"
   | "intranet_respond_io"
+  | "metrics"
   | "calendar"
+  | "recontactos"
   | "chat";
 
 /**
@@ -59,12 +61,18 @@ export const SECTION_DEFS: readonly SectionDef[] = [
   { key: "users", label: "Usuarios", path: "/usuarios" },
   { key: "golden_ticket", label: "Golden Ticket", path: "/golden-tickets" },
   { key: "user_progress", label: "Progreso usuarios", path: "/usuarios/progreso" },
+  // Métricas son cinco rutas (Resumen, Sucursales, Campañas, Ventas,
+  // Diagnóstico) bajo una sola llave: el switch enciende o apaga el grupo
+  // entero, igual que lo pide Ajustes. `path` apunta a Resumen y no a
+  // `/metricas`, que es solo un redirect.
+  { key: "metrics", label: "Métricas", path: "/metricas/resumen" },
   { key: "intranet", label: "Intranet" },
   { key: "intranet_quote", label: "Cotizador", parent: "intranet", path: "/admin/intranet/cotizador" },
   { key: "intranet_messages", label: "Mensajes", parent: "intranet", path: "/admin/intranet/mensajes" },
   { key: "intranet_objections", label: "Menú de Objeciones", parent: "intranet", path: "/admin/intranet/objeciones" },
   { key: "intranet_respond_io", label: "Instructivo Respond IO", parent: "intranet", path: "/admin/intranet/respond-io" },
   { key: "calendar", label: "Calendario", path: "/admin/calendario" },
+  { key: "recontactos", label: "Recontactos", path: "/admin/recontactos" },
   { key: "chat", label: "Chat interno", path: "/chat" },
 ];
 
@@ -78,7 +86,7 @@ const CACHE_KEY = "eg_admin_section_permissions_v1";
  * habilitado": es lo imprescindible para que un asesor pueda cotizar, que es
  * el uso que esta publicación garantiza.
  */
-const GM_MINIMO: SectionPermissions = { intranet: true, intranet_quote: true };
+const GM_MINIMO: SectionPermissions = { intranet: true, intranet_quote: true, recontactos: false };
 
 /* =======================
    LECTURA

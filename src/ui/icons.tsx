@@ -30,6 +30,7 @@ export type IconName =
   | "progress"
   | "intranet"
   | "calendar"
+  | "recontactos"
   | "settings"
   | "logout"
   // Chrome
@@ -44,7 +45,13 @@ export type IconName =
   | "attach"
   | "emoji"
   | "minimize"
-  | "bell";
+  | "bell"
+  // Métricas
+  | "metrics"
+  | "target"
+  | "money"
+  | "ads"
+  | "trending";
 
 type Props = {
   name: IconName;
@@ -291,6 +298,14 @@ export default function Icon({ name, size = 16, className, style }: Props) {
         </svg>
       );
 
+    case "recontactos":
+      return (
+        <svg {...common}>
+          <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H8l-4 2.5v-4.2A7.5 7.5 0 1 1 20 11.5Z" stroke="currentColor" strokeWidth={S} strokeLinejoin="round" />
+          <path d="M9 9h7M9 13h4" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+        </svg>
+      );
+
     case "settings":
       return (
         <svg {...common}>
@@ -410,6 +425,55 @@ export default function Icon({ name, size = 16, className, style }: Props) {
             strokeLinejoin="round"
           />
           <path d="M10.4 19.2a1.9 1.9 0 0 0 3.2 0" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+        </svg>
+      );
+
+    /* ------------------------------ Métricas ------------------------------ */
+
+    case "metrics":
+      return (
+        <svg {...common}>
+          <path d="M4 20h16" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+          <path d="M7 20v-6M12 20V6M17 20v-9" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+        </svg>
+      );
+
+    case "target":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth={S} />
+          <circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth={S} />
+          <circle cx="12" cy="12" r="1" fill="currentColor" />
+        </svg>
+      );
+
+    case "money":
+      return (
+        <svg {...common}>
+          <rect x="3" y="6" width="18" height="12" rx="2" stroke="currentColor" strokeWidth={S} />
+          <circle cx="12" cy="12" r="2.6" stroke="currentColor" strokeWidth={S} />
+          <path d="M6.5 12h.01M17.5 12h.01" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+        </svg>
+      );
+
+    case "ads":
+      return (
+        <svg {...common}>
+          <path
+            d="M4 10v4h3l6 4V6l-6 4H4Z"
+            stroke="currentColor"
+            strokeWidth={S}
+            strokeLinejoin="round"
+          />
+          <path d="M17.5 9.5a4 4 0 0 1 0 5" stroke="currentColor" strokeWidth={S} strokeLinecap="round" />
+        </svg>
+      );
+
+    case "trending":
+      return (
+        <svg {...common}>
+          <path d="M4 16l5-5 3.5 3.5L20 8" stroke="currentColor" strokeWidth={S} strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M15 8h5v5" stroke="currentColor" strokeWidth={S} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       );
 

@@ -10,12 +10,23 @@ import News from ".././pages/News";
 import Users from ".././pages/Users";
 import UserProgressPage from ".././pages/UserProgressPage";
 import GoldenTicketAdmin from ".././pages/GoldenTicketAdmin";
+import Promotions from ".././pages/Promotions";
 import UiPreview from ".././pages/UiPreview";
 import IntranetPage from ".././pages/IntranetPage";
 import CalendarPage from ".././pages/CalendarPage";
 import ChatPage from ".././pages/ChatPage";
 import SettingsPage from ".././pages/SettingsPage";
+import RecontactosPage from ".././pages/RecontactosPage";
+import type { MetricsSection } from ".././pages/metrics/MetricsPage";
 import SectionGuard from ".././components/SectionGuard";
+
+/**
+ * Métricas se carga aparte. Es la única pantalla que usa Recharts, y esa
+ * librería pesa más que varias secciones juntas: metida en el bundle principal
+ * se la bancarían también los GM, que ni siquiera ven la sección. Mismo recurso
+ * que ya usa Novedades con el selector de emojis.
+ */
+const MetricsPage = React.lazy(() => import(".././pages/metrics/MetricsPage"));
 
 type UserRole = "CLIENT" | "GM" | "ADMIN" | "ADMIN_GENERAL";
 
@@ -78,6 +89,34 @@ function RequirePerm({
   if (!ok) return <Navigate to="/salas" replace />;
 
   return <>{children}</>;
+}
+
+/**
+ * Gate + límite de Suspense de Métricas, para no repetirlos en las cinco rutas.
+ *
+ * Dos capas, como el resto del panel:
+ *   · RequireRole    → los tres perfiles del panel. Sigue frenando a CLIENT
+ *                      y a cualquier rol que se agregue mañana.
+ *   · SectionGuard   → la habilitación de Ajustes. Para ADMIN_GENERAL y ADMIN
+ *                      siempre pasa; para GM manda el switch.
+ *
+ * GM entró a la lista de roles en esta versión: antes la ruta era solo para
+ * perfiles administrativos, y sin ese cambio el switch de Ajustes no podría
+ * darle acceso a nadie — quedaría un toggle que no hace nada.
+ *
+ * El Suspense va ADENTRO del guard a propósito: así un GM sin la sección
+ * habilitada ni siquiera descarga el chunk de Métricas.
+ */
+function Metricas({ section }: { section: MetricsSection }) {
+  return (
+    <RequireRole allow={["ADMIN_GENERAL", "ADMIN", "GM"]}>
+      <SectionGuard section="metrics">
+        <React.Suspense fallback={<div className="eg-page-loading">Cargando métricas…</div>}>
+          <MetricsPage section={section} />
+        </React.Suspense>
+      </SectionGuard>
+    </RequireRole>
+  );
 }
 
 /*
@@ -191,6 +230,33 @@ export default function AppRoutes() {
           }
         />
 
+        {/* Beneficios › Promociones. Etapa visual con datos mock: sin clave en
+            admin_section_permissions todavía, así que el gate es solo el rol. */}
+        <Route
+          path="/beneficios/promociones"
+          element={
+            <RequireRole allow={["ADMIN_GENERAL", "ADMIN"]}>
+              <Promotions />
+            </RequireRole>
+          }
+        />
+
+        {/*
+          Métricas. Etapa visual con datos mock, igual que Promociones: no hay
+          clave en `admin_section_permissions` todavía, así que el único gate
+          es el rol. Cuando la sección se conecte al sistema de atribución hay
+          que sumarle su `SectionGuard`, como el resto.
+
+          `/metricas` sin subsección rebota a Resumen, que es la única que hoy
+          muestra datos.
+        */}
+        <Route path="/metricas" element={<Navigate to="/metricas/resumen" replace />} />
+        <Route path="/metricas/resumen" element={<Metricas section="resumen" />} />
+        <Route path="/metricas/sucursales" element={<Metricas section="sucursales" />} />
+        <Route path="/metricas/campanas" element={<Metricas section="campanas" />} />
+        <Route path="/metricas/ventas" element={<Metricas section="ventas" />} />
+        <Route path="/metricas/diagnostico" element={<Metricas section="diagnostico" />} />
+
         <Route
           path="/usuarios/progreso"
           element={
@@ -207,17 +273,19 @@ export default function AppRoutes() {
         <Route path="/admin/intranet/objeciones" element={<SectionGuard section="intranet_objections"><IntranetPage section="objeciones" /></SectionGuard>} />
         <Route path="/admin/intranet/respond-io" element={<SectionGuard section="intranet_respond_io"><IntranetPage section="respond-io" /></SectionGuard>} />
         <Route path="/admin/calendario" element={<SectionGuard section="calendar"><CalendarPage /></SectionGuard>} />
+        <Route path="/admin/recontactos" element={<SectionGuard section="recontactos"><RecontactosPage /></SectionGuard>} />
 
         {/* Chat interno. Etapa de UI: no toca datos, así que su único gate es
             la habilitación de sección. */}
         <Route path="/chat" element={<SectionGuard section="chat"><ChatPage /></SectionGuard>} />
 
-        {/* Ajustes: solo Admin General, ni por URL. La RLS lo respalda del
-            lado de la base, así que esconder la pantalla no es la defensa. */}
+        {/* Ajustes: solo perfiles administrativos, ni GM ni CLIENT por URL.
+            La RLS lo respalda del lado de la base, así que esconder la
+            pantalla no es la defensa. */}
         <Route
           path="/ajustes"
           element={
-            <RequireRole allow={["ADMIN_GENERAL"]}>
+            <RequireRole allow={["ADMIN_GENERAL", "ADMIN"]}>
               <SettingsPage />
             </RequireRole>
           }

@@ -89,6 +89,24 @@
   overflow-x: clip;
 }
 
+/* Entrada del contenido al cambiar de sección. Solo el área central: el
+   sidebar y la topbar no se tocan. La clase la reinicia AdminShell en cada
+   cambio de ruta. */
+@keyframes eg-route-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.eg-shell__content.is-entering {
+  animation: eg-route-in 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eg-shell__content.is-entering {
+    animation: none;
+  }
+}
+
 .eg-admin-boot {
   display: flex;
   align-items: center;
@@ -107,6 +125,19 @@
   border-top-color: var(--eg-accent);
   border-radius: var(--eg-radius-pill);
   animation: eg-spin .7s linear infinite;
+}
+
+/* Placeholder de una página que se carga bajo demanda (React.lazy). Mismo
+   gesto que el arranque del panel, pero dentro del área de contenido: el
+   sidebar y la topbar ya están y no tienen por qué parpadear. */
+.eg-page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--eg-sp-3);
+  min-height: 280px;
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-base);
 }
 
 /* Novedades ------------------------------------------------------------ */

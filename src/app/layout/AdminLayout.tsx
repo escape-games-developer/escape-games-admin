@@ -6,6 +6,7 @@ import type { NavItem } from "./AdminSidebar";
 import type { Crumb } from "./AdminTopbar";
 import ChatProvider from "../../components/chat/ChatProvider";
 import ChatFloatingManager from "../../components/chat/ChatFloatingManager";
+import { getBranchSheets, getRecontactosConfig } from "../../services/recontactos/recontactosService";
 import {
   SECTION_UNRESTRICTED_ROLES,
   cacheSectionPermissions,
@@ -52,13 +53,20 @@ const pageMeta: Record<string, { key: string; crumbs: Crumb[] }> = {
   "/salas": { key: "rooms", crumbs: [{ label: "Salas" }, { label: "Listado" }] },
   "/novedades": { key: "news", crumbs: [{ label: "Novedades" }, { label: "Listado" }] },
   "/usuarios": { key: "users", crumbs: [{ label: "Usuarios" }, { label: "Listado" }] },
-  "/golden-tickets": { key: "tickets", crumbs: [{ label: "Golden Ticket" }, { label: "Solicitudes" }] },
+  "/golden-tickets": { key: "tickets", crumbs: [{ label: "Beneficios" }, { label: "Golden Ticket" }] },
+  "/beneficios/promociones": { key: "promotions", crumbs: [{ label: "Beneficios" }, { label: "Promociones" }] },
   "/usuarios/progreso": { key: "progress", crumbs: [{ label: "Progreso" }, { label: "Usuarios" }] },
+  "/metricas/resumen": { key: "metrics-resumen", crumbs: [{ label: "Métricas" }, { label: "Resumen" }] },
+  "/metricas/sucursales": { key: "metrics-sucursales", crumbs: [{ label: "Métricas" }, { label: "Sucursales" }] },
+  "/metricas/campanas": { key: "metrics-campanas", crumbs: [{ label: "Métricas" }, { label: "Campañas" }] },
+  "/metricas/ventas": { key: "metrics-ventas", crumbs: [{ label: "Métricas" }, { label: "Ventas" }] },
+  "/metricas/diagnostico": { key: "metrics-diagnostico", crumbs: [{ label: "Métricas" }, { label: "Diagnóstico" }] },
   "/admin/intranet/cotizador": { key: "intranet-cotizador", crumbs: [{ label: "Intranet" }, { label: "Cotizador" }] },
   "/admin/intranet/mensajes": { key: "intranet-mensajes", crumbs: [{ label: "Intranet" }, { label: "Mensajes" }] },
   "/admin/intranet/objeciones": { key: "intranet-objeciones", crumbs: [{ label: "Intranet" }, { label: "Menú de Objeciones" }] },
   "/admin/intranet/respond-io": { key: "intranet-respond-io", crumbs: [{ label: "Intranet" }, { label: "Instructivo Respond IO" }] },
   "/admin/calendario": { key: "calendar", crumbs: [{ label: "Calendario" }] },
+  "/admin/recontactos": { key: "recontactos", crumbs: [{ label: "Recontactos" }, { label: "Cumpleaños" }] },
   "/chat": { key: "chat", crumbs: [{ label: "Chat interno" }, { label: "Conversaciones" }] },
   "/ajustes": { key: "settings", crumbs: [{ label: "Ajustes" }, { label: "Habilitación de secciones" }] },
 };
@@ -79,6 +87,17 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const bootVersion = useRef(0);
+  /**
+   * `useNavigate` devuelve una función NUEVA en cada cambio de ruta (depende de
+   * `locationPathname` en react-router). Tenerla como dependencia del boot hacía
+   * que navegar entre secciones volviera a correr todo el arranque —y con él
+   * `setReady(false)`—, o sea: se desmontaba el panel entero y se veía el
+   * spinner de "Preparando el panel…" en cada click del sidebar. Guardarla en un
+   * ref deja el efecto corriendo una sola vez, al montar.
+   */
+  const navigateRef = useRef(navigate);
+  /** Usuario ya booteado. Permite ignorar los eventos de auth que no cambian la sesión. */
+  const bootedUserId = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
   const [userName, setUserName] = useState("Administrador");
   const [role, setRole] = useState<UserRole>("CLIENT");
@@ -87,18 +106,33 @@ export default function AdminLayout() {
   const [sectionPermissions, setSectionPermissions] = useState<SectionPermissions>({});
   /** La lectura falló y se está usando caché o el mínimo conocido. */
   const [sectionsDegraded, setSectionsDegraded] = useState(false);
+  const [recontactosEnabled, setRecontactosEnabled] = useState(false);
+  const [recontactosBranchEnabled, setRecontactosBranchEnabled] = useState(false);
+
+  useEffect(() => {
+    navigateRef.current = navigate;
+  }, [navigate]);
 
   useEffect(() => {
     let mounted = true;
 
     const boot = async () => {
       const version = ++bootVersion.current;
-      if (mounted) setReady(false);
+      // Ojo: acá NO se baja `ready`. El panel arranca en false y, una vez
+      // arriba, no se vuelve a desmontar: un re-boot refresca los datos en su
+      // lugar. Bajarlo era lo que borraba modales y formularios abiertos.
       const { data } = await supabase.auth.getSession();
       if (!mounted || version !== bootVersion.current) return;
       if (!data.session) {
-        navigate("/login", { replace: true });
+        navigateRef.current("/login", { replace: true });
         return;
+      }
+      bootedUserId.current = data.session.user.id;
+      try {
+        const recontactosConfig = await getRecontactosConfig();
+        if (mounted && version === bootVersion.current) setRecontactosEnabled(recontactosConfig.enabled);
+      } catch {
+        if (mounted && version === bootVersion.current) setRecontactosEnabled(false);
       }
 
       const { data: adminRow } = await supabase
@@ -111,8 +145,19 @@ export default function AdminLayout() {
 
       if (!adminRow) {
         await supabase.auth.signOut();
-        navigate("/login", { replace: true });
+        navigateRef.current("/login", { replace: true });
         return;
+      }
+
+      if (adminRow.is_super) setRecontactosBranchEnabled(true);
+      else {
+        try {
+          const branchSheets = await getBranchSheets();
+          const ownSheet = branchSheets.find((item) => item.branchId === String(adminRow.branch_id ?? ""));
+          if (mounted && version === bootVersion.current) setRecontactosBranchEnabled(Boolean(ownSheet?.active && ownSheet.sheetId));
+        } catch {
+          if (mounted && version === bootVersion.current) setRecontactosBranchEnabled(false);
+        }
       }
 
       if (mounted) {
@@ -173,12 +218,55 @@ export default function AdminLayout() {
     };
 
     void boot();
-    const { data: sub } = supabase.auth.onAuthStateChange(() => void boot());
+
+    /**
+     * Supabase re-emite `SIGNED_IN` cada vez que la pestaña vuelve a estar
+     * visible —GoTrueClient registra su propio listener de `visibilitychange` y
+     * corre `_recoverAndRefresh()`— y `TOKEN_REFRESHED` cada vez que renueva el
+     * token. Antes cualquiera de esos eventos volvía a disparar `boot()`, que
+     * desmontaba el panel completo: por eso volver de otra pestaña de Chrome
+     * cerraba el modal o el formulario que estuviera abierto.
+     *
+     * Acá se reacciona solo a lo que de verdad cambia la sesión.
+     */
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+
+      // Se emite al suscribirse con la sesión que ya está leyendo `boot()`.
+      // No es un cambio: reaccionar duplicaría el arranque.
+      if (event === "INITIAL_SESSION") return;
+
+      if (event === "SIGNED_OUT") {
+        bootedUserId.current = null;
+        navigateRef.current("/login", { replace: true });
+        return;
+      }
+
+      const userId = session?.user?.id ?? null;
+      // Mismo usuario (refresh de token, vuelta de foco, update de metadata):
+      // la sesión sigue siendo la misma, no hay nada que rearmar.
+      if (!userId || userId === bootedUserId.current) return;
+
+      // Usuario distinto: acá sí corresponde levantar el panel desde cero, para
+      // no dejar a la vista los permisos del anterior.
+      setReady(false);
+      void boot();
+    });
+
     return () => {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, []);
+
+  useEffect(() => {
+    const syncRecontactosConfig = (event: Event) => {
+      const detail = (event as CustomEvent<{ enabled?: boolean }>).detail;
+      if (typeof detail?.enabled === "boolean") setRecontactosEnabled(detail.enabled);
+    };
+    window.addEventListener("eg:recontactos-config", syncRecontactosConfig);
+    return () => window.removeEventListener("eg:recontactos-config", syncRecontactosConfig);
+  }, []);
 
   const items = useMemo<NavItem[]>(() => {
     const isSuper = role === "ADMIN_GENERAL";
@@ -208,14 +296,56 @@ export default function AdminLayout() {
     if (effective.canManageNews && habilitada("news")) {
       nav.push({ key: "news", label: "Novedades", to: "/novedades", icon: "news" });
     }
-    if (effective.canManageUsers) {
-      if (habilitada("users")) nav.push({ key: "users", label: "Usuarios", to: "/usuarios", icon: "users" });
-      if (habilitada("golden_ticket")) {
-        nav.push({ key: "tickets", label: "Golden Ticket", to: "/golden-tickets", icon: "ticket" });
-      }
+    if (effective.canManageUsers && habilitada("users")) {
+      nav.push({ key: "users", label: "Usuarios", to: "/usuarios", icon: "users" });
+    }
+
+    /**
+     * Beneficios: grupo solo de navegación, sin clave propia en
+     * `admin_section_permissions`. Golden Ticket conserva exactamente su regla
+     * de siempre (canManageUsers + sección golden_ticket). Promociones es UI
+     * mock y se muestra solo a perfiles administrativos, sin depender de la
+     * habilitación de secciones.
+     */
+    const hijasBeneficios: NonNullable<NavItem["children"]> = [];
+    if (effective.canManageUsers && habilitada("golden_ticket")) {
+      hijasBeneficios.push({ key: "tickets", label: "Golden Ticket", to: "/golden-tickets" });
+    }
+    if (isAdmin) {
+      hijasBeneficios.push({ key: "promotions", label: "Promociones", to: "/beneficios/promociones" });
+    }
+    if (hijasBeneficios.length > 0) {
+      nav.push({
+        key: "beneficios",
+        label: "Beneficios",
+        to: hijasBeneficios[0].to,
+        icon: "ticket",
+        children: hijasBeneficios,
+      });
     }
     if (isAdmin && habilitada("user_progress")) {
       nav.push({ key: "progress", label: "Progreso usuarios", to: "/usuarios/progreso", icon: "progress" });
+    }
+
+    /**
+     * Métricas: grupo de navegación con su propia clave de sección. El switch
+     * de Ajustes decide si un GM la ve; para los perfiles administrativos
+     * `habilitada()` siempre da true, así que a ellos no los toca.
+     */
+    if (habilitada("metrics")) {
+      nav.push({
+        key: "metrics",
+        label: "Métricas",
+        to: "/metricas/resumen",
+        icon: "metrics",
+        children: [
+          { key: "metrics-resumen", label: "Resumen", to: "/metricas/resumen" },
+          { key: "metrics-sucursales", label: "Sucursales", to: "/metricas/sucursales" },
+          { key: "metrics-campanas", label: "Campañas", to: "/metricas/campanas" },
+          { key: "metrics-ventas", label: "Ventas", to: "/metricas/ventas" },
+          { key: "metrics-diagnostico", label: "Diagnóstico", to: "/metricas/diagnostico" },
+        ],
+      });
     }
 
     // Intranet: el grupo se arma con las subsecciones habilitadas. Si el padre
@@ -239,11 +369,14 @@ export default function AdminLayout() {
     if (habilitada("calendar")) {
       nav.push({ key: "calendar", label: "Calendario", to: "/admin/calendario", icon: "calendar" });
     }
+    if ((isSuper || (recontactosEnabled && recontactosBranchEnabled)) && habilitada("recontactos")) {
+      nav.push({ key: "recontactos", label: "Recontactos", to: "/admin/recontactos", icon: "recontactos" });
+    }
     if (habilitada("chat")) {
       nav.push({ key: "chat", label: "Chat interno", to: "/chat", icon: "chat" });
     }
     return nav;
-  }, [permissions, role, sectionPermissions]);
+  }, [permissions, role, sectionPermissions, recontactosEnabled, recontactosBranchEnabled]);
 
   /** Valor del contexto. `ready` es el mismo gate que ya frenaba el panel. */
   const sectionStore = useMemo(
@@ -306,7 +439,7 @@ export default function AdminLayout() {
         crumbs={meta.crumbs}
         userName={userName}
         userRole={roleLabel(role)}
-        settingsTo={role === "ADMIN_GENERAL" ? "/ajustes" : undefined}
+        settingsTo={role === "ADMIN_GENERAL" || role === "ADMIN" ? "/ajustes" : undefined}
         onLogout={logout}
       >
         <Outlet />

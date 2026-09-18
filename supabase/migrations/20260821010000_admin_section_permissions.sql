@@ -82,5 +82,6 @@ insert into public.admin_section_permissions (role, section_key, enabled) values
   ('GM', 'intranet_objections',   true),
   ('GM', 'intranet_respond_io',   true),
   ('GM', 'calendar',              true),
+  ('GM', 'recontactos',           false),
   ('GM', 'chat',                  true)
 on conflict (role, section_key) do nothing;

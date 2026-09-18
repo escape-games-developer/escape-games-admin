@@ -1,0 +1,677 @@
+/* =========================================================================
+   MÉTRICAS
+
+   Sin estética propia: todo sale de tokens.css y reusa las piezas del panel
+   (Card, DataTable, Select, Input, .eg-stat). Lo único que define esta hoja es
+   el ritmo de la grilla, el embudo y los detalles que el sistema todavía no
+   tenía —la variación de una card de métrica, por ejemplo—.
+
+   Ningún color literal acá. Si hace falta uno nuevo, va a tokens.css.
+   ========================================================================= */
+
+.eg-metrics-page {
+  display: grid;
+  gap: var(--eg-sp-5);
+  min-width: 0;
+}
+
+/* -------------------------------------------------------------------------
+   BARRA DE FILTROS
+   ------------------------------------------------------------------------- */
+
+.eg-metrics-filters {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.4fr) repeat(3, minmax(150px, 1fr));
+  gap: var(--eg-sp-3);
+  align-items: end;
+}
+
+/* El rango es un solo campo conceptual: dos inputs y un guion en el medio. */
+.eg-metrics-filters__range {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: var(--eg-sp-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.eg-metrics-filters__dash {
+  color: var(--eg-text-faint);
+  font-size: var(--eg-fs-base);
+}
+
+.eg-metrics-filters__actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.eg-metrics-filters__note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--eg-text-faint);
+  font-size: var(--eg-fs-sm);
+  line-height: 1.45;
+}
+
+/* -------------------------------------------------------------------------
+   ESTADOS: cargando, vacío y error
+
+   Mientras carga NO se dejan los números anteriores a la vista. Un dato
+   viejo presentado como actual es peor que una pantalla vacía: el vacío
+   se nota, el número desactualizado no.
+   ------------------------------------------------------------------------- */
+
+.eg-metrics-skeleton {
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
+  border-radius: var(--eg-radius);
+  background: linear-gradient(
+    90deg,
+    var(--eg-surface-2) 25%,
+    var(--eg-surface-3) 37%,
+    var(--eg-surface-2) 63%
+  );
+  background-size: 400% 100%;
+  animation: eg-metrics-shimmer 1.4s ease infinite;
+}
+
+@keyframes eg-metrics-shimmer {
+  from { background-position: 100% 50%; }
+  to   { background-position: 0 50%; }
+}
+
+.eg-metrics-vacio {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  margin: 0;
+  padding: var(--eg-sp-4);
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-base);
+  text-align: center;
+}
+
+.eg-metrics-error {
+  display: grid;
+  justify-items: center;
+  gap: var(--eg-sp-3);
+  padding: var(--eg-sp-8) var(--eg-sp-5);
+  text-align: center;
+}
+
+.eg-metrics-error__icon {
+  display: inline-flex;
+  color: var(--eg-danger);
+}
+
+.eg-metrics-error strong {
+  color: var(--eg-text);
+  font-size: var(--eg-fs-lg);
+}
+
+.eg-metrics-error__detalle {
+  max-width: 60ch;
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-base);
+  line-height: 1.5;
+}
+
+/* -------------------------------------------------------------------------
+   DESGLOSE DE CONSULTAS
+
+   La apertura del total, con los números tal cual los informa `summary`.
+   ------------------------------------------------------------------------- */
+
+.eg-metrics-desglose {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-sp-3) var(--eg-sp-6);
+  align-items: baseline;
+}
+
+.eg-metrics-desglose__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--eg-sp-2);
+  font-size: var(--eg-fs-sm);
+}
+
+.eg-metrics-desglose__label {
+  color: var(--eg-text-dim);
+}
+
+.eg-metrics-desglose__item b {
+  color: var(--eg-text);
+  font-size: var(--eg-fs-md);
+}
+
+.eg-metrics-desglose__cargando {
+  color: var(--eg-text-faint);
+  font-size: var(--eg-fs-sm);
+}
+
+/* -------------------------------------------------------------------------
+   ESTADO DE LOS DATOS
+   ------------------------------------------------------------------------- */
+
+.eg-metrics-salud__lista {
+  display: grid;
+  gap: var(--eg-sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eg-metrics-salud__item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--eg-sp-2);
+  align-items: start;
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-sm);
+  line-height: 1.5;
+}
+
+.eg-metrics-salud__icono {
+  display: inline-flex;
+  margin-top: 2px;
+  color: var(--eg-warning);
+}
+
+.eg-metrics-salud__cifras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-sp-2) var(--eg-sp-5);
+  padding-top: var(--eg-sp-3);
+  border-top: 1px solid var(--eg-border);
+  color: var(--eg-text-faint);
+  font-size: var(--eg-fs-xs);
+}
+
+.eg-metrics-salud__cifras b {
+  color: var(--eg-text-dim);
+}
+
+/* -------------------------------------------------------------------------
+   KPIs
+
+   La card es la `.eg-stat` de siempre; acá solo se agrega la línea de
+   variación y un hover apenas perceptible, que el stat plano no tenía.
+   ------------------------------------------------------------------------- */
+
+.eg-metrics-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: var(--eg-sp-4);
+}
+
+.eg-metric-card {
+  align-items: flex-start;
+  transition: border-color var(--eg-t-fast), background var(--eg-t-fast), transform var(--eg-t-fast);
+}
+
+.eg-metric-card:hover {
+  border-color: var(--eg-border-strong);
+  background: var(--eg-surface-2);
+  transform: translateY(-1px);
+}
+
+.eg-metric-card .eg-stat__body {
+  display: grid;
+  gap: 2px;
+}
+
+/* Nueve cards con "$8.450.000" adentro: a 24px el número se come el ancho de
+   la card en tablet. 21px sigue siendo claramente el dato principal y entra. */
+.eg-metric-card .eg-stat__value {
+  font-size: 21px;
+  letter-spacing: -.01em;
+}
+
+/* El label va arriba del número: en un tablero se lee primero qué métrica es. */
+.eg-metric-card .eg-stat__label {
+  margin-top: 0;
+  font-size: var(--eg-fs-sm);
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--eg-text-dim);
+}
+
+.eg-metric-card__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--eg-sp-2);
+  margin-top: var(--eg-sp-1);
+  min-width: 0;
+}
+
+/* LA DIFERENCIA ENTRE "NO LO SABEMOS" Y "ES CERO", HECHA VISIBLE.
+   Cuando ORIGEN devuelve null la card muestra "—" y además se apaga.
+   Si un guion se viera igual que un número, la distinción quedaría solo
+   en el JSON y nadie la leería. */
+.eg-metric-card.is-empty .eg-stat__value {
+  color: var(--eg-text-faint);
+  font-weight: 600;
+}
+
+.eg-metric-card.is-empty .eg-stat__icon {
+  opacity: .45;
+}
+
+/* Lo mismo en las celdas de las tablas. */
+.eg-metrics-num.is-empty {
+  color: var(--eg-text-faint);
+}
+
+.eg-metric-card__hint {
+  color: var(--eg-text-faint);
+  font-size: var(--eg-fs-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* -------------------------------------------------------------------------
+   CARDS DE GRÁFICO
+   ------------------------------------------------------------------------- */
+
+.eg-metrics-card {
+  display: grid;
+  gap: var(--eg-sp-4);
+  align-content: start;
+  min-width: 0;
+}
+
+.eg-metrics-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--eg-sp-3);
+  flex-wrap: wrap;
+}
+
+.eg-metrics-card__title {
+  margin: 0;
+  color: var(--eg-text);
+  font-size: var(--eg-fs-md);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.eg-metrics-card__sub {
+  margin: 0;
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-sm);
+}
+
+/* Recharts necesita un padre con alto concreto para su ResponsiveContainer. */
+.eg-metrics-chart {
+  width: 100%;
+  min-width: 0;
+  height: 300px;
+}
+
+.eg-metrics-chart--sm {
+  height: 244px;
+}
+
+/* Dos columnas: donut y conversión por origen. */
+.eg-metrics-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--eg-sp-5);
+  min-width: 0;
+}
+
+/* -------------------------------------------------------------------------
+   LEYENDAS
+
+   Propias en lugar de la de Recharts: así los puntos, el tamaño y el color de
+   texto son los mismos que usa el resto del panel.
+   ------------------------------------------------------------------------- */
+
+.eg-metrics-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--eg-sp-2) var(--eg-sp-4);
+}
+
+.eg-metrics-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--eg-sp-2);
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-sm);
+  min-width: 0;
+}
+
+.eg-metrics-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.eg-metrics-legend__value {
+  color: var(--eg-text);
+  font-weight: 700;
+}
+
+/* El share lo calcula ORIGEN, no el panel: acá solo se dibuja. */
+.eg-metrics-legend__share {
+  color: var(--eg-text-faint);
+}
+
+/* Centro del donut: el total, que si no habría que ir a buscarlo a otra card. */
+.eg-metrics-donut {
+  position: relative;
+}
+
+.eg-metrics-donut__center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 2px;
+  pointer-events: none;
+  text-align: center;
+}
+
+.eg-metrics-donut__total {
+  color: var(--eg-text);
+  font-size: var(--eg-fs-stat);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.eg-metrics-donut__label {
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-xs);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+/* Tooltip de Recharts vestido como el panel. */
+.eg-metrics-tooltip {
+  display: grid;
+  gap: 4px;
+  padding: var(--eg-sp-2) var(--eg-sp-3);
+  border: 1px solid var(--eg-border-strong);
+  border-radius: var(--eg-radius-sm);
+  background: var(--eg-surface-2);
+  box-shadow: var(--eg-shadow);
+}
+
+.eg-metrics-tooltip__title {
+  color: var(--eg-text);
+  font-size: var(--eg-fs-sm);
+  font-weight: 700;
+}
+
+.eg-metrics-tooltip__row {
+  display: flex;
+  align-items: center;
+  gap: var(--eg-sp-2);
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-sm);
+}
+
+.eg-metrics-tooltip__row b {
+  margin-left: auto;
+  color: var(--eg-text);
+}
+
+/* -------------------------------------------------------------------------
+   EMBUDO DE ATRIBUCIÓN
+   ------------------------------------------------------------------------- */
+
+.eg-metrics-funnel {
+  display: grid;
+  gap: var(--eg-sp-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eg-metrics-funnel__step {
+  display: grid;
+  gap: var(--eg-sp-2);
+  min-width: 0;
+}
+
+.eg-metrics-funnel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--eg-sp-3);
+}
+
+.eg-metrics-funnel__label {
+  color: var(--eg-text);
+  font-size: var(--eg-fs-base);
+  font-weight: 600;
+}
+
+.eg-metrics-funnel__value {
+  color: var(--eg-text);
+  font-size: var(--eg-fs-lg);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.eg-metrics-funnel__track {
+  height: 10px;
+  border-radius: var(--eg-radius-pill);
+  background: var(--eg-surface-3);
+  overflow: hidden;
+}
+
+.eg-metrics-funnel__bar {
+  height: 100%;
+  border-radius: var(--eg-radius-pill);
+  background: var(--eg-accent);
+  opacity: .9;
+}
+
+/* El último paso es plata, no cantidad: se marca distinto para que nadie mida
+   su largo contra los anteriores. Ver el comentario de AttributionFunnel. */
+.eg-metrics-funnel__step.is-money .eg-metrics-funnel__bar {
+  background: var(--eg-success);
+}
+
+.eg-metrics-funnel__step.is-money .eg-metrics-funnel__value {
+  color: var(--eg-success);
+}
+
+.eg-metrics-funnel__note {
+  color: var(--eg-text-faint);
+  font-size: var(--eg-fs-xs);
+  line-height: 1.4;
+}
+
+/* Alerta discreta: informa, no grita. Warning, no danger. */
+.eg-metrics-alert {
+  display: flex;
+  align-items: center;
+  gap: var(--eg-sp-3);
+  padding: var(--eg-sp-3) var(--eg-sp-4);
+  border: 1px solid var(--eg-warning-soft);
+  border-left: 3px solid var(--eg-warning);
+  border-radius: var(--eg-radius-sm);
+  background: var(--eg-warning-soft);
+}
+
+.eg-metrics-alert__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--eg-warning);
+}
+
+.eg-metrics-alert__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.eg-metrics-alert__text strong {
+  color: var(--eg-text);
+  font-size: var(--eg-fs-base);
+}
+
+.eg-metrics-alert__text span {
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-sm);
+  line-height: 1.45;
+}
+
+/* -------------------------------------------------------------------------
+   TABLAS
+
+   La Card aporta el marco y la cabecera; el borde propio de `.eg-table-wrap`
+   se suaviza para no terminar con dos bordes pegados.
+   ------------------------------------------------------------------------- */
+
+.eg-metrics-table-card {
+  display: grid;
+  gap: var(--eg-sp-4);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.eg-metrics-table-card .eg-table-wrap {
+  border: 1px solid var(--eg-border);
+  border-radius: var(--eg-radius);
+  background: var(--eg-bg);
+}
+
+/* Diez columnas de números no entran en 720px. Se sube el ancho mínimo y el
+   wrapper hace lo de siempre: scrollear en horizontal en pantallas chicas. */
+.eg-metrics-table-card .eg-table {
+  min-width: 940px;
+}
+
+/* Sucursales trae veinte columnas: el desglose completo de consultas más
+   las de plata. Se deja scrollear en vez de esconder columnas — una
+   columna oculta es una pregunta que nadie vuelve a hacerse. */
+.eg-metrics-table-card--ancha .eg-table {
+  min-width: 2000px;
+}
+
+.eg-metrics-table-card .eg-table td {
+  height: 52px;
+}
+
+.eg-metrics-table-card .eg-table td,
+.eg-metrics-table-card .eg-table th {
+  white-space: nowrap;
+}
+
+/* Cifras en tabular: las columnas se comparan de un vistazo en vez de bailar
+   según la cantidad de dígitos. */
+.eg-metrics-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.eg-metrics-name {
+  color: var(--eg-text);
+  font-weight: 600;
+}
+
+/* -------------------------------------------------------------------------
+   SUBSECCIONES TODAVÍA NO DESARROLLADAS
+   ------------------------------------------------------------------------- */
+
+.eg-metrics-soon {
+  display: grid;
+  gap: var(--eg-sp-4);
+}
+
+.eg-metrics-soon__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--eg-sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eg-metrics-soon__item {
+  display: grid;
+  gap: 4px;
+  padding: var(--eg-sp-3) var(--eg-sp-4);
+  border: 1px solid var(--eg-border);
+  border-radius: var(--eg-radius);
+  background: var(--eg-surface-2);
+}
+
+.eg-metrics-soon__item strong {
+  color: var(--eg-text);
+  font-size: var(--eg-fs-base);
+}
+
+.eg-metrics-soon__item span {
+  color: var(--eg-text-dim);
+  font-size: var(--eg-fs-sm);
+  line-height: 1.45;
+}
+
+/* -------------------------------------------------------------------------
+   RESPONSIVE
+
+   Mismos cortes que ya usa el panel: 1200 (tablet ancha), 900 (tablet) y
+   620 (mobile). Las tablas no necesitan reglas: `.eg-table-wrap` ya scrollea
+   en horizontal y `.eg-table` trae su ancho mínimo.
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 1200px) {
+  .eg-metrics-filters {
+    grid-template-columns: minmax(260px, 1fr) repeat(2, minmax(150px, 1fr));
+  }
+  .eg-metrics-kpis {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .eg-metrics-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* El rango ocupa la fila entera: es el filtro que más lugar necesita. */
+  .eg-metrics-filters > :first-child {
+    grid-column: 1 / -1;
+  }
+  .eg-metrics-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .eg-metrics-chart {
+    height: 260px;
+  }
+}
+
+@media (max-width: 620px) {
+  .eg-metrics-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .eg-metrics-kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .eg-metrics-chart {
+    height: 230px;
+  }
+  .eg-metrics-funnel__head {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eg-metric-card {
+    transition: none;
+  }
+  .eg-metric-card:hover {
+    transform: none;
+  }
+}

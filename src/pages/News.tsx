@@ -1267,13 +1267,38 @@ export default function News() {
       });
 
       if (error) {
-        console.error("Push function error:", error);
+        /* invoke() sólo dice "non-2xx status code": el motivo real viene en el
+           body, así que hay que leerlo o el fallo queda sin diagnóstico. */
+        let detail = error.message || "";
+        try {
+          const payload = await (error as any)?.context?.json?.();
+          if (payload) detail = payload.error || JSON.stringify(payload);
+        } catch {
+          /* body vacío o ilegible: queda el message genérico. */
+        }
+
+        console.error("Push function error:", detail, error);
+        toast("error", `La novedad se guardó, pero la push falló: ${detail}`, 10000);
         return;
       }
 
-      console.log("Push enviada correctamente:", data);
+      const sent = Number(data?.sent ?? 0);
+      const failed = Number(data?.failed ?? 0);
+
+      if (sent === 0) {
+        toast("warning", `Novedad guardada. No se envió ninguna push (${data?.reason || "sin destinatarios"}).`, 8000);
+        return;
+      }
+
+      if (failed > 0) {
+        toast("warning", `Push enviada a ${sent} dispositivos. ${failed} fallaron.`, 8000);
+        return;
+      }
+
+      toast("success", `Push enviada a ${sent} dispositivos.`);
     } catch (err: any) {
       console.error("Unexpected push invoke error:", err);
+      toast("error", `La novedad se guardó, pero no se pudo llamar a la push: ${err?.message || "error inesperado"}`, 10000);
     }
   };
 
@@ -1329,8 +1354,9 @@ export default function News() {
         return exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [saved, ...prev];
       });
 
-      if (saved.active && sendPushOnSave) {
-        await notifyNewsPublished(saved);
+      if (sendPushOnSave) {
+        if (saved.active) await notifyNewsPublished(saved);
+        else toast("warning", "Novedad guardada. No se envió push porque quedó inactiva.", 8000);
       }
 
       closeModal();
