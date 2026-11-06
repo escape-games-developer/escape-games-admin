@@ -1,25 +1,44 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge, Button, Card, DataTable, EmptyState, SearchInput, Select, type DataTableColumn } from "../../ui";
+import type { ToastKind } from "../Toast";
 import {
   PROMOTION_CLIENTS_PAGE_SIZE,
+  buildPromotionClientsCsv,
+  fetchAllPromotionClients,
   fetchPromotionClients,
+  fetchPromotionsForClientsFilter,
   formatPromotionDate,
+  promotionClientStatusLabel,
+  promotionClientsCsvFilename,
   promotionErrorMessage,
   type Promotion,
   type PromotionClient,
   type PromotionClientStatus,
+  type PromotionFilterOption,
 } from "../../lib/promotions";
 
 type Props = {
+  /**
+   * Listado de `get_promotions_admin`, cuando quien mira tiene permiso para
+   * leerlo. Se usa SOLO para marcar como "Inhabilitado" los otorgados de
+   * promociones apagadas; el filtro de promoción no sale de acá. Llega vacío
+   * para un GM que solo tiene Clientes, y en ese caso esa marca no aparece.
+   */
   promotions: Promotion[];
+  toast: (kind: ToastKind, text: string) => void;
 };
 
 /**
  * Tab "Clientes". Los filtros y la paginación se resuelven en el servidor con
  * `get_promotion_clients_admin`: acá no se filtra ni se cuenta a mano.
+ *
+ * Las dos RPC que usa (`get_promotion_clients_admin` y
+ * `get_promotions_for_clients_filter`) comparten el gate
+ * `can_read_promotion_clients()`, así que ADMIN y GM autorizado recorren
+ * exactamente el mismo camino: no hay un listado paralelo para nadie.
  */
-export default function PromotionClientsTable({ promotions }: Props) {
+export default function PromotionClientsTable({ promotions, toast }: Props) {
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
   const [promotionId, setPromotionId] = useState("all");
@@ -30,6 +49,27 @@ export default function PromotionClientsTable({ promotions }: Props) {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  /**
+   * Opciones del filtro de promoción. Tienen su propia RPC y no el listado del
+   * padre: este panel es HISTÓRICO, así que necesita también las promociones
+   * inactivas, y además `get_promotions_for_clients_filter` la puede llamar un
+   * GM que tenga Clientes pero no Promociones.
+   */
+  const [filterOptions, setFilterOptions] = useState<PromotionFilterOption[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    fetchPromotionsForClientsFilter()
+      .then((options) => { if (mounted) setFilterOptions(options); })
+      // Si el filtro no carga, la tabla sigue sirviendo: queda "Todas" y nada
+      // más. No se pisa el error del listado, que es el que importa.
+      .catch(() => { if (mounted) setFilterOptions([]); });
+
+    return () => { mounted = false; };
+  }, []);
 
   /** La búsqueda espera a que el usuario deje de tipear. */
   useEffect(() => {
@@ -67,6 +107,25 @@ export default function PromotionClientsTable({ promotions }: Props) {
     void load();
   }, [load]);
 
+  /**
+   * Dónde se escaneó el QR. Sale del QR mismo, así que no está en los
+   * registros del sistema anterior (QR globales, sin sucursal) ni en un
+   * beneficio todavía no usado. En esos casos se muestra una raya: ni "null",
+   * ni "undefined", ni "Sin sucursal", que se leería como un dato y no como
+   * un vacío.
+   *
+   * Si el QR era de un punto específico gana el nombre del punto —
+   * "Hell Experiment"— y NO se aclara la sucursal que lo contiene. La base
+   * sigue guardando esa relación, pero para quien lee la tabla Hell Experiment
+   * es una ubicación como cualquier otra, igual que en la pantalla de QR.
+   */
+  const placeCell = (branchName: string | null, venueName: string | null) => {
+    const name = venueName ?? branchName;
+    return name
+      ? <span className="eg-promo-strong">{name}</span>
+      : <span className="eg-promo-muted">—</span>;
+  };
+
   /** Para marcar visualmente los otorgados de promociones apagadas. */
   const inactiveById = useMemo(
     () => new Set(promotions.filter((promotion) => !promotion.active).map((promotion) => promotion.id)),
@@ -86,15 +145,56 @@ export default function PromotionClientsTable({ promotions }: Props) {
       render: (client) => {
         // El status persistido no cambia: si la promoción está inactiva, el
         // otorgado solo se MUESTRA como inhabilitado.
-        if (client.status === "granted" && inactiveById.has(client.promotionId)) {
-          return <Badge tone="warning" dot small>Inhabilitado</Badge>;
-        }
-        return <Badge tone={client.status === "granted" ? "success" : "neutral"} dot small>{client.status === "granted" ? "Otorgado" : "Usado"}</Badge>;
+        const label = promotionClientStatusLabel(client, inactiveById.has(client.promotionId));
+        const tone = label === "Inhabilitado" ? "warning" : client.status === "granted" ? "success" : "neutral";
+        return <Badge tone={tone} dot small>{label}</Badge>;
       },
     },
     { key: "granted_at", header: "Otorgado", render: (client) => <span className="eg-promo-muted">{formatPromotionDate(client.grantedAt)}</span> },
+    { key: "grant_branch", header: "Sucursal otorgado", render: (client) => placeCell(client.grantBranchName, client.grantVenueName) },
     { key: "used_at", header: "Usado", render: (client) => <span className="eg-promo-muted">{formatPromotionDate(client.usedAt)}</span> },
+    { key: "use_branch", header: "Sucursal uso", render: (client) => placeCell(client.useBranchName, client.useVenueName) },
   ];
+
+  /**
+   * Exporta TODO lo que coincide con los filtros aplicados (los mismos que ve
+   * la tabla), no solo la página cargada. Si falla alguna página no se baja
+   * nada: un archivo incompleto se confundiría con el listado real.
+   */
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const selectedId = promotionId === "all" ? null : promotionId;
+      const clients = await fetchAllPromotionClients({
+        promotionId: selectedId,
+        status: status === "all" ? null : status,
+        search,
+      });
+
+      if (clients.length === 0) {
+        toast("warning", "No hay clientes para exportar.");
+        return;
+      }
+
+      const promotionName = selectedId
+        ? filterOptions.find((option) => option.id === selectedId)?.name ?? clients[0].promotionName ?? ""
+        : null;
+
+      const blob = new Blob([buildPromotionClientsCsv(clients, inactiveById)], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = promotionClientsCsvFilename(promotionName);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast("error", "No se pudo exportar el listado de clientes.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const hasFilters = search.trim().length > 0 || promotionId !== "all" || status !== "all";
   const from = total === 0 ? 0 : offset + 1;
@@ -110,7 +210,7 @@ export default function PromotionClientsTable({ promotions }: Props) {
           aria-label="Filtrar por promoción"
         >
           <option value="all">Todas</option>
-          {promotions.map((promotion) => <option key={promotion.id} value={promotion.id}>{promotion.name}</option>)}
+          {filterOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
         </Select>
         <Select
           value={status}
@@ -121,6 +221,9 @@ export default function PromotionClientsTable({ promotions }: Props) {
           <option value="granted">Otorgado</option>
           <option value="used">Usado</option>
         </Select>
+        <Button variant="secondary" loading={exporting} onClick={() => void exportCsv()}>
+          {exporting ? "Exportando..." : "Exportar CSV"}
+        </Button>
       </Card>
 
       {error && (
@@ -130,11 +233,11 @@ export default function PromotionClientsTable({ promotions }: Props) {
         </div>
       )}
 
-      <Card padding="none" className="eg-promo-table-card">
+      <Card padding="none" className="eg-promo-table-card eg-promo-table-card--clients">
         <DataTable
           columns={columns}
           rows={rows}
-          rowKey={(client) => `${client.promotionId}:${client.userId}`}
+          rowKey={(client) => client.userPromotionId ?? `${client.promotionId}:${client.userId}`}
           loading={loading}
           loadingLabel="Cargando clientes..."
           empty={hasFilters ? (

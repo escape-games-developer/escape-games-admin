@@ -9,11 +9,17 @@ type Props = {
   error: string | null;
   busyId: string | null;
   onRetry: () => void;
-  onView: (promotion: Promotion) => void;
-  onEdit: (promotion: Promotion) => void;
-  onViewQr: (promotion: Promotion) => void;
-  onToggleActive: (promotion: Promotion) => void;
-  onCreate: () => void;
+  /*
+    Los cinco callbacks administrativos son OPCIONALES. Sin ellos la tabla queda
+    en solo lectura: es el modo de un GM con el permiso `promotions`, que puede
+    ver el listado pero no administrarlo. No se trata de deshabilitar botones —
+    directamente no se dibujan, así que no hay ningún camino a las RPC de admin.
+  */
+  onView?: (promotion: Promotion) => void;
+  onEdit?: (promotion: Promotion) => void;
+  onViewQr?: (promotion: Promotion) => void;
+  onToggleActive?: (promotion: Promotion) => void;
+  onCreate?: () => void;
 };
 
 /**
@@ -47,6 +53,13 @@ export default function PromotionsTable({
 
   const hasFilters = q.trim().length > 0 || status !== "all";
 
+  /**
+   * Solo lectura: nadie pasó acciones administrativas. El detalle entra en la
+   * cuenta porque abrirlo dispara `get_promotion_admin`, que expone los tokens
+   * y solo acepta ADMIN_GENERAL / ADMIN.
+   */
+  const readOnly = !onView && !onEdit && !onViewQr && !onToggleActive;
+
   const columns: DataTableColumn<Promotion>[] = [
     {
       key: "image",
@@ -79,29 +92,34 @@ export default function PromotionsTable({
     { key: "available", header: "Disponibles", align: "center", render: (promotion) => <span className="eg-promo-number">{promotion.availableCount}</span> },
     { key: "used", header: "Usados", align: "center", render: (promotion) => <span className="eg-promo-number">{promotion.usedCount}</span> },
     { key: "created", header: "Creada", render: (promotion) => <span className="eg-promo-muted">{formatPromotionDate(promotion.createdAt)}</span> },
-    {
+  ];
+
+  // La columna de acciones existe solo si hay acciones. En solo lectura la
+  // tabla termina en "Creada".
+  if (!readOnly) {
+    columns.push({
       key: "actions",
       header: "Acciones",
       align: "center",
       render: (promotion) => (
         <div onClick={(event) => event.stopPropagation()}>
           <ActionMenu items={[
-            { key: "view", label: "Ver", icon: "eye", onSelect: () => onView(promotion) },
-            { key: "edit", label: "Editar", icon: "edit", onSelect: () => onEdit(promotion) },
-            { key: "qr", label: "Ver QR", icon: "qr", onSelect: () => onViewQr(promotion) },
-            {
+            ...(onView ? [{ key: "view", label: "Ver", icon: "eye" as const, onSelect: () => onView(promotion) }] : []),
+            ...(onEdit ? [{ key: "edit", label: "Editar", icon: "edit" as const, onSelect: () => onEdit(promotion) }] : []),
+            ...(onViewQr ? [{ key: "qr", label: "Ver QR", icon: "qr" as const, onSelect: () => onViewQr(promotion) }] : []),
+            ...(onToggleActive ? [{
               key: "toggle",
               label: promotion.active ? "Desactivar" : "Activar",
-              icon: "toggle",
+              icon: "toggle" as const,
               separatorBefore: true,
               disabled: busyId === promotion.id,
               onSelect: () => onToggleActive(promotion),
-            },
+            }] : []),
           ]} />
         </div>
       ),
-    },
-  ];
+    });
+  }
 
   return (
     <>
@@ -135,8 +153,12 @@ export default function PromotionsTable({
             <EmptyState
               icon="ticket"
               title="Todavía no hay promociones"
-              description="Creá la primera para empezar a otorgar beneficios."
-              action={<Button variant="primary" icon="plus" onClick={onCreate}>Nueva promoción</Button>}
+              description={onCreate
+                ? "Creá la primera para empezar a otorgar beneficios."
+                : "Cuando se cree la primera, va a aparecer acá."}
+              action={onCreate
+                ? <Button variant="primary" icon="plus" onClick={onCreate}>Nueva promoción</Button>
+                : undefined}
             />
           )}
         />

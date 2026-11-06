@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { Badge, Button, Icon, Modal, StatCard } from "../../ui";
 import type { ToastKind } from "../Toast";
@@ -6,14 +6,11 @@ import {
   fetchPromotionAdmin,
   formatPromotionDate,
   promotionErrorMessage,
-  rotatePromotionGrantToken,
-  rotatePromotionUseToken,
   type Promotion,
   type PromotionDetail,
 } from "../../lib/promotions";
+import PromotionQrTargetPanel from "./PromotionQrTargetPanel";
 import PromotionQrPair from "./PromotionQrPair";
-
-const ROTATE_CONFIRM = "El QR actualmente impreso dejará de funcionar.\n\n¿Confirmás la rotación?";
 
 type Props = {
   promotion: Promotion | null;
@@ -25,72 +22,65 @@ type Props = {
 };
 
 /**
- * Detalle de una promoción. Los tokens NO vienen del listado: se piden con
- * `get_promotion_admin` al abrir, que es el único camino que los expone.
+ * Detalle de una promoción.
+ *
+ * Los QR ahora son POR DESTINO: una sucursal entera o un punto específico
+ * dentro de una. Cada combinación promoción + destino + acción tiene su propio
+ * token, y todo eso lo maneja `PromotionQrTargetPanel`.
+ *
+ * Los dos QR globales del sistema anterior (`grant_token` / `use_token` de
+ * `get_promotion_admin`) siguen existiendo en la base y se conservan acá, pero
+ * relegados a un bloque colapsado y en modo lectura:
+ *
+ *   · se cargan RECIÉN al desplegar el bloque, no al abrir el modal, así una
+ *     visita normal ya no pide tokens que nadie va a mirar — y si esa lectura
+ *     falla, no rompe la pantalla de los QR por sucursal;
+ *   · no se ofrece regenerarlos. Durante la transición, rotar por error un QR
+ *     global invalidaría material impreso viejo sin que nadie lo pida.
  */
 export default function PromotionDetailsModal({ promotion, mode = "details", onClose, onEdit, toast }: Props) {
-  const [detail, setDetail] = useState<PromotionDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [rotating, setRotating] = useState<"grant" | "use" | null>(null);
+  /** Tokens del sistema anterior. Null hasta que alguien despliega el bloque. */
+  const [legacy, setLegacy] = useState<PromotionDetail | null>(null);
+  const [legacyLoading, setLegacyLoading] = useState(false);
+  const [legacyError, setLegacyError] = useState<string | null>(null);
+  const [legacyPedido, setLegacyPedido] = useState(false);
 
   const promotionId = promotion?.id ?? null;
 
-  const load = useCallback(async () => {
+  const cargarLegacy = useCallback(async () => {
     if (!promotionId) return;
 
-    setLoading(true);
-    setError(null);
+    setLegacyLoading(true);
+    setLegacyError(null);
 
     try {
-      setDetail(await fetchPromotionAdmin(promotionId));
+      setLegacy(await fetchPromotionAdmin(promotionId));
     } catch (err) {
-      setDetail(null);
-      setError(promotionErrorMessage(err, "No pude cargar el detalle de la promoción."));
+      setLegacy(null);
+      setLegacyError(promotionErrorMessage(err, "No pude cargar los QR anteriores."));
     } finally {
-      setLoading(false);
+      setLegacyLoading(false);
     }
   }, [promotionId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   if (!promotion) return null;
 
   const onlyQr = mode === "qr";
 
-  const rotate = async (kind: "grant" | "use") => {
-    if (rotating) return;
-    if (!window.confirm(ROTATE_CONFIRM)) return;
-
-    setRotating(kind);
-
-    try {
-      const token = kind === "grant"
-        ? await rotatePromotionGrantToken(promotion.id)
-        : await rotatePromotionUseToken(promotion.id);
-
-      // Solo se reemplaza el token rotado: el otro QR no se toca.
-      setDetail((prev) => prev
-        ? { ...prev, ...(kind === "grant" ? { grantToken: token } : { useToken: token }) }
-        : prev);
-
-      toast("success", kind === "grant"
-        ? "QR de otorgar regenerado. El anterior dejó de funcionar."
-        : "QR de usar regenerado. El anterior dejó de funcionar.");
-    } catch (err) {
-      toast("error", promotionErrorMessage(err, "No pude regenerar el QR."));
-    } finally {
-      setRotating(null);
-    }
+  /** Se dispara al abrir el `<details>`, una sola vez. */
+  const alDesplegarLegacy = (abierto: boolean) => {
+    if (!abierto || legacyPedido) return;
+    setLegacyPedido(true);
+    void cargarLegacy();
   };
 
   return (
     <Modal
       open
       title={onlyQr ? `QR · ${promotion.name}` : promotion.name}
-      description={onlyQr ? "Códigos para otorgar y usar la promoción." : `Creada el ${formatPromotionDate(promotion.createdAt)}`}
+      description={onlyQr
+        ? "Códigos de activación y utilización por sucursal y punto."
+        : `Creada el ${formatPromotionDate(promotion.createdAt)}`}
       size="lg"
       panelClassName="eg-promo-modal"
       onClose={onClose}
@@ -127,24 +117,49 @@ export default function PromotionDetailsModal({ promotion, mode = "details", onC
           </div>
         )}
 
-        {error ? (
-          <div className="eg-promo-error" role="alert">
-            <span>{error}</span>
-            <Button size="sm" variant="secondary" icon="refresh" onClick={() => void load()}>Reintentar</Button>
+        <PromotionQrTargetPanel
+          promotionId={promotion.id}
+          promotionName={promotion.name}
+          toast={toast}
+        />
+
+        {/* --------------------- QR del sistema anterior --------------------- */}
+        <details
+          className="eg-promo-legacy"
+          onToggle={(event) => alDesplegarLegacy(event.currentTarget.open)}
+        >
+          <summary className="eg-promo-legacy__summary">
+            <Icon name="chevronRight" size={14} />
+            <span>QR anteriores</span>
+          </summary>
+
+          <div className="eg-promo-legacy__body">
+            <p className="eg-promo-legacy__warning" role="note">
+              Estos QR pertenecen al sistema anterior y se mantienen temporalmente por
+              compatibilidad. No tienen sucursal asociada y no se pueden regenerar desde acá.
+            </p>
+
+            {legacyError ? (
+              <div className="eg-promo-error" role="alert">
+                <span>{legacyError}</span>
+                <Button size="sm" variant="secondary" icon="refresh" onClick={() => void cargarLegacy()}>Reintentar</Button>
+              </div>
+            ) : (
+              /*
+                Sin `printable` y sin callbacks de rotación: el par queda en
+                modo lectura. No es solo esconder botones — los handlers no
+                existen, así que no hay forma de llamar a las RPC de rotación
+                del sistema anterior desde esta pantalla.
+              */
+              <PromotionQrPair
+                grantToken={legacy?.grantToken ?? null}
+                useToken={legacy?.useToken ?? null}
+                promotionName={promotion.name}
+                loading={legacyLoading}
+              />
+            )}
           </div>
-        ) : (
-          <PromotionQrPair
-            grantToken={detail?.grantToken ?? null}
-            useToken={detail?.useToken ?? null}
-            promotionName={promotion.name}
-            printable
-            loading={loading}
-            rotating={rotating}
-            onRotateGrant={() => void rotate("grant")}
-            onRotateUse={() => void rotate("use")}
-            onError={(msg) => toast("error", msg)}
-          />
-        )}
+        </details>
       </div>
     </Modal>
   );

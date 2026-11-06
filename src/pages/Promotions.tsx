@@ -7,6 +7,7 @@ import PromotionFormModal, { type PromotionDraft } from "../components/promotion
 import PromotionDetailsModal from "../components/promotions/PromotionDetailsModal";
 import "../components/promotions/promotions.css";
 import { Button, PageHeader, StatCard } from "../ui";
+import { useSectionPermissions } from "../lib/sectionPermissionsStore";
 import {
   createPromotion,
   deletePromotionImage,
@@ -26,22 +27,70 @@ type Tab = "promotions" | "clients";
  * Todo el negocio pasa por `lib/promotions.ts`, que habla solo con las RPC
  * admin. Lo único que esta pantalla toca de Storage es a través de esa misma
  * capa, y siempre subiendo antes de borrar.
+ *
+ * Tres perfiles conviven acá, y la diferencia se decide ANTES de renderizar —
+ * nunca con un try/catch sobre una llamada rechazada:
+ *
+ *   · ADMIN_GENERAL / ADMIN → todo, exactamente como siempre.
+ *   · GM con `promotions`   → tab "Promociones creadas" en SOLO LECTURA. No se
+ *     monta ni se ejecuta nada administrativo: sin alta, sin edición, sin
+ *     activar/desactivar y sin el modal de detalle, que es el único que llama
+ *     `get_promotion_admin` (la RPC que expone los tokens).
+ *   · GM con `promotions_clients` → tab "Clientes".
  */
 export default function Promotions() {
   const { toasts, toast, dismiss } = useToasts();
+  /**
+   * Permisos ya resueltos por el boot de AdminLayout. La ruta pasa por
+   * `SectionGuard`, que no dibuja nada mientras `loading`: acá los valores ya
+   * son definitivos, así que la tab inicial no puede parpadear.
+   */
+  const { promotions: acceso } = useSectionPermissions();
+
+  /** Tabs habilitadas, en su orden de siempre. Nunca queda vacío: si no hubiera
+   *  ninguna, el guard de la ruta ya habría frenado la pantalla. */
+  const tabsDisponibles = useMemo(() => {
+    const disponibles: [Tab, string][] = [];
+    if (acceso.canRead) disponibles.push(["promotions", "Promociones creadas"]);
+    if (acceso.canReadClients) disponibles.push(["clients", "Clientes"]);
+    return disponibles;
+  }, [acceso.canRead, acceso.canReadClients]);
 
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [tab, setTab] = useState<Tab>("promotions");
+  /**
+   * Default de la tab. Se calcula en el inicializador (no en un efecto) para
+   * que el primer render ya sea el correcto: con ambas habilitadas queda el
+   * default de siempre, y si solo hay una, esa. No hay tab persistida en
+   * localStorage ni en la URL, así que no hay nada más que corregir.
+   */
+  const [tab, setTab] = useState<Tab>(() => tabsDisponibles[0]?.[0] ?? "promotions");
+  /** Red de seguridad: si los permisos cambiaran en caliente, nunca se
+   *  renderiza una tab prohibida, ni por un frame. */
+  const tabActiva: Tab = tabsDisponibles.some(([key]) => key === tab)
+    ? tab
+    : tabsDisponibles[0]?.[0] ?? "promotions";
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Promotion | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<{ promotion: Promotion; mode: "details" | "qr" } | null>(null);
 
+  /**
+   * Listado. `get_promotions_admin` está gateada por `can_read_promotions()`:
+   * sin el permiso ni se intenta. Un GM que solo tiene Clientes no dispara la
+   * llamada (y la tab Clientes no la necesita: se abastece de sus propias RPC).
+   */
   const load = useCallback(async () => {
+    if (!acceso.canRead) {
+      setPromotions([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -53,7 +102,7 @@ export default function Promotions() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [acceso.canRead]);
 
   useEffect(() => {
     void load();
@@ -190,55 +239,75 @@ export default function Promotions() {
     <div className="eg-promo-page">
       <PageHeader
         title="Promociones"
-        subtitle="Gestioná las promociones disponibles y los beneficios otorgados a clientes."
-        action={<Button variant="primary" icon="plus" onClick={openCreate}>Nueva promoción</Button>}
+        subtitle={acceso.isAdmin
+          ? "Gestioná las promociones disponibles y los beneficios otorgados a clientes."
+          : "Consultá las promociones disponibles y los beneficios otorgados a clientes."}
+        action={acceso.isAdmin
+          ? <Button variant="primary" icon="plus" onClick={openCreate}>Nueva promoción</Button>
+          : undefined}
       />
 
-      <div className="eg-promo-stats">
-        <StatCard value={stats.activePromotions} label="Promociones activas" tone="success" icon="ticket" loading={loading} />
-        <StatCard value={stats.grantedBenefits} label="Beneficios otorgados" tone="accent" icon="users" loading={loading} />
-        <StatCard value={stats.usedBenefits} label="Beneficios utilizados" icon="qr" loading={loading} />
-      </div>
+      {/* Las métricas se calculan sobre el listado: sin permiso de lectura no
+          hay de dónde sacarlas, y mostrar tres ceros sería mentir. */}
+      {acceso.canRead && (
+        <div className="eg-promo-stats">
+          <StatCard value={stats.activePromotions} label="Promociones activas" tone="success" icon="ticket" loading={loading} />
+          <StatCard value={stats.grantedBenefits} label="Beneficios otorgados" tone="accent" icon="users" loading={loading} />
+          <StatCard value={stats.usedBenefits} label="Beneficios utilizados" icon="qr" loading={loading} />
+        </div>
+      )}
 
-      {/* Mismas clases de pestañas que ya usa el panel. */}
-      <div className="eg-golden-tabs eg-promo-tabs" role="tablist" aria-label="Vistas de promociones">
-        {([
-          ["promotions", "Promociones creadas"],
-          ["clients", "Clientes"],
-        ] as [Tab, string][]).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={tab === key}
-            className={`eg-golden-tab${tab === key ? " is-active" : ""}`}
-            onClick={() => setTab(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Mismas clases de pestañas que ya usa el panel. Con una sola tab
+          disponible no se dibuja la barra: no hay nada entre qué elegir. */}
+      {tabsDisponibles.length > 1 && (
+        <div className="eg-golden-tabs eg-promo-tabs" role="tablist" aria-label="Vistas de promociones">
+          {tabsDisponibles.map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={tabActiva === key}
+              className={`eg-golden-tab${tabActiva === key ? " is-active" : ""}`}
+              onClick={() => setTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="eg-promo-view" role="tabpanel">
-        {tab === "promotions" ? (
+        {tabActiva === "promotions" ? (
           <PromotionsTable
             promotions={promotions}
             loading={loading}
             error={error}
             busyId={busyId}
             onRetry={() => void load()}
-            onView={(promotion) => setViewing({ promotion, mode: "details" })}
-            onEdit={openEdit}
-            onViewQr={(promotion) => setViewing({ promotion, mode: "qr" })}
-            onToggleActive={(promotion) => void toggleActive(promotion)}
-            onCreate={openCreate}
+            /*
+              Sin permisos de administración no se pasa NINGÚN callback
+              administrativo: la tabla no dibuja el menú de acciones ni hace
+              clickeable la fila, así que no hay forma de abrir el detalle —el
+              único camino a `get_promotion_admin`— ni de tocar una promoción.
+            */
+            onView={acceso.isAdmin ? (promotion) => setViewing({ promotion, mode: "details" }) : undefined}
+            onEdit={acceso.isAdmin ? openEdit : undefined}
+            onViewQr={acceso.isAdmin ? (promotion) => setViewing({ promotion, mode: "qr" }) : undefined}
+            onToggleActive={acceso.isAdmin ? (promotion) => void toggleActive(promotion) : undefined}
+            onCreate={acceso.isAdmin ? openCreate : undefined}
           />
         ) : (
-          <PromotionClientsTable promotions={promotions} />
+          /*
+            `promotions` solo alimenta el cartel "Inhabilitado" de los otorgados
+            de promociones apagadas. Para un GM sin `promotions` llega vacío y
+            esa marca no aparece; el filtro de promoción NO sale de acá, la tabla
+            lo pide con su propia RPC.
+          */
+          <PromotionClientsTable promotions={promotions} toast={toast} />
         )}
       </div>
 
-      {formOpen && (
+      {acceso.isAdmin && formOpen && (
         <PromotionFormModal
           key={editing?.id ?? "new"}
           open
@@ -249,7 +318,7 @@ export default function Promotions() {
         />
       )}
 
-      {viewing && (
+      {acceso.isAdmin && viewing && (
         <PromotionDetailsModal
           key={`${viewing.promotion.id}:${viewing.mode}`}
           promotion={viewing.promotion}

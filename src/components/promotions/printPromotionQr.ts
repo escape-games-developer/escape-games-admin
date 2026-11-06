@@ -14,7 +14,26 @@ function escapeHtml(value: string): string {
 
 export function printPromotionQr(
   canvas: HTMLCanvasElement | null,
-  { title, subtitle, note }: { title: string; subtitle: string; note?: string },
+  {
+    title,
+    subtitle,
+    branch,
+    note,
+  }: {
+    title: string;
+    subtitle: string;
+    /**
+     * Destino del QR. Va destacado porque un QR impreso tiene que poder
+     * identificarse a simple vista: promoción, acción y destino. Sin esto,
+     * dos QR de la misma promo para destinos distintos se confunden.
+     *
+     * Es SIEMPRE una línea sola con el nombre del lugar. Un punto específico
+     * no lleva debajo la sucursal que lo contiene: en el cartel impreso es una
+     * ubicación más, igual que cualquier sucursal.
+     */
+    branch?: string;
+    note?: string;
+  },
   onError: (msg: string) => void
 ) {
   if (!canvas) {
@@ -52,7 +71,8 @@ export function printPromotionQr(
           body { font-family: system-ui, sans-serif; margin: 0; padding: 40px; }
           .wrap { display:flex; flex-direction:column; align-items:center; gap:18px; }
           h1 { margin:0; font-size:24px; letter-spacing:1px; text-align:center; }
-          h2 { margin:0; font-size:16px; font-weight:600; text-align:center; }
+          h2 { margin:0; font-size:16px; font-weight:600; text-align:center; letter-spacing:1px; text-transform:uppercase; }
+          h3 { margin:0; font-size:20px; font-weight:800; text-align:center; letter-spacing:2px; text-transform:uppercase; }
           p { margin:0; font-size:12px; color:#555; text-align:center; }
           img { width: 340px; height: 340px; image-rendering: pixelated; }
         </style>
@@ -61,6 +81,7 @@ export function printPromotionQr(
         <div class="wrap">
           <h1>${escapeHtml(title)}</h1>
           <h2>${escapeHtml(subtitle)}</h2>
+          ${branch ? `<h3>${escapeHtml(branch)}</h3>` : ""}
           <img id="qrimg" src="${dataUrl}" alt="" />
           ${note ? `<p>${escapeHtml(note)}</p>` : ""}
         </div>

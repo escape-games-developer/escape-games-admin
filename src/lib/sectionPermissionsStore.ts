@@ -1,6 +1,8 @@
 import { createContext, useContext } from "react";
 import {
   canAccessSection,
+  promotionsCapabilities,
+  type PromotionsCapabilities,
   type SectionKey,
   type SectionPermissions,
   type SectionRole,
@@ -22,6 +24,12 @@ export type SectionPermissionsStore = {
   /** La lectura falló y se está usando caché o el mínimo conocido. */
   degraded: boolean;
   canAccessSection: (sectionKey: SectionKey) => boolean;
+  /**
+   * Beneficios › Promociones ya resuelto. Se deja acá, y no en la pantalla,
+   * para que las tabs, el sidebar y la futura edición de sucursal lean todos
+   * la misma respuesta. Sale de `promotionsCapabilities`: no es otra regla.
+   */
+  promotions: PromotionsCapabilities;
 };
 
 export const SectionPermissionsContext = createContext<SectionPermissionsStore | null>(null);
@@ -47,5 +55,6 @@ export function buildSectionPermissionsStore(
     loading,
     degraded,
     canAccessSection: (sectionKey) => canAccessSection(sectionKey, role, permissions),
+    promotions: promotionsCapabilities(role, permissions),
   };
 }

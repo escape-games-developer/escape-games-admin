@@ -5,7 +5,14 @@ import { useSectionPermissions } from "../lib/sectionPermissionsStore";
 import { SECTION_DEFS, firstAccessiblePath, type SectionKey } from "../lib/sectionPermissions";
 
 type Props = {
-  section: SectionKey;
+  /**
+   * Una clave, o varias. Con varias alcanza con que UNA esté habilitada: es el
+   * caso de Promociones, que se abre con `promotions` o con
+   * `promotions_clients` (cada tab se filtra después, adentro).
+   */
+  section: SectionKey | SectionKey[];
+  /** Título para el cartel cuando `section` es una lista. */
+  label?: string;
   children: ReactNode;
 };
 
@@ -18,16 +25,19 @@ type Props = {
  * No redirige a propósito: con varias secciones apagadas, redirigir entre
  * ellas es la receta para un loop. Muestra una pantalla clara y deja volver.
  */
-export default function SectionGuard({ section, children }: Props) {
+export default function SectionGuard({ section, label: labelProp, children }: Props) {
   const { canAccessSection, loading, role, permissions } = useSectionPermissions();
 
   // Sin permisos resueltos no se dibuja nada protegido: evita el parpadeo de
   // ver la sección un instante y que después desaparezca.
   if (loading) return null;
 
-  if (canAccessSection(section)) return <>{children}</>;
+  const claves = Array.isArray(section) ? section : [section];
+  if (claves.some((clave) => canAccessSection(clave))) return <>{children}</>;
 
-  const label = SECTION_DEFS.find((def) => def.key === section)?.label ?? "Esta sección";
+  const label = labelProp
+    ?? SECTION_DEFS.find((def) => def.key === claves[0])?.label
+    ?? "Esta sección";
   // Salida a la primera sección que sí puede abrir. Si no hay ninguna, no se
   // ofrece botón: mandarlo a otra pantalla bloqueada no ayuda a nadie.
   const salida = firstAccessiblePath(role, permissions);

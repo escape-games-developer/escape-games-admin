@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button, Card, PageHeader, Toggle } from "../ui";
 import { ToastStack, useToasts } from "../components/Toast";
 import {
@@ -152,31 +152,75 @@ export default function SettingsPage() {
           <p className="eg-settings__loading" role="status">Cargando configuración…</p>
         ) : (
           <div className="eg-settings__list">
-            {SECTION_DEFS.filter((def) => def.key !== "recontactos").map((def) => {
-              const enabled = permissions[def.key] === true;
-              // Una hija con el padre apagado no se muestra igual: se aclara
-              // en el propio switch en vez de esconderlo.
-              const padreApagado = def.parent ? permissions[def.parent] !== true : false;
+            {(() => {
+              const visibles = SECTION_DEFS.filter((def) => def.key !== "recontactos");
+              // Encabezados de agrupación VISUAL. El catálogo sigue plano y las
+              // claves se guardan igual que siempre: esto solo dibuja el árbol
+              // Beneficios › Promociones que pidió Ajustes. Las secciones sin
+              // `group` no cambian en nada.
+              let grupoDibujado: string | undefined;
+              let subgrupoDibujado: string | undefined;
 
-              return (
-                <div
-                  key={def.key}
-                  className={`eg-settings__row${def.parent ? " is-child" : ""}`}
-                >
-                  <Toggle
-                    label={def.label}
-                    description={
-                      padreApagado
-                        ? "Intranet está apagada: no se muestra aunque esté activada."
-                        : undefined
-                    }
-                    checked={enabled}
-                    disabled={guardando === def.key}
-                    onChange={(event) => void cambiar(def.key, event.target.checked)}
-                  />
-                </div>
-              );
-            })}
+              return visibles.flatMap((def) => {
+                const filas: ReactNode[] = [];
+
+                if (def.group && def.group !== grupoDibujado) {
+                  grupoDibujado = def.group;
+                  subgrupoDibujado = undefined;
+                  filas.push(
+                    <div className="eg-settings__group" key={`group:${def.group}`}>{def.group}</div>
+                  );
+                } else if (!def.group) {
+                  grupoDibujado = undefined;
+                  subgrupoDibujado = undefined;
+                }
+
+                if (def.subgroup && def.subgroup !== subgrupoDibujado) {
+                  subgrupoDibujado = def.subgroup;
+                  filas.push(
+                    <div className="eg-settings__subgroup" key={`subgroup:${def.group}:${def.subgroup}`}>{def.subgroup}</div>
+                  );
+                } else if (!def.subgroup) {
+                  subgrupoDibujado = undefined;
+                }
+
+                const enabled = permissions[def.key] === true;
+                // Una hija con el padre apagado no se muestra igual: se aclara
+                // en el propio switch en vez de esconderlo.
+                const padreApagado = def.parent ? permissions[def.parent] !== true : false;
+                /*
+                  Con el padre apagado algunas hijas solo se aclaran (Intranet) y
+                  otras se bloquean (Permitir edición). En los dos casos el valor
+                  GUARDADO queda intacto: apagar Clientes no borra "Permitir
+                  edición", solo deja de aplicarla, y al reactivar Clientes vuelve
+                  a tener efecto con el valor que ya tenía.
+                */
+                const bloqueado = padreApagado && def.lockWhenParentOff === true;
+                const ayuda = padreApagado
+                  ? def.parentOffHint ?? "Intranet está apagada: no se muestra aunque esté activada."
+                  : undefined;
+
+                filas.push(
+                  <div
+                    key={def.key}
+                    className={`eg-settings__row${def.parent || def.subgroup ? " is-child" : ""}${bloqueado ? " is-locked" : ""}`}
+                    // El `title` va en la fila y no en el Toggle: el input está
+                    // oculto, así que ahí el tooltip nunca aparecería.
+                    title={bloqueado ? ayuda : undefined}
+                  >
+                    <Toggle
+                      label={def.label}
+                      description={ayuda}
+                      checked={enabled}
+                      disabled={guardando === def.key || bloqueado}
+                      onChange={(event) => void cambiar(def.key, event.target.checked)}
+                    />
+                  </div>
+                );
+
+                return filas;
+              });
+            })()}
           </div>
         )}
       </Card>

@@ -7,10 +7,13 @@
 .eg-promo-view { display: grid; gap: var(--eg-sp-4); min-width: 0; }
 
 .eg-promo-filters { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(160px, 220px); gap: var(--eg-sp-3); align-items: center; }
-.eg-promo-filters--clients { grid-template-columns: minmax(260px, 1fr) minmax(170px, 240px) minmax(150px, 200px); }
+.eg-promo-filters--clients { grid-template-columns: minmax(260px, 1fr) minmax(170px, 240px) minmax(150px, 200px) auto; }
 
 .eg-promo-table-card { min-width: 0; overflow: hidden; }
 .eg-promo-table-card .eg-table { min-width: 900px; }
+/* Clientes suma "Sucursal otorgado" y "Sucursal uso": diez columnas no entran
+   en 900px sin apretar el mail y los nombres. */
+.eg-promo-table-card--clients .eg-table { min-width: 1120px; }
 .eg-promo-table__image-col { width: 112px; }
 .eg-promo-table__name-col { min-width: 240px; }
 .eg-promo-table__mail-col { max-width: 240px; }
@@ -53,6 +56,55 @@
 .eg-promo-qr__value { overflow: hidden; color: var(--eg-text-faint); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--eg-fs-xs); text-overflow: ellipsis; white-space: nowrap; }
 .eg-promo-qr__actions { display: flex; flex-wrap: wrap; gap: var(--eg-sp-2); }
 
+/* QR por destino (sucursales) -------------------------------------------- */
+.eg-promo-branches { display: grid; gap: var(--eg-sp-5); min-width: 0; }
+.eg-promo-branches__loading { margin: 0; color: var(--eg-text-dim); font-size: var(--eg-fs-base); }
+.eg-promo-branches__block { display: grid; gap: var(--eg-sp-3); min-width: 0; }
+.eg-promo-branches__head { display: grid; gap: 2px; }
+.eg-promo-branches__head strong { color: var(--eg-text); font-size: var(--eg-fs-sm); letter-spacing: .04em; text-transform: uppercase; }
+.eg-promo-branches__head p { margin: 0; color: var(--eg-text-dim); font-size: var(--eg-fs-xs); line-height: 1.45; }
+
+/* Título de la lista de destinos dentro de un bloque ("Sucursales"). Es un
+   escalón MENOR que el título del bloque, no compite con él. */
+.eg-promo-branches__group { display: grid; gap: var(--eg-sp-2); min-width: 0; }
+.eg-promo-branches__group-title { margin: 0; color: var(--eg-text-dim); font-size: var(--eg-fs-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+
+.eg-promo-branch-list { display: grid; border: 1px solid var(--eg-border); border-radius: var(--eg-radius); overflow: hidden; }
+.eg-promo-branch { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--eg-sp-3); align-items: center; padding: var(--eg-sp-3) var(--eg-sp-4); border-bottom: 1px solid var(--eg-border); background: var(--eg-surface); }
+.eg-promo-branch:last-child { border-bottom: 0; }
+.eg-promo-branch.is-enabled { background: var(--eg-surface-2); }
+.eg-promo-branch__id { display: flex; flex-wrap: wrap; align-items: center; gap: var(--eg-sp-2); min-width: 0; }
+.eg-promo-branch__id strong { color: var(--eg-text); font-size: var(--eg-fs-md); }
+.eg-promo-branch__state { display: inline-flex; }
+.eg-promo-branch__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--eg-sp-2); }
+
+/* QR grande (modal de un destino) ---------------------------------------- */
+.eg-promo-qrbig { display: grid; justify-items: center; gap: var(--eg-sp-4); }
+.eg-promo-qrbig__label { display: grid; justify-items: center; gap: var(--eg-sp-1); text-align: center; }
+.eg-promo-qrbig__label strong { color: var(--eg-text); font-size: var(--eg-fs-lg); text-transform: uppercase; letter-spacing: .04em; }
+.eg-promo-qrbig__label em { color: var(--eg-text); font-size: var(--eg-fs-lg); font-style: normal; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.eg-promo-qrbig__action { padding: 2px var(--eg-sp-3); border-radius: var(--eg-radius-pill); font-size: var(--eg-fs-xs); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.eg-promo-qrbig__action--grant { background: var(--eg-success-soft); color: var(--eg-success); }
+.eg-promo-qrbig__action--use { background: var(--eg-accent-soft); color: var(--eg-accent); }
+.eg-promo-qrbig__code { padding: var(--eg-sp-3); border-radius: var(--eg-radius); background: var(--eg-text-inverse); line-height: 0; }
+.eg-promo-qrbig__code canvas { display: block; max-width: 100%; height: auto !important; }
+.eg-promo-qrbig__help { margin: 0; max-width: 46ch; color: var(--eg-text-dim); font-size: var(--eg-fs-sm); line-height: 1.5; text-align: center; }
+.eg-promo-qrbig__warning { margin: 0; max-width: 46ch; color: var(--eg-warning); font-size: var(--eg-fs-xs); line-height: 1.5; text-align: center; }
+.eg-promo-qrbig__actions { display: flex; gap: var(--eg-sp-2); }
+
+/* Confirmación de acciones destructivas ---------------------------------- */
+.eg-promo-confirm__text { margin: 0; color: var(--eg-text-dim); font-size: var(--eg-fs-base); line-height: 1.55; }
+
+/* QR del sistema anterior ------------------------------------------------ */
+.eg-promo-legacy { border: 1px solid var(--eg-border); border-radius: var(--eg-radius); background: var(--eg-surface); }
+.eg-promo-legacy__summary { display: flex; align-items: center; gap: var(--eg-sp-2); padding: var(--eg-sp-3) var(--eg-sp-4); color: var(--eg-text-dim); font-size: var(--eg-fs-sm); font-weight: 700; cursor: pointer; list-style: none; }
+.eg-promo-legacy__summary::-webkit-details-marker { display: none; }
+.eg-promo-legacy__summary:hover { color: var(--eg-text); }
+.eg-promo-legacy__summary svg { transition: transform var(--eg-t-fast); }
+.eg-promo-legacy[open] .eg-promo-legacy__summary svg { transform: rotate(90deg); }
+.eg-promo-legacy__body { display: grid; gap: var(--eg-sp-3); padding: 0 var(--eg-sp-4) var(--eg-sp-4); }
+.eg-promo-legacy__warning { margin: 0; padding: var(--eg-sp-2) var(--eg-sp-3); border-left: 2px solid var(--eg-warning); background: var(--eg-surface-2); color: var(--eg-text-dim); font-size: var(--eg-fs-xs); line-height: 1.5; }
+
 /* Detalle ---------------------------------------------------------------- */
 .eg-promo-details { display: grid; gap: var(--eg-sp-5); }
 .eg-promo-details__summary { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--eg-sp-5); align-items: start; }
@@ -76,6 +128,8 @@
 }
 @media (max-width: 620px) {
   .eg-promo-stats, .eg-promo-filters, .eg-promo-filters--clients { grid-template-columns: 1fr; }
+  .eg-promo-branch { grid-template-columns: 1fr; justify-items: start; }
+  .eg-promo-branch__actions { justify-content: flex-start; }
   .eg-promo-qr { flex-direction: column; align-items: center; text-align: center; }
   .eg-promo-qr__copy { justify-items: center; }
   .eg-promo-qr__actions { justify-content: center; }

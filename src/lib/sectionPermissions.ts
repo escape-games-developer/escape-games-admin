@@ -17,6 +17,9 @@ export type SectionKey =
   | "news"
   | "users"
   | "golden_ticket"
+  | "promotions"
+  | "promotions_clients"
+  | "promotions_clients_edit"
   | "user_progress"
   | "intranet"
   | "intranet_quote"
@@ -49,6 +52,18 @@ export type SectionDef = {
   parent?: SectionKey;
   /** Ruta real de `routes.tsx`. Los grupos (Intranet) no tienen. */
   path?: string;
+  /**
+   * Agrupación VISUAL para Ajustes. No existe en la base y no participa de
+   * `canAccessSection`: el catálogo sigue siendo plano. Las claves sin grupo
+   * se listan sueltas, exactamente como hasta ahora.
+   */
+  group?: string;
+  /** Segundo nivel visual dentro de `group` (Beneficios › Promociones). */
+  subgroup?: string;
+  /** Reemplaza la ayuda por defecto cuando el padre está apagado. */
+  parentOffHint?: string;
+  /** Con el padre apagado el switch se BLOQUEA, no solo se aclara. */
+  lockWhenParentOff?: boolean;
 };
 
 /**
@@ -59,7 +74,28 @@ export const SECTION_DEFS: readonly SectionDef[] = [
   { key: "rooms", label: "Salas", path: "/salas" },
   { key: "news", label: "Novedades", path: "/novedades" },
   { key: "users", label: "Usuarios", path: "/usuarios" },
-  { key: "golden_ticket", label: "Golden Ticket", path: "/golden-tickets" },
+  { key: "golden_ticket", label: "Golden Ticket", path: "/golden-tickets", group: "Beneficios" },
+  /**
+   * Beneficios › Promociones. Tres claves PLANAS en la base (las mismas que ya
+   * existen para el rol GM); el anidado es solo presentación en Ajustes.
+   *
+   *   · promotions              → tab "Promociones creadas", SOLO LECTURA.
+   *   · promotions_clients      → tab "Clientes".
+   *   · promotions_clients_edit → capacidad de edición futura (sucursal). Su
+   *     padre es `promotions_clients`: sin ese permiso no tiene efecto, y esa
+   *     dependencia la resuelve `canAccessSection` como cualquier otra hija.
+   */
+  { key: "promotions", label: "Promoción", path: "/beneficios/promociones", group: "Beneficios", subgroup: "Promociones" },
+  { key: "promotions_clients", label: "Clientes", path: "/beneficios/promociones", group: "Beneficios", subgroup: "Promociones" },
+  {
+    key: "promotions_clients_edit",
+    label: "Permitir edición",
+    parent: "promotions_clients",
+    group: "Beneficios",
+    subgroup: "Promociones",
+    parentOffHint: "Requiere permiso Clientes activo",
+    lockWhenParentOff: true,
+  },
   { key: "user_progress", label: "Progreso usuarios", path: "/usuarios/progreso" },
   // Métricas son cinco rutas (Resumen, Sucursales, Campañas, Ventas,
   // Diagnóstico) bajo una sola llave: el switch enciende o apaga el grupo
@@ -194,6 +230,56 @@ export function canAccessSection(
   if (parent && permissions[parent] !== true) return false;
 
   return permissions[sectionKey] === true;
+}
+
+/* =======================
+   PROMOCIONES — CAPACIDADES
+======================= */
+
+/**
+ * Beneficios › Promociones, en un solo lugar.
+ *
+ * Son azúcar sobre `canAccessSection`: no hay una segunda regla de permisos
+ * acá. Para ADMIN_GENERAL / ADMIN todas dan true, porque `canAccessSection` ya
+ * los deja pasar siempre; para GM mandan los switches de Ajustes.
+ *
+ * El backend valida lo mismo con `can_read_promotions()`,
+ * `can_read_promotion_clients()` e `is_promo_admin()`. Esto no reemplaza esa
+ * validación: evita que la UI llegue a pedir algo que le van a rechazar.
+ */
+export type PromotionsCapabilities = {
+  /** ADMIN_GENERAL o ADMIN: los únicos que pueden ADMINISTRAR promociones. */
+  isAdmin: boolean;
+  /** Puede leer el listado (`get_promotions_admin`). */
+  canRead: boolean;
+  /** Puede leer el listado de clientes (`get_promotion_clients_admin`). */
+  canReadClients: boolean;
+  /** Capacidad para la edición futura (sucursal). Todavía no se usa. */
+  canEditClients: boolean;
+  /** Alcanza para entrar a la sección: al menos una tab disponible. */
+  canOpenSection: boolean;
+};
+
+export function promotionsCapabilities(
+  role: SectionRole,
+  permissions: SectionPermissions
+): PromotionsCapabilities {
+  const isAdmin = SECTION_UNRESTRICTED_ROLES.includes(role);
+  const canRead = canAccessSection("promotions", role, permissions);
+  const canReadClients = canAccessSection("promotions_clients", role, permissions);
+
+  return {
+    isAdmin,
+    canRead,
+    canReadClients,
+    // `promotions_clients_edit` tiene como padre a `promotions_clients`, así
+    // que `canAccessSection` ya exige las dos: el valor guardado de "Permitir
+    // edición" queda intacto, simplemente no aplica sin Clientes.
+    canEditClients: canAccessSection("promotions_clients_edit", role, permissions),
+    // `promotions_clients_edit` NO entra acá a propósito: es una capacidad
+    // sobre los clientes, no una llave de entrada a la sección.
+    canOpenSection: canRead || canReadClients,
+  };
 }
 
 /** Hijas visibles de un grupo. Sirve para no dibujar un menú vacío. */

@@ -13,6 +13,7 @@ import {
   canAccessSection,
   fallbackSectionPermissions,
   fetchSectionPermissions,
+  promotionsCapabilities,
   visibleChildren,
   type SectionPermissions,
 } from "../../lib/sectionPermissions";
@@ -303,15 +304,19 @@ export default function AdminLayout() {
     /**
      * Beneficios: grupo solo de navegación, sin clave propia en
      * `admin_section_permissions`. Golden Ticket conserva exactamente su regla
-     * de siempre (canManageUsers + sección golden_ticket). Promociones es UI
-     * mock y se muestra solo a perfiles administrativos, sin depender de la
-     * habilitación de secciones.
+     * de siempre (canManageUsers + sección golden_ticket).
+     *
+     * Promociones ya no depende del rol: se muestra si el usuario puede abrir
+     * al menos una de sus dos tabs — `promotions` (Promociones creadas) o
+     * `promotions_clients` (Clientes). Para ADMIN_GENERAL / ADMIN las dos dan
+     * true, así que siguen viéndola igual que siempre. `promotions_clients_edit`
+     * queda fuera del cálculo a propósito: no abre nada por sí sola.
      */
     const hijasBeneficios: NonNullable<NavItem["children"]> = [];
     if (effective.canManageUsers && habilitada("golden_ticket")) {
       hijasBeneficios.push({ key: "tickets", label: "Golden Ticket", to: "/golden-tickets" });
     }
-    if (isAdmin) {
+    if (promotionsCapabilities(role, sectionPermissions).canOpenSection) {
       hijasBeneficios.push({ key: "promotions", label: "Promociones", to: "/beneficios/promociones" });
     }
     if (hijasBeneficios.length > 0) {

@@ -2026,3 +2026,11 @@ button.eg-golden-row .eg-golden-row__right span { color: var(--eg-accent); font-
 /* Subsección de Intranet: se sangra para que se lea la jerarquía. */
 .eg-settings__row.is-child { padding-left: var(--eg-sp-8); background: var(--eg-surface); }
 .eg-settings__row .eg-toggle { width: 100%; }
+
+/* Agrupación visual (Beneficios › Promociones). Son rótulos, no switches: el
+   catálogo de secciones sigue siendo plano. */
+.eg-settings__group { padding: var(--eg-sp-2) var(--eg-sp-4); border-bottom: 1px solid var(--eg-border); background: var(--eg-surface-3); color: var(--eg-text-dim); font-size: var(--eg-fs-xs); font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.eg-settings__subgroup { padding: var(--eg-sp-2) var(--eg-sp-4) var(--eg-sp-2) var(--eg-sp-6); border-bottom: 1px solid var(--eg-border); background: var(--eg-surface-2); color: var(--eg-text); font-size: var(--eg-fs-sm); font-weight: 700; }
+/* Switch sin efecto por depender de otro permiso: atenuado además de disabled. */
+.eg-settings__row.is-locked { cursor: not-allowed; }
+.eg-settings__row.is-locked .eg-toggle { opacity: .55; cursor: not-allowed; }

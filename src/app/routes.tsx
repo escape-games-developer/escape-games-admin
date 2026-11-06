@@ -230,13 +230,27 @@ export default function AppRoutes() {
           }
         />
 
-        {/* Beneficios › Promociones. Etapa visual con datos mock: sin clave en
-            admin_section_permissions todavía, así que el gate es solo el rol. */}
+        {/*
+          Beneficios › Promociones. Ya tiene claves en `admin_section_permissions`,
+          así que pasa a las dos capas de siempre:
+
+            · RequireRole  → suma GM a los perfiles del panel. Sin eso los
+              switches de Ajustes no le podrían dar acceso a nadie.
+            · SectionGuard → se abre con `promotions` O con `promotions_clients`:
+              cada una habilita una tab distinta y con cualquiera hay algo para
+              ver. `promotions_clients_edit` NO abre la sección: es una
+              capacidad sobre los clientes, no una llave de entrada.
+
+          Un GM sin ninguna de las dos cae en "Acceso restringido", el mismo
+          comportamiento que ya tiene el resto del panel.
+        */}
         <Route
           path="/beneficios/promociones"
           element={
-            <RequireRole allow={["ADMIN_GENERAL", "ADMIN"]}>
-              <Promotions />
+            <RequireRole allow={["ADMIN_GENERAL", "ADMIN", "GM"]}>
+              <SectionGuard section={["promotions", "promotions_clients"]} label="Promociones">
+                <Promotions />
+              </SectionGuard>
             </RequireRole>
           }
         />
