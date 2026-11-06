@@ -53,7 +53,8 @@ function roleLabel(role: UserRole): string {
 const pageMeta: Record<string, { key: string; crumbs: Crumb[] }> = {
   "/salas": { key: "rooms", crumbs: [{ label: "Salas" }, { label: "Listado" }] },
   "/novedades": { key: "news", crumbs: [{ label: "Novedades" }, { label: "Listado" }] },
-  "/usuarios": { key: "users", crumbs: [{ label: "Usuarios" }, { label: "Listado" }] },
+  "/usuarios/clientes": { key: "users-clients", crumbs: [{ label: "Usuarios" }, { label: "Clientes" }] },
+  "/usuarios/sistema": { key: "users-staff", crumbs: [{ label: "Usuarios" }, { label: "Usuarios de sistema" }] },
   "/golden-tickets": { key: "tickets", crumbs: [{ label: "Beneficios" }, { label: "Golden Ticket" }] },
   "/beneficios/promociones": { key: "promotions", crumbs: [{ label: "Beneficios" }, { label: "Promociones" }] },
   "/usuarios/progreso": { key: "progress", crumbs: [{ label: "Progreso" }, { label: "Usuarios" }] },
@@ -298,7 +299,16 @@ export default function AdminLayout() {
       nav.push({ key: "news", label: "Novedades", to: "/novedades", icon: "news" });
     }
     if (effective.canManageUsers && habilitada("users")) {
-      nav.push({ key: "users", label: "Usuarios", to: "/usuarios", icon: "users" });
+      nav.push({
+        key: "users",
+        label: "Usuarios",
+        to: "/usuarios/clientes",
+        icon: "users",
+        children: [
+          { key: "users-clients", label: "Clientes", to: "/usuarios/clientes" },
+          { key: "users-staff", label: "Usuarios de sistema", to: "/usuarios/sistema" },
+        ],
+      });
     }
 
     /**

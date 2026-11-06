@@ -208,12 +208,28 @@ export default function AppRoutes() {
           }
         />
 
+        {/*
+          Usuarios se divide en dos vistas con los mismos permisos de siempre:
+          Clientes (CLIENT) y Usuarios de sistema (GM / Admin General).
+          `key` distinto para que al cambiar de vista se reinicien filtros y estado.
+        */}
+        <Route path="/usuarios" element={<Navigate to="/usuarios/clientes" replace />} />
         <Route
-          path="/usuarios"
+          path="/usuarios/clientes"
           element={
             <RequirePerm permKey="canManageUsers">
               <SectionGuard section="users">
-                <Users />
+                <Users key="clients" scope="clients" />
+              </SectionGuard>
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="/usuarios/sistema"
+          element={
+            <RequirePerm permKey="canManageUsers">
+              <SectionGuard section="users">
+                <Users key="staff" scope="staff" />
               </SectionGuard>
             </RequirePerm>
           }

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 import GoldenTicketReviewModal from "../components/GoldenTicketReviewModal";
+import ClientDetailPanel from "../components/users/ClientDetailPanel";
 import { ToastStack, useToasts } from "../components/Toast";
 import {
   ActionMenu,
@@ -159,7 +160,21 @@ function humanizeEdgeError(err: any) {
   return raw || "Error inesperado.";
 }
 
-function newUserTemplate(): User {
+/**
+ * Vista de la sección Usuarios. Cada una lista SOLO los perfiles que le tocan:
+ *   · clients → CLIENT
+ *   · staff   → GM y ADMIN_GENERAL (usuarios de sistema)
+ * La lectura de la base es la misma; el corte se hace en el front.
+ */
+export type UsersScope = "clients" | "staff";
+
+const scopeRoles: Record<UsersScope, UserRole[]> = {
+  clients: ["CLIENT"],
+  staff: ["GM", "ADMIN_GENERAL"],
+};
+
+function newUserTemplate(scope: UsersScope): User {
+  const role: UserRole = scope === "clients" ? "CLIENT" : "GM";
   return {
     id: crypto.randomUUID(),
     firstName: "",
@@ -167,13 +182,13 @@ function newUserTemplate(): User {
     alias: "",
     email: "",
     avatarUrl: "",
-    role: "CLIENT",
-    branch: "",
+    role,
+    branch: role === "GM" ? "Nuñez" : "",
     active: true,
-    permissions: defaultPermsForRole("CLIENT"),
+    permissions: defaultPermsForRole(role),
     goldenActive: false,
     goldenSource: null,
-    _isStaff: false,
+    _isStaff: isStaffRole(role),
   };
 }
 
@@ -229,6 +244,7 @@ function ModalShell({
 /** ✅ Modal crear */
 function CreateUserModal({
   open,
+  scope,
   initialUser,
   canManageUsers,
   busy,
@@ -236,6 +252,7 @@ function CreateUserModal({
   onSave,
 }: {
   open: boolean;
+  scope: UsersScope;
   initialUser: User | null;
   canManageUsers: boolean;
   busy: boolean;
@@ -269,8 +286,8 @@ function CreateUserModal({
 
   return <Modal
     open={open}
-    title="Nuevo usuario"
-    description="Creá un usuario y configurá su acceso al sistema."
+    title={scope === "clients" ? "Nuevo cliente" : "Nuevo usuario de sistema"}
+    description={scope === "clients" ? "Creá un cliente de la app." : "Creá un Game Master o Admin General y configurá su acceso al panel."}
     size="lg"
     panelClassName="eg-users-modal eg-users-create-modal"
     onClose={onClose}
@@ -289,9 +306,9 @@ function CreateUserModal({
       <section className="eg-users-form__section">
         <div className="eg-users-form__heading"><strong>Acceso</strong><span>Rol y alcance administrativo</span></div>
         <div className="eg-users-form__grid">
-          <Select id="user-role" label="Rol" value={draft.role} onChange={(event) => patch({ role: safeRole(event.target.value) })}>
-            <option value="CLIENT">Cliente</option><option value="GM">Game Master</option><option value="ADMIN_GENERAL">Admin General</option>
-          </Select>
+          {scope === "staff" && <Select id="user-role" label="Rol" value={draft.role} onChange={(event) => patch({ role: safeRole(event.target.value) })}>
+            <option value="GM">Game Master</option><option value="ADMIN_GENERAL">Admin General</option>
+          </Select>}
           {draft.role === "GM" && <Select id="user-branch" label="Sucursal" value={draft.branch} onChange={(event) => patch({ branch: event.target.value as Branch })}>{BRANCHES.map((branch) => <option key={branch} value={branch}>{branch}</option>)}</Select>}
           <Card padding="sm" className="eg-users-form__note">
             {draft.role === "CLIENT" ? "Se generará una contraseña temporal y se mostrará una única vez al finalizar." : <>Se enviará una invitación a <strong>{draft.email || "el mail indicado"}</strong> para configurar la contraseña.</>}
@@ -303,7 +320,8 @@ function CreateUserModal({
   </Modal>;
 }
 
-export default function Users() {
+export default function Users({ scope }: { scope: UsersScope }) {
+  const isClients = scope === "clients";
   const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
   const ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
 
@@ -340,6 +358,9 @@ export default function Users() {
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<UserRole | "">("");
   const [branchFilter, setBranchFilter] = useState<Branch | "">("");
+
+  /** Cliente abierto en el panel lateral (solo vista Clientes). */
+  const [detailClient, setDetailClient] = useState<User | null>(null);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createInitial, setCreateInitial] = useState<User | null>(null);
@@ -610,26 +631,36 @@ export default function Users() {
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
+    const allowed = scopeRoles[scope];
     return items.filter((u) => {
+      if (!allowed.includes(u.role)) return false;
       const full = `${u.firstName} ${u.lastName} ${u.email} ${u.alias}`.toLowerCase();
       const okSearch = !s ? true : full.includes(s);
       const okRole = !roleFilter ? true : u.role === roleFilter;
       const okBranch = !branchFilter ? true : u.branch === branchFilter;
       return okSearch && okRole && okBranch;
     });
-  }, [items, q, roleFilter, branchFilter]);
+  }, [items, q, roleFilter, branchFilter, scope]);
+
+  /** Usuarios del perfil de esta vista, sin filtros: decide el mensaje de "vacío". */
+  const scopeCount = useMemo(
+    () => items.filter((u) => scopeRoles[scope].includes(u.role)).length,
+    [items, scope]
+  );
 
   const totals = useMemo(() => {
     const totalUsers = filtered.length;
     const activeUsers = filtered.filter((u) => u.active).length;
     const gmCount = filtered.filter((u) => u.role === "GM").length;
     const adminGeneralCount = filtered.filter((u) => u.role === "ADMIN_GENERAL").length;
+    const goldenCount = filtered.filter((u) => u.goldenActive).length;
 
     return {
       totalUsers,
       activeUsers,
       gmCount,
       adminGeneralCount,
+      goldenCount,
     };
   }, [filtered]);
 
@@ -692,7 +723,7 @@ export default function Users() {
 
   const startCreate = () => {
     closeMenu();
-    setCreateInitial(newUserTemplate());
+    setCreateInitial(newUserTemplate(scope));
     setCreateModalOpen(true);
   };
 
@@ -977,7 +1008,7 @@ export default function Users() {
   const roleLabelOf = (r: UserRole) =>
     r === "CLIENT" ? "Cliente" : r === "GM" ? "Game Master" : "Admin General";
 
-  const userColumns: DataTableColumn<User>[] = [
+  const allColumns: DataTableColumn<User>[] = [
     {
       key: "user",
       header: "Usuario",
@@ -1028,26 +1059,31 @@ export default function Users() {
       key: "actions",
       header: "Acciones",
       align: "center",
-      render: (user) => canManageUsers ? <ActionMenu items={[
+      // El span frena el clic: usar el menú no tiene que abrir la ficha del cliente.
+      render: (user) => canManageUsers ? <span onClick={(event) => event.stopPropagation()}><ActionMenu items={[
         ...(user._isStaff && (user.role === "GM" || user.role === "ADMIN_GENERAL") ? [{ key: "gm-code", label: "Código GM", icon: "copy" as const, disabled: busy, onSelect: () => ensureAndCopyGmCode(user) }] : []),
-        { key: "permissions", label: "Permisos", icon: "settings", disabled: busy, onSelect: () => setPermModal({ open: true, user: { ...user, permissions: { ...user.permissions } } }) },
+        ...(user._isStaff ? [{ key: "permissions", label: "Permisos", icon: "settings" as const, disabled: busy, onSelect: () => setPermModal({ open: true, user: { ...user, permissions: { ...user.permissions } } }) }] : []),
         { key: "password", label: "Resetear contraseña", icon: "refresh", disabled: busy, onSelect: () => openReset(user) },
         ...(user.role === "CLIENT" ? [{ key: "golden", label: "Golden Ticket", icon: "ticket" as const, disabled: busy, onSelect: () => openGolden(user) }] : []),
         { key: "delete", label: "Eliminar usuario", icon: "trash", danger: true, separatorBefore: true, disabled: busy, onSelect: () => openDelete(user) },
-      ]} /> : <span className="eg-users-muted">—</span>,
+      ]} /></span> : <span className="eg-users-muted">—</span>,
     },
   ];
+
+  /** Clientes: sin rol ni sucursal (siempre Cliente / —). Sistema: sin Golden Ticket. */
+  const hiddenColumns = isClients ? ["role", "branch"] : ["golden"];
+  const userColumns = allColumns.filter((col) => !hiddenColumns.includes(col.key));
 
   return (
     <div className="eg-users-page">
       <div className="eg-users-page__inner">
         <PageHeader
-          title="Usuarios"
-          subtitle="Administrá usuarios, roles y permisos."
-          action={canManageUsers ? <Button variant="primary" icon="plus" onClick={startCreate} disabled={busy}>Nuevo usuario</Button> : undefined}
+          title={isClients ? "Clientes" : "Usuarios de sistema"}
+          subtitle={isClients ? "Clientes de la app: datos, contraseña y Golden Ticket." : "Administradores y Game Masters: roles, sucursal y permisos del panel."}
+          action={canManageUsers ? <Button variant="primary" icon="plus" onClick={startCreate} disabled={busy}>{isClients ? "Nuevo cliente" : "Nuevo usuario"}</Button> : undefined}
         />
 
-        <Card padding="sm" className="eg-users-config">
+        {isClients && <Card padding="sm" className="eg-users-config">
           <div className="eg-users-config__copy">
             <UiIcon name="ticket" size={18} />
             <span><strong>Capturas de Golden Ticket</strong><small>Botón “Subir captura” para todos los clientes</small></span>
@@ -1058,27 +1094,34 @@ export default function Users() {
             onChange={toggleRatingUpload}
             disabled={ratingLoading || ratingSaving}
           />
-        </Card>
+        </Card>}
 
         <Card padding="sm" className="eg-users-filters">
-          <SearchInput value={q} onChange={(event) => setQ(event.target.value)} placeholder="Buscar por nombre, mail o alias..." aria-label="Buscar usuarios" />
-          <Select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as UserRole | "")} aria-label="Filtrar por rol">
-            <option value="">Todos los roles</option>
-            <option value="CLIENT">Cliente</option>
-            <option value="GM">Game Master</option>
-            <option value="ADMIN_GENERAL">Admin General</option>
-          </Select>
-          <Select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value as Branch | "")} aria-label="Filtrar por sucursal">
-            <option value="">Todas las sucursales</option>
-            {BRANCHES.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
-          </Select>
+          <SearchInput value={q} onChange={(event) => setQ(event.target.value)} placeholder={isClients ? "Buscar por nombre, mail o alias..." : "Buscar por nombre o mail..."} aria-label={isClients ? "Buscar clientes" : "Buscar usuarios de sistema"} />
+          {!isClients && <>
+            <Select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as UserRole | "")} aria-label="Filtrar por rol">
+              <option value="">Todos los roles</option>
+              <option value="GM">Game Master</option>
+              <option value="ADMIN_GENERAL">Admin General</option>
+            </Select>
+            <Select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value as Branch | "")} aria-label="Filtrar por sucursal">
+              <option value="">Todas las sucursales</option>
+              {BRANCHES.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+            </Select>
+          </>}
         </Card>
 
         <div className="eg-users-stats">
-          <StatCard value={totals.totalUsers} label="Usuarios visibles" loading={loading} />
-          <StatCard value={totals.activeUsers} label="Usuarios activos" tone="success" loading={loading} />
-          <StatCard value={totals.gmCount} label="Game Masters" loading={loading} />
-          <StatCard value={totals.adminGeneralCount} label="Admin General" tone="accent" loading={loading} />
+          {isClients ? <>
+            <StatCard value={totals.totalUsers} label="Clientes visibles" loading={loading} />
+            <StatCard value={totals.activeUsers} label="Clientes activos" tone="success" loading={loading} />
+            <StatCard value={totals.goldenCount} label="Con Golden Ticket" tone="accent" loading={loading} />
+          </> : <>
+            <StatCard value={totals.totalUsers} label="Usuarios visibles" loading={loading} />
+            <StatCard value={totals.activeUsers} label="Usuarios activos" tone="success" loading={loading} />
+            <StatCard value={totals.gmCount} label="Game Masters" loading={loading} />
+            <StatCard value={totals.adminGeneralCount} label="Admin General" tone="accent" loading={loading} />
+          </>}
         </div>
 
         <Card padding="none" className="eg-users-table-card">
@@ -1089,16 +1132,20 @@ export default function Users() {
             loading={loading}
             loadingLabel="Cargando usuarios..."
             rowClassName={(user) => user.active ? undefined : "eg-users-row--inactive"}
+            onRowClick={isClients ? (user) => setDetailClient(user) : undefined}
             empty={<EmptyState
               icon="users"
-              title={items.length === 0 ? "Todavía no hay usuarios" : "No encontramos usuarios con estos filtros"}
-              description={items.length === 0 ? "Los usuarios aparecerán acá cuando estén disponibles." : "Probá modificando la búsqueda, el rol o la sucursal."}
+              title={scopeCount === 0 ? (isClients ? "Todavía no hay clientes" : "Todavía no hay usuarios de sistema") : "No encontramos resultados con estos filtros"}
+              description={scopeCount === 0 ? "Van a aparecer acá cuando estén disponibles." : isClients ? "Probá modificando la búsqueda." : "Probá modificando la búsqueda, el rol o la sucursal."}
             />}
           />
         </Card>
 
+        {isClients && <ClientDetailPanel client={detailClient} onClose={() => setDetailClient(null)} />}
+
         <CreateUserModal
           open={createModalOpen}
+          scope={scope}
           initialUser={createInitial}
           canManageUsers={canManageUsers}
           busy={busy}
