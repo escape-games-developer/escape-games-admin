@@ -5,11 +5,13 @@ import PromotionsTable from "../components/promotions/PromotionsTable";
 import PromotionClientsTable from "../components/promotions/PromotionClientsTable";
 import PromotionFormModal, { type PromotionDraft } from "../components/promotions/PromotionFormModal";
 import PromotionDetailsModal from "../components/promotions/PromotionDetailsModal";
+import PromotionConfirmDialog from "../components/promotions/PromotionConfirmDialog";
 import "../components/promotions/promotions.css";
 import { Button, PageHeader, StatCard } from "../ui";
 import { useSectionPermissions } from "../lib/sectionPermissionsStore";
 import {
   createPromotion,
+  deletePromotion,
   deletePromotionImage,
   fetchPromotionsAdmin,
   promotionErrorMessage,
@@ -77,6 +79,8 @@ export default function Promotions() {
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<{ promotion: Promotion; mode: "details" | "qr" } | null>(null);
+  const [deleting, setDeleting] = useState<Promotion | null>(null);
+  const [deleteWorking, setDeleteWorking] = useState(false);
 
   /**
    * Listado. `get_promotions_admin` está gateada por `can_read_promotions()`:
@@ -235,6 +239,38 @@ export default function Promotions() {
     }
   };
 
+  /**
+   * Borrado definitivo (pensado para limpiar pruebas). La imagen del bucket se
+   * borra recién después de que la RPC confirmó; si eso falla solo se avisa.
+   */
+  const confirmDelete = async () => {
+    const promotion = deleting;
+    if (!promotion || deleteWorking) return;
+    setDeleteWorking(true);
+    setBusyId(promotion.id);
+
+    try {
+      await deletePromotion(promotion.id);
+      setDeleting(null);
+      toast("success", `${promotion.name} eliminada.`);
+
+      if (promotion.imagePath) {
+        try {
+          await deletePromotionImage(promotion.imagePath);
+        } catch (err) {
+          toast("warning", `La promoción se borró, pero no pude borrar su imagen del bucket: ${promotionErrorMessage(err, "error de Storage")}.`);
+        }
+      }
+
+      await load();
+    } catch (err) {
+      toast("error", promotionErrorMessage(err, "No pude borrar la promoción."));
+    } finally {
+      setDeleteWorking(false);
+      setBusyId(null);
+    }
+  };
+
   return (
     <div className="eg-promo-page">
       <PageHeader
@@ -294,6 +330,7 @@ export default function Promotions() {
             onEdit={acceso.isAdmin ? openEdit : undefined}
             onViewQr={acceso.isAdmin ? (promotion) => setViewing({ promotion, mode: "qr" }) : undefined}
             onToggleActive={acceso.isAdmin ? (promotion) => void toggleActive(promotion) : undefined}
+            onDelete={acceso.isAdmin ? setDeleting : undefined}
             onCreate={acceso.isAdmin ? openCreate : undefined}
           />
         ) : (
@@ -303,7 +340,7 @@ export default function Promotions() {
             esa marca no aparece; el filtro de promoción NO sale de acá, la tabla
             lo pide con su propia RPC.
           */
-          <PromotionClientsTable promotions={promotions} toast={toast} />
+          <PromotionClientsTable promotions={promotions} toast={toast} canDelete={acceso.isAdmin} onDeleted={() => void load()} />
         )}
       </div>
 
@@ -326,6 +363,17 @@ export default function Promotions() {
           onClose={() => setViewing(null)}
           onEdit={openEdit}
           toast={toast}
+        />
+      )}
+
+      {acceso.isAdmin && deleting && (
+        <PromotionConfirmDialog
+          title="Eliminar promoción"
+          message={`Se va a borrar "${deleting.name}" de forma definitiva${deleting.totalGranted > 0 ? `, junto con sus ${deleting.totalGranted} beneficios otorgados a clientes` : ""} y sus QR. Los QR impresos dejan de funcionar. No se puede deshacer.`}
+          confirmLabel="Eliminar"
+          working={deleteWorking}
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setDeleting(null)}
         />
       )}
 

@@ -8,7 +8,6 @@ import SetPassword from ".././pages/SetPassword";
 import Rooms from ".././pages/Rooms";
 import News from ".././pages/News";
 import Users from ".././pages/Users";
-import UserProgressPage from ".././pages/UserProgressPage";
 import GoldenTicketAdmin from ".././pages/GoldenTicketAdmin";
 import Promotions from ".././pages/Promotions";
 import UiPreview from ".././pages/UiPreview";
@@ -287,16 +286,8 @@ export default function AppRoutes() {
         <Route path="/metricas/ventas" element={<Metricas section="ventas" />} />
         <Route path="/metricas/diagnostico" element={<Metricas section="diagnostico" />} />
 
-        <Route
-          path="/usuarios/progreso"
-          element={
-            <RequireRole allow={["ADMIN_GENERAL", "ADMIN"]}>
-              <SectionGuard section="user_progress">
-                <UserProgressPage />
-              </SectionGuard>
-            </RequireRole>
-          }
-        />
+        {/* Progreso usuarios se eliminó: lo reemplaza la ficha del cliente. Links viejos van a Clientes. */}
+        <Route path="/usuarios/progreso" element={<Navigate to="/usuarios/clientes" replace />} />
 
         <Route path="/admin/intranet/cotizador" element={<SectionGuard section="intranet_quote"><IntranetPage section="cotizador" /></SectionGuard>} />
         <Route path="/admin/intranet/mensajes" element={<SectionGuard section="intranet_messages"><IntranetPage section="mensajes" /></SectionGuard>} />

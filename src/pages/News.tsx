@@ -40,6 +40,10 @@ type NewsItem = {
   ctaLink: string;
   active: boolean;
   createdAt?: string;
+  /** ISO. Si tiene valor, la novedad está inactiva y se activa sola a esa hora (job pg_cron). */
+  scheduledAt: string | null;
+  /** Si al activarse por programación manda la push. */
+  scheduledPush: boolean;
 };
 
 const TYPE_LABEL: Record<NewsType, string> = {
@@ -70,7 +74,52 @@ const defaultNews = (): NewsItem => ({
   ctaMode: "VER_DETALLE",
   ctaLink: "",
   active: true,
+  scheduledAt: null,
+  scheduledPush: false,
 });
+
+/* ===== Programación ===== */
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** ISO → valor de <input type="datetime-local"> en la hora local del navegador. */
+function isoToLocalInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** Valor de datetime-local (hora local) → ISO UTC para la base. */
+function localInputToIso(value: string): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** Sugerencia al prender "Programar": mañana a las 10:00. */
+function defaultScheduleLocal(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(10, 0, 0, 0);
+  return isoToLocalInput(d.toISOString());
+}
+
+function formatSchedule(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
+
+/** La base todavía no tiene las columnas: falta aplicar el SQL de programación. */
+function isMissingScheduleColumns(err: any): boolean {
+  const msg = String(err?.message || "");
+  return /scheduled_(at|push)/i.test(msg) && /column|schema cache/i.test(msg);
+}
+
+const MISSING_SCHEDULE_SQL =
+  "Falta aplicar en Supabase el SQL de novedades programadas (20261106130000_news_scheduled_publish.sql).";
 
 function isHttpUrl(v: string) {
   try {
@@ -122,6 +171,8 @@ function fromDb(row: any): NewsItem {
     ctaLink: row.cta_link || "",
     active: Boolean(row.active),
     createdAt: row.created_at ? String(row.created_at) : undefined,
+    scheduledAt: row.scheduled_at ? String(row.scheduled_at) : null,
+    scheduledPush: Boolean(row.scheduled_push),
   };
 }
 
@@ -144,6 +195,14 @@ function toDb(n: NewsItem) {
     active: Boolean(n.active),
     updated_at: new Date().toISOString(),
   };
+}
+
+/**
+ * Las columnas de programación van aparte: si el SQL todavía no está aplicado,
+ * una novedad común (sin programar) se sigue guardando como siempre.
+ */
+function scheduleToDb(n: NewsItem) {
+  return { scheduled_at: n.scheduledAt, scheduled_push: n.scheduledPush };
 }
 
 async function uploadNewsImage(file: File, newsId: string): Promise<string> {
@@ -841,6 +900,9 @@ export default function News() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<NewsItem | null>(null);
   const [sendPushOnSave, setSendPushOnSave] = useState(true);
+  /** "Programar publicación" en el formulario. */
+  const [scheduleOn, setScheduleOn] = useState(false);
+  const [scheduleLocal, setScheduleLocal] = useState("");
 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [editingImageFile, setEditingImageFile] = useState<File | null>(null);
@@ -975,7 +1037,9 @@ export default function News() {
           : statusFilter === "active"
           ? n.active
           : statusFilter === "inactive"
-          ? !n.active
+          ? !n.active && !n.scheduledAt
+          : statusFilter === "scheduled"
+          ? Boolean(n.scheduledAt)
           : true;
 
       const d = n.publishedAt;
@@ -990,7 +1054,8 @@ export default function News() {
     return {
       total: filtered.length,
       active: filtered.filter((n) => n.active).length,
-      inactive: filtered.filter((n) => !n.active).length,
+      inactive: filtered.filter((n) => !n.active && !n.scheduledAt).length,
+      scheduled: filtered.filter((n) => Boolean(n.scheduledAt)).length,
       featured: filtered.filter((n) => n.type === "DESTACADO").length,
     };
   }, [filtered]);
@@ -1088,6 +1153,8 @@ export default function News() {
     setOpen(false);
     setEditing(null);
     setSendPushOnSave(true);
+    setScheduleOn(false);
+    setScheduleLocal("");
     setEditingImageFile(null);
     setAspectWarn(undefined);
 
@@ -1114,6 +1181,8 @@ export default function News() {
     setTempPreviewUrl(null);
     if (fileRef.current) fileRef.current.value = "";
     setSendPushOnSave(true);
+    setScheduleOn(false);
+    setScheduleLocal("");
     setOpen(true);
   };
 
@@ -1135,7 +1204,10 @@ export default function News() {
     setTempPreviewUrl(null);
     if (fileRef.current) fileRef.current.value = "";
 
-    setSendPushOnSave(false);
+    // Si ya estaba programada se abre con su programación y su push tal cual.
+    setScheduleOn(Boolean(n.scheduledAt));
+    setScheduleLocal(isoToLocalInput(n.scheduledAt));
+    setSendPushOnSave(n.scheduledAt ? n.scheduledPush : false);
     setOpen(true);
   };
 
@@ -1319,6 +1391,15 @@ export default function News() {
       return alert("Seleccioná una imagen.");
     }
 
+    const scheduledIso = scheduleOn ? localInputToIso(scheduleLocal) : null;
+    if (scheduleOn) {
+      if (!scheduledIso) return alert("Elegí la fecha y hora de publicación.");
+      if (new Date(scheduledIso).getTime() <= Date.now() + 60_000) {
+        return alert("La fecha y hora programada tiene que ser posterior a ahora.");
+      }
+    }
+    const previous = items.find((x) => x.id === editing.id);
+
     setSaving(true);
     try {
       let finalImageUrl = editing.image;
@@ -1336,9 +1417,22 @@ export default function News() {
         image: finalImageUrl,
         ctaMode: editing.ctaMode || (editing.type === "PROMO" ? "CONSULTAR" : "VER_DETALLE"),
         ctaLink: (editing.ctaLink || "").trim(),
+        // Programada: queda oculta hasta la hora elegida, con la fecha visible
+        // de ese día, y la push (si va) sale al publicarse, no ahora.
+        ...(scheduledIso
+          ? {
+              active: false,
+              scheduledAt: scheduledIso,
+              scheduledPush: sendPushOnSave,
+              publishedAt: isoToLocalInput(scheduledIso).slice(0, 10),
+            }
+          : { scheduledAt: null, scheduledPush: false }),
       };
 
-      const payload = toDb(normalized);
+      // Las columnas de programación solo viajan si hacen falta (programar o
+      // quitar una programación existente).
+      const touchesSchedule = Boolean(scheduledIso || previous?.scheduledAt);
+      const payload = touchesSchedule ? { ...toDb(normalized), ...scheduleToDb(normalized) } : toDb(normalized);
 
       const { data, error } = await supabase
         .from("news_v1")
@@ -1354,7 +1448,9 @@ export default function News() {
         return exists ? prev.map((p) => (p.id === saved.id ? saved : p)) : [saved, ...prev];
       });
 
-      if (sendPushOnSave) {
+      if (saved.scheduledAt) {
+        toast("success", `Novedad programada para el ${formatSchedule(saved.scheduledAt)}${saved.scheduledPush ? ", con push" : ""}.`, 8000);
+      } else if (sendPushOnSave) {
         if (saved.active) await notifyNewsPublished(saved);
         else toast("warning", "Novedad guardada. No se envió push porque quedó inactiva.", 8000);
       }
@@ -1362,7 +1458,7 @@ export default function News() {
       closeModal();
     } catch (err: any) {
       console.error(err);
-      alert(err?.message || "Error guardando novedad.");
+      alert(isMissingScheduleColumns(err) ? MISSING_SCHEDULE_SQL : err?.message || "Error guardando novedad.");
     } finally {
       setSaving(false);
     }
@@ -1374,15 +1470,40 @@ export default function News() {
     const current = items.find((x) => x.id === id);
     if (!current) return;
 
-    const next = { ...current, active: !current.active };
+    // Activar a mano una programada = publicarla ya: se descarta la programación
+    // (y su push) para que el job no la vuelva a tocar.
+    const clearsSchedule = Boolean(current.scheduledAt);
+    const next = { ...current, active: !current.active, scheduledAt: null, scheduledPush: false };
     setItems((prev) => prev.map((p) => (p.id === id ? next : p)));
 
-    const { error } = await supabase.from("news_v1").update({ active: next.active }).eq("id", id);
+    const { error } = await supabase
+      .from("news_v1")
+      .update(clearsSchedule ? { active: next.active, scheduled_at: null, scheduled_push: false } : { active: next.active })
+      .eq("id", id);
     if (error) {
       console.error(error);
       alert("No pude actualizar estado.");
       setItems((prev) => prev.map((p) => (p.id === id ? current : p)));
     }
+  };
+
+  /** Deja la novedad inactiva y sin fecha: ya no se publica sola. */
+  const cancelSchedule = async (id: string) => {
+    if (!canManageNews) return;
+    const current = items.find((x) => x.id === id);
+    if (!current?.scheduledAt) return;
+
+    const next = { ...current, scheduledAt: null, scheduledPush: false };
+    setItems((prev) => prev.map((p) => (p.id === id ? next : p)));
+
+    const { error } = await supabase.from("news_v1").update({ scheduled_at: null, scheduled_push: false }).eq("id", id);
+    if (error) {
+      console.error(error);
+      alert("No pude cancelar la programación.");
+      setItems((prev) => prev.map((p) => (p.id === id ? current : p)));
+      return;
+    }
+    toast("success", "Programación cancelada. La novedad quedó inactiva.");
   };
 
   const remove = async (id: string) => {
@@ -1509,7 +1630,11 @@ export default function News() {
       key: "status",
       header: "Estado",
       align: "center",
-      render: (item) => <Badge tone={item.active ? "success" : "neutral"} dot small>{item.active ? "Activa" : "Inactiva"}</Badge>,
+      render: (item) => item.scheduledAt ? (
+        <span title={item.scheduledPush ? "Se publica sola y manda push" : "Se publica sola, sin push"}>
+          <Badge tone="info" dot small>Programada · {formatSchedule(item.scheduledAt)}</Badge>
+        </span>
+      ) : <Badge tone={item.active ? "success" : "neutral"} dot small>{item.active ? "Activa" : "Inactiva"}</Badge>,
     },
     {
       key: "actions",
@@ -1519,7 +1644,8 @@ export default function News() {
         <ActionMenu items={[
           { key: "edit", label: "Editar", icon: "edit", disabled: saving, onSelect: () => startEdit(item) },
           { key: "preview", label: "Vista previa", icon: "eye", disabled: saving, onSelect: () => openCardPreview(item) },
-          { key: "toggle", label: item.active ? "Desactivar" : "Activar", icon: "toggle", disabled: saving, onSelect: () => toggleActive(item.id) },
+          { key: "toggle", label: item.active ? "Desactivar" : item.scheduledAt ? "Publicar ahora" : "Activar", icon: "toggle", disabled: saving, onSelect: () => toggleActive(item.id) },
+          ...(item.scheduledAt ? [{ key: "unschedule", label: "Cancelar programación", icon: "close" as const, disabled: saving, onSelect: () => cancelSchedule(item.id) }] : []),
           { key: "delete", label: "Borrar", icon: "trash", danger: true, separatorBefore: true, disabled: saving, onSelect: () => remove(item.id) },
         ]} />
       ) : <span className="eg-news-muted">—</span>,
@@ -1542,7 +1668,7 @@ export default function News() {
           <option value="EVENTO">Evento</option><option value="PROXIMAMENTE">Próximamente</option>
         </Select>
         <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} aria-label="Filtrar por estado">
-          <option value="">Todos los estados</option><option value="active">Solo activas</option><option value="inactive">Solo inactivas</option>
+          <option value="">Todos los estados</option><option value="active">Solo activas</option><option value="inactive">Solo inactivas</option><option value="scheduled">Solo programadas</option>
         </Select>
         <Input ref={fromRef} type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} onFocus={() => openDatePicker(fromRef.current)} aria-label="Fecha desde" />
         <Input ref={toRef} type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} onFocus={() => openDatePicker(toRef.current)} aria-label="Fecha hasta" />
@@ -1552,6 +1678,7 @@ export default function News() {
         <StatCard value={totals.total} label="Novedades visibles" loading={loading} />
         <StatCard value={totals.active} label="Activas" tone="success" loading={loading} />
         <StatCard value={totals.inactive} label="Inactivas" loading={loading} />
+        <StatCard value={totals.scheduled} label="Programadas" loading={loading} />
         <StatCard value={totals.featured} label="Destacadas" tone="accent" loading={loading} />
       </div>
 
@@ -1572,8 +1699,8 @@ export default function News() {
         description={isEditingExisting ? "Actualizá la información publicada en la app." : "Completá la información para publicar una novedad."}
         panelClassName="eg-news-modal"
         headerActions={editing ? <div className="eg-news-modal-toggles">
-          <Toggle title="Será visible en la aplicación." label="Activa" checked={editing.active} onChange={(event) => setEditing({ ...editing, active: event.target.checked })} />
-          <Toggle title="Solo se enviará si la novedad queda activa." label="Push" checked={sendPushOnSave} onChange={(event) => setSendPushOnSave(event.target.checked)} />
+          <Toggle title={scheduleOn ? "Se activa sola en la fecha programada." : "Será visible en la aplicación."} label="Activa" checked={scheduleOn ? false : editing.active} disabled={scheduleOn} onChange={(event) => setEditing({ ...editing, active: event.target.checked })} />
+          <Toggle title={scheduleOn ? "Se enviará cuando se publique." : "Solo se enviará si la novedad queda activa."} label="Push" checked={sendPushOnSave} onChange={(event) => setSendPushOnSave(event.target.checked)} />
         </div> : undefined}
         size="lg"
         onClose={closeModal}
@@ -1591,6 +1718,36 @@ export default function News() {
               </Select>
               <Input ref={publishedRef} id="news-date" label="Fecha" type="date" value={editing.publishedAt} onChange={(event) => setEditing({ ...editing, publishedAt: event.target.value })} onFocus={() => openDatePicker(publishedRef.current)} />
               <Input id="news-link" label="Link CTA" value={editing.ctaLink} onChange={(event) => setEditing({ ...editing, ctaLink: event.target.value })} placeholder="https://..." />
+              <div className={`eg-news-schedule${scheduleOn ? " is-on" : ""}`}>
+                <div className="eg-news-schedule__head">
+                  <span className="eg-news-schedule__copy">
+                    <strong><UiIcon name="calendar" size={15} /> Programar publicación</strong>
+                    <small>{scheduleOn
+                      ? `Queda oculta y se publica sola${sendPushOnSave ? ", con push," : ""} en la fecha y hora elegidas.`
+                      : "Dejala armada y elegí cuándo se activa en la app."}</small>
+                  </span>
+                  <Toggle
+                    label={scheduleOn ? "Sí" : "No"}
+                    checked={scheduleOn}
+                    onChange={(event) => {
+                      const on = event.target.checked;
+                      setScheduleOn(on);
+                      if (on && !scheduleLocal) setScheduleLocal(defaultScheduleLocal());
+                    }}
+                  />
+                </div>
+                {scheduleOn && (
+                  <Input
+                    id="news-schedule"
+                    label="Fecha y hora de publicación"
+                    type="datetime-local"
+                    value={scheduleLocal}
+                    min={isoToLocalInput(new Date().toISOString())}
+                    onChange={(event) => setScheduleLocal(event.target.value)}
+                    onFocus={(event) => openDatePicker(event.currentTarget)}
+                  />
+                )}
+              </div>
               <div className="eg-news-editor">
                 <div className="eg-news-editor__label"><span className="eg-field__label">Descripción</span><span>{htmlToPlainText(editing.description || "").length} / 113</span></div>
                 <div className="eg-news-editor__toolbar">

@@ -57,7 +57,6 @@ const pageMeta: Record<string, { key: string; crumbs: Crumb[] }> = {
   "/usuarios/sistema": { key: "users-staff", crumbs: [{ label: "Usuarios" }, { label: "Usuarios de sistema" }] },
   "/golden-tickets": { key: "tickets", crumbs: [{ label: "Beneficios" }, { label: "Golden Ticket" }] },
   "/beneficios/promociones": { key: "promotions", crumbs: [{ label: "Beneficios" }, { label: "Promociones" }] },
-  "/usuarios/progreso": { key: "progress", crumbs: [{ label: "Progreso" }, { label: "Usuarios" }] },
   "/metricas/resumen": { key: "metrics-resumen", crumbs: [{ label: "Métricas" }, { label: "Resumen" }] },
   "/metricas/sucursales": { key: "metrics-sucursales", crumbs: [{ label: "Métricas" }, { label: "Sucursales" }] },
   "/metricas/campanas": { key: "metrics-campanas", crumbs: [{ label: "Métricas" }, { label: "Campañas" }] },
@@ -272,7 +271,6 @@ export default function AdminLayout() {
 
   const items = useMemo<NavItem[]>(() => {
     const isSuper = role === "ADMIN_GENERAL";
-    const isAdmin = isSuper || role === "ADMIN";
     const effective: UserPermissions = isSuper
       ? {
           canManageRooms: true,
@@ -337,9 +335,6 @@ export default function AdminLayout() {
         icon: "ticket",
         children: hijasBeneficios,
       });
-    }
-    if (isAdmin && habilitada("user_progress")) {
-      nav.push({ key: "progress", label: "Progreso usuarios", to: "/usuarios/progreso", icon: "progress" });
     }
 
     /**

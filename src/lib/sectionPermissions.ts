@@ -20,7 +20,6 @@ export type SectionKey =
   | "promotions"
   | "promotions_clients"
   | "promotions_clients_edit"
-  | "user_progress"
   | "intranet"
   | "intranet_quote"
   | "intranet_messages"
@@ -73,7 +72,7 @@ export type SectionDef = {
 export const SECTION_DEFS: readonly SectionDef[] = [
   { key: "rooms", label: "Salas", path: "/salas" },
   { key: "news", label: "Novedades", path: "/novedades" },
-  { key: "users", label: "Usuarios", path: "/usuarios" },
+  { key: "users", label: "Usuarios", path: "/usuarios/clientes" },
   { key: "golden_ticket", label: "Golden Ticket", path: "/golden-tickets", group: "Beneficios" },
   /**
    * Beneficios › Promociones. Tres claves PLANAS en la base (las mismas que ya
@@ -96,7 +95,6 @@ export const SECTION_DEFS: readonly SectionDef[] = [
     parentOffHint: "Requiere permiso Clientes activo",
     lockWhenParentOff: true,
   },
-  { key: "user_progress", label: "Progreso usuarios", path: "/usuarios/progreso" },
   // Métricas son cinco rutas (Resumen, Sucursales, Campañas, Ventas,
   // Diagnóstico) bajo una sola llave: el switch enciende o apaga el grupo
   // entero, igual que lo pide Ajustes. `path` apunta a Resumen y no a

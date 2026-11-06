@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Badge, Button, Card, DataTable, EmptyState, SearchInput, Select, type DataTableColumn } from "../../ui";
+import { ActionMenu, Badge, Button, Card, DataTable, EmptyState, SearchInput, Select, type DataTableColumn } from "../../ui";
 import type { ToastKind } from "../Toast";
+import PromotionConfirmDialog from "./PromotionConfirmDialog";
 import {
   PROMOTION_CLIENTS_PAGE_SIZE,
   buildPromotionClientsCsv,
+  deleteUserPromotion,
   fetchAllPromotionClients,
   fetchPromotionClients,
   fetchPromotionsForClientsFilter,
@@ -27,6 +29,10 @@ type Props = {
    */
   promotions: Promotion[];
   toast: (kind: ToastKind, text: string) => void;
+  /** Solo ADMIN_GENERAL / ADMIN. Sin esto la columna de acciones no se dibuja. */
+  canDelete?: boolean;
+  /** Avisa al padre para refrescar los contadores de promociones. */
+  onDeleted?: () => void;
 };
 
 /**
@@ -38,7 +44,9 @@ type Props = {
  * `can_read_promotion_clients()`, así que ADMIN y GM autorizado recorren
  * exactamente el mismo camino: no hay un listado paralelo para nadie.
  */
-export default function PromotionClientsTable({ promotions, toast }: Props) {
+export default function PromotionClientsTable({ promotions, toast, canDelete = false, onDeleted }: Props) {
+  const [deleting, setDeleting] = useState<PromotionClient | null>(null);
+  const [deleteWorking, setDeleteWorking] = useState(false);
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
   const [promotionId, setPromotionId] = useState("all");
@@ -156,6 +164,47 @@ export default function PromotionClientsTable({ promotions, toast }: Props) {
     { key: "use_branch", header: "Sucursal uso", render: (client) => placeCell(client.useBranchName, client.useVenueName) },
   ];
 
+  // Sin id de `user_promotions` no hay qué borrar: esa fila no muestra menú.
+  if (canDelete) {
+    columns.push({
+      key: "actions",
+      header: "Acciones",
+      align: "center",
+      render: (client) => client.userPromotionId ? (
+        <div onClick={(event) => event.stopPropagation()}>
+          <ActionMenu items={[{
+            key: "delete",
+            label: "Eliminar",
+            icon: "trash",
+            danger: true,
+            disabled: deleteWorking,
+            onSelect: () => setDeleting(client),
+          }]} />
+        </div>
+      ) : <span className="eg-promo-muted">—</span>,
+    });
+  }
+
+  const confirmDelete = async () => {
+    const client = deleting;
+    if (!client?.userPromotionId || deleteWorking) return;
+    setDeleteWorking(true);
+
+    try {
+      await deleteUserPromotion(client.userPromotionId);
+      setDeleting(null);
+      toast("success", "Beneficio eliminado.");
+      // Si era el último de la página, se vuelve a la anterior.
+      if (rows.length === 1 && offset > 0) setOffset((prev) => Math.max(0, prev - PROMOTION_CLIENTS_PAGE_SIZE));
+      else await load();
+      onDeleted?.();
+    } catch (err) {
+      toast("error", promotionErrorMessage(err, "No pude borrar el beneficio."));
+    } finally {
+      setDeleteWorking(false);
+    }
+  };
+
   /**
    * Exporta TODO lo que coincide con los filtros aplicados (los mismos que ve
    * la tabla), no solo la página cargada. Si falla alguna página no se baja
@@ -272,6 +321,17 @@ export default function PromotionClientsTable({ promotions, toast }: Props) {
             </Button>
           </div>
         </div>
+      )}
+
+      {deleting && (
+        <PromotionConfirmDialog
+          title="Eliminar beneficio"
+          message={`Se va a borrar el beneficio "${deleting.promotionName || "promoción"}" de ${[deleting.nombre, deleting.apellido].filter(Boolean).join(" ") || deleting.mail || "este cliente"}${deleting.status === "used" ? " (ya usado)" : ""}. El cliente deja de verlo en la app. No se puede deshacer.`}
+          confirmLabel="Eliminar"
+          working={deleteWorking}
+          onConfirm={() => void confirmDelete()}
+          onCancel={() => setDeleting(null)}
+        />
       )}
     </>
   );

@@ -999,6 +999,42 @@ export async function setPromotionActive(promotionId: string, active: boolean): 
   if (error) throw error;
 }
 
+/* =======================
+   BORRADO (pruebas)
+======================= */
+
+/**
+ * Traduce los errores de las RPC de borrado. Ver la migración
+ * `20261106120000_promotions_delete_rpcs.sql`: si no está aplicada en la base,
+ * PostgREST responde PGRST202 (función inexistente).
+ */
+function deleteError(raw: unknown, fallback: string): Error {
+  const detalle = raw as { code?: unknown; message?: unknown } | null;
+  const code = text(detalle?.code).trim().toUpperCase();
+  const message = text(detalle?.message).trim();
+
+  if (code === "PGRST202" || /could not find the function/i.test(message)) {
+    return new Error("Falta aplicar en Supabase el SQL de borrado de promociones (20261106120000_promotions_delete_rpcs.sql).");
+  }
+  if (code === "42501" || /FORBIDDEN/.test(message)) return new Error("No tenés permisos para borrar promociones.");
+  if (/USER_PROMOTION_NOT_FOUND/.test(message)) return new Error("Ese beneficio ya no existe. Actualizá el listado.");
+  if (/PROMOTION_NOT_FOUND/.test(message)) return new Error("La promoción ya no existe. Actualizá el listado.");
+  if (code === "23503") return new Error("No se pudo borrar: hay otros datos que dependen de este registro.");
+  return new Error(message || fallback);
+}
+
+/** Borra la promoción y todo lo que depende de ella. Solo ADMIN_GENERAL / ADMIN. */
+export async function deletePromotion(promotionId: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_promotion", { p_promotion_id: promotionId });
+  if (error) throw deleteError(error, "No pude borrar la promoción.");
+}
+
+/** Borra un beneficio otorgado a un cliente (fila de la tab Clientes). */
+export async function deleteUserPromotion(userPromotionId: string): Promise<void> {
+  const { error } = await supabase.rpc("delete_user_promotion", { p_user_promotion_id: userPromotionId });
+  if (error) throw deleteError(error, "No pude borrar el beneficio.");
+}
+
 /** Devuelve el token NUEVO, puro (sin prefijo de QR). */
 export async function rotatePromotionGrantToken(promotionId: string): Promise<string> {
   const { data, error } = await supabase.rpc("rotate_promotion_grant_token", {

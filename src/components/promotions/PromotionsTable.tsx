@@ -19,6 +19,7 @@ type Props = {
   onEdit?: (promotion: Promotion) => void;
   onViewQr?: (promotion: Promotion) => void;
   onToggleActive?: (promotion: Promotion) => void;
+  onDelete?: (promotion: Promotion) => void;
   onCreate?: () => void;
 };
 
@@ -36,6 +37,7 @@ export default function PromotionsTable({
   onEdit,
   onViewQr,
   onToggleActive,
+  onDelete,
   onCreate,
 }: Props) {
   const [q, setQ] = useState("");
@@ -58,7 +60,7 @@ export default function PromotionsTable({
    * cuenta porque abrirlo dispara `get_promotion_admin`, que expone los tokens
    * y solo acepta ADMIN_GENERAL / ADMIN.
    */
-  const readOnly = !onView && !onEdit && !onViewQr && !onToggleActive;
+  const readOnly = !onView && !onEdit && !onViewQr && !onToggleActive && !onDelete;
 
   const columns: DataTableColumn<Promotion>[] = [
     {
@@ -114,6 +116,15 @@ export default function PromotionsTable({
               separatorBefore: true,
               disabled: busyId === promotion.id,
               onSelect: () => onToggleActive(promotion),
+            }] : []),
+            ...(onDelete ? [{
+              key: "delete",
+              label: "Eliminar promoción",
+              icon: "trash" as const,
+              danger: true,
+              separatorBefore: !onToggleActive,
+              disabled: busyId === promotion.id,
+              onSelect: () => onDelete(promotion),
             }] : []),
           ]} />
         </div>
