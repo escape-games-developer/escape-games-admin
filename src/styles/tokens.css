@@ -97,4 +97,116 @@
   /* ---- Transiciones: cortas, sin adornos ---- */
   --eg-t-fast: 120ms ease;
   --eg-t: 180ms ease;
+
+  /* ---- Canales RGB para la hoja vieja (styles/app.css), que pinta con
+          rgba(…, alfa). En oscuro valen lo mismo que antes; el tema claro
+          los invierte. ---- */
+  --eg-ink-rgb: 255, 255, 255;   /* bordes, velos y texto sobre fondo */
+  --eg-panel-rgb: 12, 12, 16;    /* paneles y modales translúcidos */
+  --eg-well-rgb: 0, 0, 0;        /* fondo de campos y etiquetas */
+  --eg-bg-wide: #0f172a;         /* fondo de Salas / Novedades a ancho completo */
+  --eg-field-bg: #0b111b;        /* fondo de campos y buscadores (= --eg-bg en oscuro) */
+
+  /* ---- Paleta "slate" que usan los estilos en línea de Salas, Novedades,
+          Notificaciones y el modal de Golden Ticket. Mismos valores que tenían
+          escritos a mano; el tema claro los invierte. ---- */
+  --eg-slate-bg: #0b1220;        /* fondos de tarjetas y modales */
+  --eg-slate-bg-2: #111827;      /* segundo tono de fondo (degradés) */
+  --eg-slate-line: #1f2937;      /* bordes y separadores sólidos */
+  --eg-slate-text: #e5e7eb;      /* texto principal */
+  --eg-slate-text-2: #cbd5e1;    /* texto secundario */
+  --eg-slate-muted: #94a3b8;     /* texto atenuado */
+  --eg-heading: #ffffff;         /* títulos y números destacados sobre el fondo */
+}
+
+/*
+ * Tema claro. Se activa con <html data-theme="light"> (src/lib/theme.ts).
+ * Solo cambian colores y sombras; medidas, tipografía y espaciado son los
+ * mismos. El naranja de marca no cambia.
+ *
+ * Suave a propósito: fondo gris y tarjetas blanco hueso, nada de blanco puro
+ * en superficies grandes (encandila). El menú lateral y las barras superiores
+ * siguen oscuros (ver el bloque de abajo).
+ */
+:root[data-theme="light"] {
+  --eg-bg: #e3e7ed;
+  /* Además del menú, este color se usa en encabezados de tablas, modales y
+     paneles: en claro es claro. El menú y las barras lo vuelven oscuro solo
+     para sí mismos (bloque de abajo). */
+  --eg-sidebar: #e9edf2;
+  --eg-field-bg: #fafbfc;
+  --eg-surface: #f3f5f8;
+  --eg-surface-2: #eaeef3;
+  --eg-surface-3: #dce2ea;
+  --eg-overlay: rgba(15, 23, 42, 0.45);
+
+  --eg-border: rgba(15, 23, 42, 0.1);
+  --eg-border-strong: rgba(15, 23, 42, 0.18);
+
+  --eg-text: #1e293b;
+  --eg-text-dim: #4f5d70;
+  --eg-text-faint: #7d8a9c;
+  --eg-text-inverse: #ffffff;
+
+  --eg-accent: #ff6a00;
+  --eg-accent-hover: #e85f00;
+  --eg-accent-soft: rgba(255, 106, 0, 0.1);
+  --eg-accent-border: rgba(255, 106, 0, 0.38);
+
+  --eg-success: #12a46a;
+  --eg-success-soft: rgba(18, 164, 106, 0.12);
+
+  --eg-danger: #e5383b;
+  --eg-danger-hover: #c92f32;
+  --eg-danger-soft: rgba(229, 56, 59, 0.1);
+
+  --eg-warning: #c97d00;
+  --eg-warning-soft: rgba(217, 138, 0, 0.13);
+
+  --eg-info: #2f74e0;
+  --eg-info-soft: rgba(47, 116, 224, 0.1);
+
+  --eg-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --eg-shadow: 0 4px 16px rgba(15, 23, 42, 0.1);
+  --eg-shadow-lg: 0 16px 48px rgba(15, 23, 42, 0.16);
+
+  --eg-ink-rgb: 15, 23, 42;
+  --eg-panel-rgb: 243, 245, 248;
+  --eg-well-rgb: 243, 245, 248;
+  --eg-bg-wide: #e3e7ed;
+
+  --eg-slate-bg: #f3f5f8;
+  --eg-slate-bg-2: #edf0f4;
+  --eg-slate-line: #d3dae3;
+  --eg-slate-text: #1e293b;
+  --eg-slate-text-2: #334155;
+  --eg-slate-muted: #5f6d80;
+  --eg-heading: #1e293b;
+}
+
+/*
+ * En el tema claro, el menú lateral, las barras superiores (panel y app del
+ * GM) y la pantalla de login siguen oscuros: se les devuelve la paleta oscura,
+ * y todo lo que tienen adentro (íconos, menús desplegables) la hereda.
+ */
+:root[data-theme="light"] .eg-sidebar,
+:root[data-theme="light"] .eg-topbar,
+:root[data-theme="light"] .eg-gmapp__bar,
+:root[data-theme="light"] .eg-auth-shell {
+  --eg-bg: #0b111b;
+  --eg-field-bg: #0b111b;
+  --eg-sidebar: #0e1523;
+  --eg-surface: #131c2b;
+  --eg-surface-2: #182233;
+  --eg-surface-3: #1e293b;
+  --eg-border: rgba(255, 255, 255, 0.07);
+  --eg-border-strong: rgba(255, 255, 255, 0.12);
+  --eg-text: #e8edf5;
+  --eg-text-dim: #8b9ab0;
+  --eg-text-faint: #5f6d82;
+  --eg-accent-soft: rgba(255, 106, 0, 0.12);
+  --eg-accent-border: rgba(255, 106, 0, 0.32);
+  --eg-ink-rgb: 255, 255, 255;
+  --eg-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  color: var(--eg-text);
 }

@@ -3,9 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- App instalable (src/lib/pwa.ts) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0b111b" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Escape Games" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+    <!-- Tema guardado (src/lib/theme.ts), aplicado antes de React para que no parpadee. -->
+    <script>
+      (function () {
+        try {
+          var p = localStorage.getItem("eg_theme") || "dark";
+          var t = p === "system" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : p;
+          document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+          document.documentElement.style.colorScheme = t === "light" ? "light" : "dark";
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
     <style>
       html, body, #root { margin: 0; min-height: 100%; background-color: #0b111b; }
+      html[data-theme="light"], html[data-theme="light"] body, html[data-theme="light"] #root { background-color: #f4f6fa; }
     </style>
     <title>Escape Games</title>
   </head>

@@ -720,7 +720,7 @@ function CropperModal({
                 height: "min(58vh, 560px)",
                 borderRadius: 14,
                 overflow: "hidden",
-                border: "1px solid rgba(255,255,255,.12)",
+                border: "1px solid rgba(var(--eg-ink-rgb),.12)",
                 background: "rgba(0,0,0,.25)",
                 userSelect: "none",
               }}
@@ -801,8 +801,8 @@ function ClientCardPreview({
           <div style={{ padding: 22 }}>
             <div
               style={{
-                border: "1px solid rgba(255,255,255,0.16)",
-                backgroundColor: "rgba(0,0,0,0.42)",
+                border: "1px solid rgba(var(--eg-ink-rgb),0.16)",
+                backgroundColor: "rgba(var(--eg-well-rgb),0.42)",
                 borderRadius: 18,
                 overflow: "hidden",
               }}
@@ -827,12 +827,12 @@ function ClientCardPreview({
                     {!item.active ? <span style={styles.statusBadgeOff}>Inactiva</span> : <span style={styles.statusBadgeActive}>Activa</span>}
                   </div>
 
-                  <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>{item.publishedAt}</div>
+                  <div style={{ color: "rgba(var(--eg-ink-rgb),0.6)", fontSize: 12 }}>{item.publishedAt}</div>
                 </div>
 
-                <div style={{ color: "#fff", fontSize: 18, fontWeight: 800, marginBottom: 8 }}>{item.title}</div>
+                <div style={{ color: "var(--eg-heading)", fontSize: 18, fontWeight: 800, marginBottom: 8 }}>{item.title}</div>
 
-                <div style={{ color: "rgba(255,255,255,0.78)", fontSize: 14, lineHeight: "20px", whiteSpace: "pre-wrap" }}>
+                <div style={{ color: "rgba(var(--eg-ink-rgb),0.78)", fontSize: 14, lineHeight: "20px", whiteSpace: "pre-wrap" }}>
                   {item.descriptionText}
                 </div>
 
@@ -1800,8 +1800,8 @@ const styles: Record<string, any> = {
   page: {
   width: "100%",
   minHeight: "100vh",
-  background: "#0f172a",
-  color: "#e5e7eb",
+  background: "var(--eg-bg-wide)",
+  color: "var(--eg-slate-text)",
   boxSizing: "border-box",
   },
 
@@ -1834,14 +1834,14 @@ const styles: Record<string, any> = {
     margin: 0,
     fontSize: 32,
     fontWeight: 800,
-    color: "#ffffff",
+    color: "var(--eg-heading)",
     lineHeight: 1.1,
   },
 
   subtitle: {
     margin: "8px 0 0 0",
     fontSize: 14,
-    color: "#94a3b8",
+    color: "var(--eg-slate-muted)",
     maxWidth: 760,
   },
 
@@ -1893,8 +1893,8 @@ const styles: Record<string, any> = {
   },
 
   card: {
-    background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
-    border: "1px solid #1f2937",
+    background: "linear-gradient(180deg, var(--eg-slate-bg-2) 0%, var(--eg-slate-bg) 100%)",
+    border: "1px solid var(--eg-slate-line)",
     borderRadius: 16,
     padding: 14,
     boxShadow: "0 10px 24px rgba(0,0,0,0.16)",
@@ -1905,23 +1905,23 @@ const styles: Record<string, any> = {
   cardLabel: {
     display: "block",
     fontSize: 12,
-    color: "#94a3b8",
+    color: "var(--eg-slate-muted)",
     marginBottom: 8,
   },
 
   cardValue: {
     fontSize: 22,
     fontWeight: 800,
-    color: "#ffffff",
+    color: "var(--eg-heading)",
     lineHeight: 1,
   },
 
   loadingPanel: {
-    border: "1px solid #1f2937",
+    border: "1px solid var(--eg-slate-line)",
     borderRadius: 18,
-    background: "#0b1220",
+    background: "var(--eg-slate-bg)",
     padding: 18,
-    color: "#cbd5e1",
+    color: "var(--eg-slate-text-2)",
   },
 
   tableOuter: {
@@ -1930,16 +1930,16 @@ const styles: Record<string, any> = {
   minHeight: 0,
   overflow: "auto",
   borderRadius: 18,
-  background: "#0b1220",
+  background: "var(--eg-slate-bg)",
   },
 
   tableWrapNews: {
     width: "100%",
     minWidth: 1280,
-    border: "1px solid #1f2937",
+    border: "1px solid var(--eg-slate-line)",
     borderRadius: 18,
     overflow: "hidden",
-    background: "#0b1220",
+    background: "var(--eg-slate-bg)",
     boxSizing: "border-box",
   },
 
@@ -1948,8 +1948,8 @@ const styles: Record<string, any> = {
     gridTemplateColumns: "90px 2fr 2.1fr 1.1fr 0.9fr 2fr 1fr 84px",
     gap: 12,
     padding: "16px 18px",
-    background: "#111827",
-    borderBottom: "1px solid #1f2937",
+    background: "var(--eg-slate-bg-2)",
+    borderBottom: "1px solid var(--eg-slate-line)",
     boxSizing: "border-box",
     alignItems: "center",
     position: "sticky",
@@ -1971,7 +1971,7 @@ const styles: Record<string, any> = {
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    color: "#94a3b8",
+    color: "var(--eg-slate-muted)",
     fontWeight: 700,
     minWidth: 0,
   },
@@ -1980,7 +1980,7 @@ const styles: Record<string, any> = {
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    color: "#94a3b8",
+    color: "var(--eg-slate-muted)",
     fontWeight: 700,
     textAlign: "center",
     minWidth: 0,
@@ -1988,7 +1988,7 @@ const styles: Record<string, any> = {
 
   td: {
     fontSize: 14,
-    color: "#e5e7eb",
+    color: "var(--eg-slate-text)",
     minWidth: 0,
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -1997,7 +1997,7 @@ const styles: Record<string, any> = {
 
   tdCenter: {
     fontSize: 14,
-    color: "#e5e7eb",
+    color: "var(--eg-slate-text)",
     textAlign: "center",
     minWidth: 0,
   },
@@ -2016,13 +2016,13 @@ const styles: Record<string, any> = {
     height: 38,
     borderRadius: 10,
     overflow: "hidden",
-    border: "1px solid rgba(255,255,255,.12)",
-    background: "rgba(0,0,0,.35)",
+    border: "1px solid rgba(var(--eg-ink-rgb),.12)",
+    background: "rgba(var(--eg-well-rgb),.35)",
   },
 
   newsTitleCell: {
     fontWeight: 800,
-    color: "#fff",
+    color: "var(--eg-heading)",
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -2035,7 +2035,7 @@ const styles: Record<string, any> = {
     minHeight: 30,
     padding: "0 12px",
     borderRadius: 999,
-    background: "#1e293b",
+    background: "var(--eg-surface-3)",
     border: "1px solid #334155",
     fontWeight: 700,
     fontSize: 12,
@@ -2080,7 +2080,7 @@ const styles: Record<string, any> = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#fff",
+    color: "var(--eg-heading)",
   },
 
   actionBtnMini: {
@@ -2092,7 +2092,7 @@ const styles: Record<string, any> = {
     borderRadius: 12,
     background: "linear-gradient(180deg, rgba(249,115,22,0.22) 0%, rgba(249,115,22,0.12) 100%)",
     border: "1px solid rgba(249,115,22,0.35)",
-    color: "#fff",
+    color: "var(--eg-heading)",
     fontWeight: 700,
     fontSize: 13,
   },
@@ -2100,7 +2100,7 @@ const styles: Record<string, any> = {
   emptyState: {
     padding: 28,
     textAlign: "center" as const,
-    color: "#94a3b8",
+    color: "var(--eg-slate-muted)",
     fontSize: 15,
   },
 
@@ -2133,8 +2133,8 @@ const styles: Record<string, any> = {
     maxHeight: "92vh",
     overflowY: "auto" as const,
     borderRadius: 22,
-    background: "#0b1220",
-    border: "1px solid #1f2937",
+    background: "var(--eg-slate-bg)",
+    border: "1px solid var(--eg-slate-line)",
     boxShadow: "0 30px 80px rgba(0,0,0,0.45)",
     boxSizing: "border-box",
   },
@@ -2151,7 +2151,7 @@ const styles: Record<string, any> = {
     margin: 0,
     fontSize: 24,
     fontWeight: 800,
-    color: "#fff",
+    color: "var(--eg-heading)",
   },
 
   modalFooter: {
@@ -2176,7 +2176,7 @@ const styles: Record<string, any> = {
   },
 
   labelNews: {
-    color: "#cbd5e1",
+    color: "var(--eg-slate-text-2)",
     fontSize: 13,
     fontWeight: 700,
   },
@@ -2197,7 +2197,7 @@ const styles: Record<string, any> = {
   toolbarDivider: {
     width: 1,
     height: 22,
-    background: "rgba(255,255,255,0.12)",
+    background: "rgba(var(--eg-ink-rgb),0.12)",
     marginInline: 4,
   },
 
@@ -2205,18 +2205,18 @@ const styles: Record<string, any> = {
     marginTop: 6,
     borderRadius: 14,
     overflow: "hidden",
-    border: "1px solid rgba(255,255,255,0.12)",
-    background: "rgba(0,0,0,0.3)",
+    border: "1px solid rgba(var(--eg-ink-rgb),0.12)",
+    background: "rgba(var(--eg-well-rgb),0.3)",
   },
 
   sliderWrap: {
     padding: 12,
-    borderTop: "1px solid rgba(255,255,255,0.10)",
+    borderTop: "1px solid rgba(var(--eg-ink-rgb),0.10)",
   },
 
   sliderLabel: {
     display: "block",
-    color: "#94a3b8",
+    color: "var(--eg-slate-muted)",
     fontSize: 12,
     fontWeight: 700,
     marginBottom: 8,
@@ -2226,12 +2226,12 @@ const styles: Record<string, any> = {
     marginTop: 6,
     minHeight: 120,
     borderRadius: 14,
-    border: "1px dashed rgba(255,255,255,0.18)",
-    background: "rgba(255,255,255,0.03)",
+    border: "1px dashed rgba(var(--eg-ink-rgb),0.18)",
+    background: "rgba(var(--eg-ink-rgb),0.03)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    color: "#94a3b8",
+    color: "var(--eg-slate-muted)",
     fontSize: 14,
     padding: 16,
   },
@@ -2247,7 +2247,7 @@ const styles: Record<string, any> = {
     display: "inline-flex",
     alignItems: "center",
     gap: 8,
-    color: "#e5e7eb",
+    color: "var(--eg-slate-text)",
     fontSize: 14,
   },
 
@@ -2259,8 +2259,8 @@ const styles: Record<string, any> = {
     width: 260,
     borderRadius: 16,
     overflow: "hidden",
-    border: "1px solid #1f2937",
-    background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
+    border: "1px solid var(--eg-slate-line)",
+    background: "linear-gradient(180deg, var(--eg-slate-bg-2) 0%, var(--eg-slate-bg) 100%)",
     boxShadow: "0 20px 40px rgba(0,0,0,0.28)",
     backdropFilter: "blur(10px)",
   }),
@@ -2274,7 +2274,7 @@ const styles: Record<string, any> = {
     gap: 10,
     alignItems: "center",
     background: "transparent",
-    color: "#e5e7eb",
+    color: "var(--eg-slate-text)",
     border: "none",
     fontWeight: 600,
     fontSize: 14,
@@ -2283,7 +2283,7 @@ const styles: Record<string, any> = {
 
   portalDivider: {
     height: 1,
-    background: "#1f2937",
+    background: "var(--eg-slate-line)",
   },
 
   portalDangerItem: {

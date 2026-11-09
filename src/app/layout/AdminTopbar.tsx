@@ -2,6 +2,8 @@ import Breadcrumb from "../../ui/Breadcrumb";
 import Icon from "../../ui/icons";
 import AdminUserBar from "./AdminUserBar";
 import ChatTopbarButton from "../../components/chat/ChatTopbarButton";
+import InstallButton from "./InstallButton";
+import ThemeMenu from "./ThemeMenu";
 
 export type Crumb = {
   label: string;
@@ -43,7 +45,11 @@ export default function AdminTopbar({ crumbs, userName, userRole, onOpenMenu }: 
       <Breadcrumb items={crumbs} />
 
       <div className="eg-topbar__right">
+        <InstallButton />
+
         {userName && <AdminUserBar userName={userName} userRole={userRole} />}
+
+        <ThemeMenu />
 
         {/* Se dibuja solo si hay <ChatProvider> arriba. Eso cubre dos casos:
             la vitrina de UI (monta esta misma topbar fuera del panel) y el GM

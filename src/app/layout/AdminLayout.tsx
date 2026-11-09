@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabase";
 import AdminShell from "./AdminShell";
+import GmAppShell from "./GmAppShell";
+import { isStandalone } from "../../lib/pwa";
 import type { NavItem } from "./AdminSidebar";
 import type { Crumb } from "./AdminTopbar";
 import ChatProvider from "../../components/chat/ChatProvider";
@@ -68,7 +70,6 @@ const pageMeta: Record<string, { key: string; crumbs: Crumb[] }> = {
   "/admin/intranet/respond-io": { key: "intranet-respond-io", crumbs: [{ label: "Intranet" }, { label: "Instructivo Respond IO" }] },
   "/admin/calendario": { key: "calendar", crumbs: [{ label: "Calendario" }] },
   "/admin/recontactos": { key: "recontactos", crumbs: [{ label: "Recontactos" }, { label: "Cumpleaños" }] },
-  "/reservas": { key: "reservations", crumbs: [{ label: "Reservas del día" }] },
   "/chat": { key: "chat", crumbs: [{ label: "Chat interno" }, { label: "Conversaciones" }] },
   "/ajustes": { key: "settings", crumbs: [{ label: "Ajustes" }, { label: "Habilitación de secciones" }] },
 };
@@ -291,9 +292,6 @@ export default function AdminLayout() {
     const habilitada = (key: Parameters<typeof canAccessSection>[0]) =>
       canAccessSection(key, role, sectionPermissions);
 
-    if (habilitada("reservations")) {
-      nav.push({ key: "reservations", label: "Reservas del día", to: "/reservas", icon: "qr" });
-    }
     if ((role === "GM" || effective.canManageRooms || effective.canEditRankings) && habilitada("rooms")) {
       nav.push({ key: "rooms", label: "Salas", to: "/salas", icon: "rooms" });
     }
@@ -444,6 +442,20 @@ export default function AdminLayout() {
    * tiene nada que ver con este globo.
    */
   const chatHabilitado = canAccessSection("chat", role, sectionPermissions);
+
+  /**
+   * App instalada del GM: una sola pantalla con las reservas de su sucursal,
+   * día por día (GmAppShell). Desde el navegador sigue el panel normal.
+   */
+  // Solo en desarrollo: `?gmapp` simula esa pantalla para probarla sin instalar.
+  const previewGmApp = import.meta.env.DEV && new URLSearchParams(location.search).has("gmapp");
+  if ((role === "GM" && isStandalone()) || previewGmApp) {
+    return (
+      <SectionPermissionsContext.Provider value={sectionStore}>
+        <GmAppShell userName={userName} onLogout={logout} />
+      </SectionPermissionsContext.Provider>
+    );
+  }
 
   const panel = (
     <>

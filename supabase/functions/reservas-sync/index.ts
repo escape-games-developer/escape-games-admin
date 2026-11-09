@@ -55,6 +55,16 @@ const fecha = (value: unknown): string | null => {
   return null;
 };
 
+/** Igual que public.eg_reserva_marca: "EG Núñez" → "nunez". */
+const marcaKey = (marca: string | null): string =>
+  (marca ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/^\s*eg\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
 function toRecord(row: Row) {
   const get = (key: string) => row[key];
   const referencia = text(get("REFERENCIA"));
@@ -100,12 +110,15 @@ Deno.serve(async (req) => {
   if (!rows.length) return json({ ok: true, recibidas: 0, guardadas: 0 });
   if (rows.length > MAX_ROWS) return json({ ok: false, error: "maximo_" + MAX_ROWS + "_filas_por_envio" }, 413);
 
-  // Una referencia repetida en el mismo envío: gana la última (la hoja agrega abajo).
-  const byRef = new Map<string, NonNullable<ReturnType<typeof toRecord>>>();
+  // La clave es sucursal + referencia: cada sucursal tiene su propio WooCommerce
+  // y dos pueden llegar al mismo "WC-4702". La tabla la calcula sola
+  // (reserva_id); acá se usa la misma regla para no mandar dos veces la misma
+  // reserva en un envío (gana la última: la hoja agrega abajo).
+  const byKey = new Map<string, NonNullable<ReturnType<typeof toRecord>>>();
   let descartadas = 0;
   for (const row of rows) {
     const rec = toRecord(row);
-    if (rec) byRef.set(rec.referencia, rec);
+    if (rec) byKey.set(marcaKey(rec.marca) + "|" + rec.referencia, rec);
     else descartadas++;
   }
 
@@ -113,8 +126,8 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const records = [...byRef.values()];
-  const { error } = await db.from("web_reservations").upsert(records, { onConflict: "referencia" });
+  const records = [...byKey.values()];
+  const { error } = await db.from("web_reservations").upsert(records, { onConflict: "reserva_id" });
   if (error) return json({ ok: false, error: error.message }, 500);
 
   return json({ ok: true, recibidas: rows.length, guardadas: records.length, descartadas });

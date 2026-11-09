@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, Card, PageHeader, Toggle } from "../ui";
 import { ToastStack, useToasts } from "../components/Toast";
+import { fetchAppConfig, setRatingUploadEnabled } from "../lib/appConfig";
 import {
   SECTION_DEFS,
   fetchSectionPermissions,
@@ -41,6 +42,35 @@ export default function SettingsPage() {
   const [branchWorking, setBranchWorking] = useState<string | null>(null);
   const [googleWorking, setGoogleWorking] = useState(false);
   const isSuper = localStorage.getItem("eg_admin_is_super") === "true";
+  /** Botón "Subir captura" de Golden Ticket en la app cliente (app_config.rating_upload_enabled). Antes estaba en Clientes. */
+  const [ratingUpload, setRatingUpload] = useState<boolean | null>(null);
+  const [ratingSaving, setRatingSaving] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchAppConfig()
+      .then((cfg) => { if (mounted) setRatingUpload(cfg.ratingUploadEnabled); })
+      .catch((error: unknown) => {
+        if (!mounted) return;
+        setRatingUpload(false);
+        toast("error", error instanceof Error ? error.message : "No se pudo leer la configuración de Golden Ticket");
+      });
+    return () => { mounted = false; };
+  }, [toast]);
+
+  const cambiarCapturas = async (enabled: boolean) => {
+    if (ratingSaving || ratingUpload === null) return;
+    setRatingSaving(true);
+    try {
+      const applied = await setRatingUploadEnabled(enabled);
+      setRatingUpload(applied);
+      toast("success", applied ? "Subida de capturas activada" : "Subida de capturas desactivada");
+    } catch (error: unknown) {
+      toast("error", error instanceof Error ? error.message : "No pude cambiar la configuración.");
+    } finally {
+      setRatingSaving(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -223,6 +253,24 @@ export default function SettingsPage() {
             })()}
           </div>
         )}
+      </Card>
+
+      <Card padding="lg" className="eg-settings__card">
+        <div className="eg-settings__heading">
+          <h2>Golden Ticket</h2>
+          <p>Configuración de la app de clientes.</p>
+        </div>
+        <div className="eg-settings__list">
+          <div className="eg-settings__row">
+            <Toggle
+              label="Capturas de Golden Ticket"
+              description={ratingUpload === null ? "Cargando…" : "Botón “Subir captura” para todos los clientes."}
+              checked={ratingUpload === true}
+              disabled={ratingUpload === null || ratingSaving}
+              onChange={(event) => void cambiarCapturas(event.target.checked)}
+            />
+          </div>
+        </div>
       </Card>
 
       {isSuper && <Card padding="lg" className="eg-settings__card">

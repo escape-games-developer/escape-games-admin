@@ -628,7 +628,7 @@ const FORM_SECTIONS: { key: SectionKey; title: string; hint: string }[] = [
 const formLabelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 700,
-  color: "#cbd5e1",
+  color: "var(--eg-slate-text-2)",
 };
 
 const formFieldStyle: React.CSSProperties = {
@@ -639,9 +639,9 @@ const formFieldStyle: React.CSSProperties = {
 };
 
 const formPanelStyle: React.CSSProperties = {
-  border: "1px solid rgba(255,255,255,.08)",
+  border: "1px solid rgba(var(--eg-ink-rgb),.08)",
   borderRadius: 18,
-  background: "rgba(255,255,255,.03)",
+  background: "rgba(var(--eg-ink-rgb),.03)",
   padding: 16,
   minWidth: 0,
 };
@@ -673,9 +673,9 @@ function FormSection({
   return (
     <section className={stepMode ? "eg-room-step-panel" : undefined}
       style={{
-        border: "1px solid rgba(255,255,255,.08)",
+        border: "1px solid rgba(var(--eg-ink-rgb),.08)",
         borderRadius: 8,
-        background: "rgba(255,255,255,.02)",
+        background: "rgba(var(--eg-ink-rgb),.02)",
         overflow: "hidden",
       }}
     >
@@ -696,10 +696,10 @@ function FormSection({
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
-          background: "rgba(255,255,255,.04)",
+          background: "rgba(var(--eg-ink-rgb),.04)",
           border: "none",
-          borderBottom: `1px solid ${open ? "rgba(255,255,255,.08)" : "transparent"}`,
-          color: "#e2e8f0",
+          borderBottom: `1px solid ${open ? "rgba(var(--eg-ink-rgb),.08)" : "transparent"}`,
+          color: "var(--eg-slate-text)",
           font: "inherit",
           textAlign: "left",
           cursor: "pointer",
@@ -707,7 +707,7 @@ function FormSection({
       >
         <span style={{ minWidth: 0 }}>
           <span style={{ display: "block", fontSize: 15, fontWeight: 800 }}>{title}</span>
-          <span style={{ display: "block", marginTop: 2, fontSize: 12, color: "#94a3b8" }}>
+          <span style={{ display: "block", marginTop: 2, fontSize: 12, color: "var(--eg-slate-muted)" }}>
             {hint}
           </span>
         </span>
@@ -717,7 +717,7 @@ function FormSection({
           style={{
             display: "inline-flex",
             flex: "0 0 auto",
-            color: "#94a3b8",
+            color: "var(--eg-slate-muted)",
             transform: open ? "rotate(180deg)" : "rotate(0deg)",
             transition: "transform .2s ease",
           }}
@@ -1074,13 +1074,13 @@ const canEditRankings =
         ? "rgba(0,255,242,0.12)"
         : kind === "off"
         ? "rgba(255,0,0,0.16)"
-        : "rgba(255,255,255,0.10)";
+        : "rgba(var(--eg-ink-rgb),0.10)";
     const br =
       kind === "on"
         ? "1px solid rgba(0,255,242,0.28)"
         : kind === "off"
         ? "1px solid rgba(255,0,0,0.22)"
-        : "1px solid rgba(255,255,255,0.10)";
+        : "1px solid rgba(var(--eg-ink-rgb),0.10)";
 
     return (
       <span
@@ -1094,7 +1094,7 @@ const canEditRankings =
           border: br,
           fontSize: 11,
           fontWeight: 900,
-          color: "#fff",
+          color: "var(--eg-heading)",
           lineHeight: 1,
           whiteSpace: "nowrap",
         }}
@@ -1110,8 +1110,8 @@ const canEditRankings =
   width: 270,
   borderRadius: 16,
   overflow: "hidden",
-  border: "1px solid #1f2937",
-  background: "linear-gradient(180deg, #111827 0%, #0b1220 100%)",
+  border: "1px solid var(--eg-slate-line)",
+  background: "linear-gradient(180deg, var(--eg-slate-bg-2) 0%, var(--eg-slate-bg) 100%)",
   boxShadow: "0 20px 40px rgba(0,0,0,0.28)",
 };
 
@@ -1124,7 +1124,7 @@ const portalItemStyle: React.CSSProperties = {
   gap: 10,
   alignItems: "center",
   background: "transparent",
-  color: "#e5e7eb",
+  color: "var(--eg-slate-text)",
   border: "none",
   fontWeight: 400,
   fontSize: 14,
@@ -1134,7 +1134,7 @@ const portalItemStyle: React.CSSProperties = {
 
 const portalDividerStyle: React.CSSProperties = {
   height: 1,
-  background: "#1f2937",
+  background: "var(--eg-slate-line)",
 };
 
 const portalDangerItemStyle: React.CSSProperties = {
@@ -1143,7 +1143,7 @@ const portalDangerItemStyle: React.CSSProperties = {
 };
 
 const menuItemHoverOn = (el: HTMLButtonElement) => {
-  el.style.background = "rgba(255,255,255,0.05)";
+  el.style.background = "rgba(var(--eg-ink-rgb),0.05)";
 };
 
 const menuItemHoverOff = (el: HTMLButtonElement) => {
@@ -2275,7 +2275,7 @@ const scrollerStyle: React.CSSProperties = {
   overflowY: "auto",
   overflowX: "hidden",
   borderRadius: 16,
-  border: "1px solid rgba(255,255,255,0.12)",
+  border: "1px solid rgba(var(--eg-ink-rgb),0.12)",
   background: "transparent",
 };
 
@@ -2292,19 +2292,19 @@ const thStyle: React.CSSProperties = {
   position: "sticky" as any,
   top: 0,
   zIndex: 5,
-  background: "rgba(10,10,10,0.92)",
+  background: "rgba(var(--eg-panel-rgb),0.92)",
   backdropFilter: "blur(6px)",
-  borderBottom: "1px solid rgba(255,255,255,0.12)",
+  borderBottom: "1px solid rgba(var(--eg-ink-rgb),0.12)",
   padding: "12px 10px",
   fontSize: 13,
   fontWeight: 900,
   textAlign: "left" as any,
   letterSpacing: 0.3,
-  color: "rgba(255,255,255,0.92)",
+  color: "rgba(var(--eg-ink-rgb),0.92)",
 };
 
 const tdBase: React.CSSProperties = {
-  borderBottom: "1px solid rgba(255,255,255,0.08)",
+  borderBottom: "1px solid rgba(var(--eg-ink-rgb),0.08)",
   padding: "10px 10px",
   verticalAlign: "middle",
 };
@@ -2315,11 +2315,11 @@ const GOLDEN_ROW_BG = "rgba(255,190,60,0.06)";
 const GOLDEN_ROW_BG_HOVER = "rgba(255,190,60,0.12)";
 
 const statCardStyle: React.CSSProperties = {
-  border: "1px solid #1f2937",
+  border: "1px solid var(--eg-slate-line)",
   borderRadius: 18,
-  background: "#0b1220",
+  background: "var(--eg-slate-bg)",
   padding: 18,
-  color: "#cbd5e1",
+  color: "var(--eg-slate-text-2)",
   minHeight: 92,
   display: "flex",
   flexDirection: "column",
@@ -2558,12 +2558,12 @@ return (
               fontSize: 28,
               lineHeight: 1.1,
               fontWeight: 900,
-              color: "#fff",
+              color: "var(--eg-heading)",
             }}
           >
             Salas
           </h1>
-          <p style={{ margin: "6px 0 0", color: "rgba(255,255,255,0.65)", fontSize: 13 }}></p>
+          <p style={{ margin: "6px 0 0", color: "rgba(var(--eg-ink-rgb),0.65)", fontSize: 13 }}></p>
         </div>
 
         <div>
@@ -2635,8 +2635,8 @@ return (
             key={String(label)}
             style={statCardStyle}
           >
-            <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 700 }}>{label}</span>
-            <strong style={{ fontSize: 22, fontWeight: 800, color: "#fff", lineHeight: 1 }}>
+            <span style={{ fontSize: 13, color: "var(--eg-slate-muted)", fontWeight: 700 }}>{label}</span>
+            <strong style={{ fontSize: 22, fontWeight: 800, color: "var(--eg-heading)", lineHeight: 1 }}>
               {String(value)}
             </strong>
           </div>
@@ -2650,8 +2650,8 @@ return (
           minHeight: 0,
           overflow: "hidden",
           borderRadius: 18,
-          background: "#0b1220",
-          border: "1px solid rgba(255,255,255,0.08)",
+          background: "var(--eg-slate-bg)",
+          border: "1px solid rgba(var(--eg-ink-rgb),0.08)",
         }}
       >
   <div style={scrollerStyle}>
@@ -2695,7 +2695,7 @@ return (
                         borderRadius: 10,
                         overflow: "hidden",
                         border: "1px solid rgba(255,190,60,.35)",
-                        background: "rgba(0,0,0,.35)",
+                        background: "rgba(var(--eg-well-rgb),.35)",
                       }}
                     >
                       {goldenImgFailed ? (
@@ -2736,7 +2736,7 @@ return (
                       style={{
                         fontWeight: 900,
                         fontSize: 13,
-                        color: "rgba(255,255,255,.92)",
+                        color: "rgba(var(--eg-ink-rgb),.92)",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -2744,7 +2744,7 @@ return (
                     >
                       Golden Ticket
                     </div>
-                    <div style={{ marginTop: 4, fontSize: 11.5, color: "#94a3b8" }}>
+                    <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--eg-slate-muted)" }}>
                       {goldenGranted == null
                         ? `— / ${GOLDEN_TICKET_LIMIT} otorgados`
                         : `${goldenGranted} / ${GOLDEN_TICKET_LIMIT} otorgados`}
@@ -2771,7 +2771,7 @@ return (
                       style={{
                         padding: "8px 10px",
                         borderRadius: 12,
-                        background: "rgba(0,0,0,0.55)",
+                        background: "rgba(var(--eg-well-rgb),0.55)",
                         border: "1px solid rgba(255,190,60,0.35)",
                         display: "inline-flex",
                         alignItems: "center",
@@ -2800,7 +2800,7 @@ return (
                 </tr>
               ) : (
                 filtered.map((r, idx) => {
-                  const rowBg = idx % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.00)";
+                  const rowBg = idx % 2 === 0 ? "rgba(var(--eg-ink-rgb),0.02)" : "rgba(var(--eg-ink-rgb),0.00)";
                   const branchName = r.branch || (r.branch_id ? branchesById.get(r.branch_id) || "" : "");
 
                   return (
@@ -2808,7 +2808,7 @@ return (
                       key={r.id}
                       style={{ background: rowBg }}
                       onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLTableRowElement).style.background = "rgba(255,255,255,0.04)";
+                        (e.currentTarget as HTMLTableRowElement).style.background = "rgba(var(--eg-ink-rgb),0.04)";
                       }}
                       onMouseLeave={(e) => {
                         (e.currentTarget as HTMLTableRowElement).style.background = rowBg;
@@ -2821,8 +2821,8 @@ return (
                             height: 38,
                             borderRadius: 10,
                             overflow: "hidden",
-                            border: "1px solid rgba(255,255,255,.12)",
-                            background: "rgba(0,0,0,.35)",
+                            border: "1px solid rgba(var(--eg-ink-rgb),.12)",
+                            background: "rgba(var(--eg-well-rgb),.35)",
                           }}
                         >
                           <img
@@ -2846,7 +2846,7 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                           style={{
                             fontWeight: 900,
                             fontSize: 13,
-                            color: "rgba(255,255,255,.92)",
+                            color: "rgba(var(--eg-ink-rgb),.92)",
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
@@ -2862,8 +2862,8 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                                 style={{
                                   padding: "4px 8px",
                                   borderRadius: 999,
-                                  border: "1px solid rgba(255,255,255,.12)",
-                                  background: "rgba(255,255,255,.06)",
+                                  border: "1px solid rgba(var(--eg-ink-rgb),.12)",
+                                  background: "rgba(var(--eg-ink-rgb),.06)",
                                   fontSize: 11,
                                   opacity: 0.92,
                                 }}
@@ -2925,8 +2925,8 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                           style={{
                             padding: "8px 10px",
                             borderRadius: 12,
-                            background: "rgba(0,0,0,0.55)",
-                            border: "1px solid rgba(255,255,255,0.14)",
+                            background: "rgba(var(--eg-well-rgb),0.55)",
+                            border: "1px solid rgba(var(--eg-ink-rgb),0.14)",
                             display: "inline-flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -3225,8 +3225,8 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
           maxHeight: "88vh",
           overflow: "hidden",
           borderRadius: 22,
-          border: "1px solid rgba(255,255,255,0.10)",
-          background: "#0b1220",
+          border: "1px solid rgba(var(--eg-ink-rgb),0.10)",
+          background: "var(--eg-slate-bg)",
           boxShadow: "0 18px 50px rgba(0,0,0,.45)",
           display: "flex",
           flexDirection: "column",
@@ -3235,7 +3235,7 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
         <div className="eg-room-form__header"
           style={{
             padding: "18px 22px",
-            borderBottom: "1px solid rgba(255,255,255,.08)",
+            borderBottom: "1px solid rgba(var(--eg-ink-rgb),.08)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -3251,12 +3251,12 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                 margin: 0,
                 fontSize: 22,
                 fontWeight: 900,
-                color: "#fff",
+                color: "var(--eg-heading)",
               }}
             >
               {isEditingRoom ? "Editar sala" : "Nueva sala"}
             </h2>
-            <div style={{ marginTop: 4, fontSize: 13, color: "#94a3b8" }}>
+            <div style={{ marginTop: 4, fontSize: 13, color: "var(--eg-slate-muted)" }}>
               {isEditingRoom
                 ? "Actualizá la información de la sala conservando su configuración."
                 : "Completá la información necesaria para publicar la sala."}
@@ -3413,7 +3413,7 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                 <label style={formFieldStyle}>
                   <span style={formLabelStyle}>
                     Dificultad{" "}
-                    <span style={{ color: "#94a3b8", fontWeight: 600 }}>
+                    <span style={{ color: "var(--eg-slate-muted)", fontWeight: 600 }}>
                       ({editing.difficulty ?? 5}/10)
                     </span>
                   </span>
@@ -3431,7 +3431,7 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
                 <label style={formFieldStyle}>
                   <span style={formLabelStyle}>
                     Factor sorpresa{" "}
-                    <span style={{ color: "#94a3b8", fontWeight: 600 }}>
+                    <span style={{ color: "var(--eg-slate-muted)", fontWeight: 600 }}>
                       ({editing.surprise ?? 5}/10)
                     </span>
                   </span>
@@ -3713,7 +3713,7 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
         <div className="eg-room-form__footer"
           style={{
             padding: "18px 22px",
-            borderTop: "1px solid rgba(255,255,255,.08)",
+            borderTop: "1px solid rgba(var(--eg-ink-rgb),.08)",
             display: "flex",
             justifyContent: "flex-end",
             gap: 10,
@@ -3800,7 +3800,7 @@ src={r.cardPhoto || r.bannerPhoto || "https://picsum.photos/seed/placeholder/900
               height: "min(58vh, 560px)",
               borderRadius: 14,
               overflow: "hidden",
-              border: "1px solid rgba(255,255,255,.12)",
+              border: "1px solid rgba(var(--eg-ink-rgb),.12)",
               background: "rgba(0,0,0,.25)",
               userSelect: "none",
             }}

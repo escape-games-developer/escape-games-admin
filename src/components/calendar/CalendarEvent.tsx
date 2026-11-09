@@ -1,7 +1,37 @@
-import { Button } from "../../ui";
-import { itemMeta, type CalendarItem } from "./calendarData";
-type Props = { item: CalendarItem; open: boolean; onToggle: () => void };
-export default function CalendarEvent({ item, open, onToggle }: Props) {
-  const meta = itemMeta[item.type];
-  return <div className="eg-calendar-event-wrap"><button type="button" className={`eg-calendar-event is-${item.type}`} onClick={(event) => { event.stopPropagation(); onToggle(); }} aria-expanded={open}><span className="eg-calendar-event__top"><span aria-hidden="true">{meta.emoji}</span><strong>{item.time}</strong></span><span className="eg-calendar-event__title">{item.title}</span><span className="eg-calendar-event__place">{item.location}</span></button>{open && <div className="eg-calendar-event-popover" role="dialog" aria-label={`Detalle de ${item.title}`} onClick={(event) => event.stopPropagation()}><span className="eg-calendar-event-popover__tag">{meta.emoji} {meta.label}</span><strong>{item.person ?? item.title}</strong><span>{item.time} · {item.location}</span>{item.guests && <span>{item.guests} invitados</span>}<div className="eg-calendar-event-popover__actions"><Button size="sm" variant="secondary" icon="eye">Ver detalle</Button><Button size="sm" variant="ghost" icon="edit">Editar</Button></div></div>}</div>;
+import { timeArgentina, type RangeReservation } from "../../lib/reservations";
+import { branchStyle, itemColor, validationState } from "./calendarData";
+import ReservationPopover from "./ReservationPopover";
+
+type Props = {
+  item: RangeReservation;
+  /** Rectángulo de la línea si su detalle está abierto. */
+  anchor: DOMRect | undefined;
+  onToggle: (rect: DOMRect) => void;
+};
+
+/**
+ * Reserva en la vista Mes: una sola línea con el color de su sucursal
+ * ("14:45 El Payaso de las Alcantarillas"). Al tocarla muestra el detalle.
+ */
+export default function CalendarEvent({ item, anchor, onToggle }: Props) {
+  const state = validationState(item);
+  const time = timeArgentina(item.visit_at);
+  const sala = item.sala ?? "Sin sala";
+  return (
+    <>
+      <button
+        type="button"
+        className={`eg-calendar-line is-${state}`}
+        style={branchStyle(itemColor(item))}
+        onClick={(event) => { event.stopPropagation(); onToggle(event.currentTarget.getBoundingClientRect()); }}
+        aria-expanded={Boolean(anchor)}
+        title={`${time} · ${sala}${item.branch_name ? ` · ${item.branch_name}` : ""}`}
+      >
+        <time>{time}</time>
+        <span>{sala}</span>
+        {state !== "pending" && <b aria-label={state === "done" ? "Validada" : "Validada en parte"}>✓</b>}
+      </button>
+      {anchor && <ReservationPopover item={item} anchor={anchor} />}
+    </>
+  );
 }

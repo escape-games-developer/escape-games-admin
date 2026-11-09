@@ -1,13 +1,20 @@
 :root{
   --bg:#0b0b0e;
   --txt:#f3f5ff;
-  --mut: rgba(255, 255, 255, 0.75);
-  --line: rgba(255, 255, 255, 0.895);
+  --mut: rgba(var(--eg-ink-rgb), 0.75);
+  --line: rgba(var(--eg-ink-rgb), 0.895);
 
   --accent:#ff6a00;
   --danger:#ff3c3c;
 
   --shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+
+/* Tema claro (src/lib/theme.ts): variables viejas que todavía usan algunas vistas. */
+:root[data-theme="light"]{
+  --bg:#f4f6fa;
+  --txt:#0f172a;
+  --shadow: 0 10px 30px rgba(15,23,42,.14);
 }
 
 *{ box-sizing:border-box; }
@@ -18,7 +25,7 @@ body,
   height:100%;
   min-height:100%;
   margin:0;
-  background-color:#0b111b;
+  background-color:var(--eg-bg);
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
 }
 
@@ -27,7 +34,7 @@ a{ color:inherit; text-decoration:none; }
 /* Fondo global sólido: evita el flash de la imagen durante el arranque. */
 body{
   color: var(--txt);
-  background-color:#0b111b;
+  background-color:var(--eg-bg);
 }
 
 /* =========================
@@ -35,7 +42,7 @@ body{
 ========================= */
 *{
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,.18) transparent;
+  scrollbar-color: rgba(var(--eg-ink-rgb),.18) transparent;
 }
 
 *::-webkit-scrollbar{
@@ -48,7 +55,7 @@ body{
 }
 
 *::-webkit-scrollbar-thumb{
-  background: rgba(255,255,255,.14);
+  background: rgba(var(--eg-ink-rgb),.14);
   border-radius: 999px;
 }
 
@@ -117,11 +124,11 @@ body.adminWide .main{
   width: 100%;
 }
 body.news-fullwidth {
-  background: #0f172a !important;
+  background: var(--eg-bg-wide) !important;
 }
 
 body.rooms-fullwidth {
-  background: #0f172a !important;
+  background: var(--eg-bg-wide) !important;
 }
 
 body.adminWide .content{
@@ -148,8 +155,8 @@ body.adminWide .page{
   width:44px;
   height:44px;
   border-radius:12px;
-  border:1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.05);
+  border:1px solid rgba(var(--eg-ink-rgb),.14);
+  background: rgba(var(--eg-ink-rgb),.05);
   color: var(--txt);
   cursor:pointer;
   display:flex;
@@ -188,8 +195,8 @@ body.adminWide .page{
   padding:10px 12px;
   border-radius:14px;
   cursor:pointer;
-  border:1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.05);
+  border:1px solid rgba(var(--eg-ink-rgb),.14);
+  background: rgba(var(--eg-ink-rgb),.05);
   color: var(--txt);
 }
 .ghostBtn:hover{ border-color: rgba(255,106,0,.30); }
@@ -210,8 +217,8 @@ body.adminWide .page{
 .roomCard,
 .authCard,
 .modalBox{
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.72);
+  border: 1px solid rgba(var(--eg-ink-rgb),.12);
+  background: rgba(var(--eg-panel-rgb),.72);
   backdrop-filter: blur(8px);
   border-radius:18px;
   box-shadow: var(--shadow);
@@ -247,8 +254,8 @@ body.adminWide .page{
   width:100%;
   padding:10px 12px;
   border-radius:12px;
-  border:1px solid rgba(255,255,255,.14);
-  background: rgba(0,0,0,.25);
+  border:1px solid rgba(var(--eg-ink-rgb),.14);
+  background: rgba(var(--eg-well-rgb),.25);
   color: var(--txt);
   outline:none;
 }
@@ -258,8 +265,8 @@ body.adminWide .page{
 }
 
 select.input option {
-  background-color: #1a1a1f !important;
-  color: #ffffff !important;
+  background-color: var(--eg-surface-2) !important;
+  color: var(--eg-text) !important;
 }
 select.input option:checked {
   background-color: rgba(36, 36, 39, 0.315) !important;
@@ -318,7 +325,7 @@ select.input option:checked {
   padding:6px 10px;
   border-radius:999px;
   background: rgba(0,0,0,.45);
-  border:1px solid rgba(255,255,255,.12);
+  border:1px solid rgba(var(--eg-ink-rgb),.12);
 }
 .roomBadge.off{
   left:10px;
@@ -368,8 +375,8 @@ select.input option:checked {
   width:10px;
   height:10px;
   border-radius:999px;
-  background: rgba(255,255,255,.12);
-  border:1px solid rgba(255,255,255,.12);
+  background: rgba(var(--eg-ink-rgb),.12);
+  border:1px solid rgba(var(--eg-ink-rgb),.12);
 }
 .dot.on{
   background: rgba(255,106,0,.85);
@@ -421,7 +428,7 @@ select.input option:checked {
   align-items:center;
   justify-content:space-between;
   padding: 0 12px;
-  border-bottom:1px solid rgba(255,255,255,.12);
+  border-bottom:1px solid rgba(var(--eg-ink-rgb),.12);
 }
 
 .modalTitle{ font-weight:900; }
@@ -434,13 +441,13 @@ select.input option:checked {
 
 .modalFoot{
   padding:12px;
-  border-top:1px solid rgba(255,255,255,.12);
+  border-top:1px solid rgba(var(--eg-ink-rgb),.12);
   display:flex;
   justify-content:flex-end;
   gap:10px;
   position: sticky;
   bottom: 0;
-  background: rgba(12,12,16,.92);
+  background: rgba(var(--eg-panel-rgb),.92);
   backdrop-filter: blur(8px);
 }
 
@@ -478,7 +485,7 @@ select.input option:checked {
   border-radius:999px;
   background: rgba(255,106,0,.14);
   border: 1px solid rgba(255,106,0,.35);
-  color: rgba(255,255,255,.92);
+  color: rgba(var(--eg-ink-rgb),.92);
 }
 
 .multiSelectCaret{
@@ -489,8 +496,8 @@ select.input option:checked {
 .multiSelectPanel{
   margin-top:8px;
   border-radius:14px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.88);
+  border:1px solid rgba(var(--eg-ink-rgb),.12);
+  background: rgba(var(--eg-panel-rgb),.88);
   backdrop-filter: blur(8px);
   box-shadow: var(--shadow);
   overflow:hidden;
@@ -502,7 +509,7 @@ select.input option:checked {
   justify-content:space-between;
   gap:10px;
   padding:10px;
-  border-bottom:1px solid rgba(255,255,255,.10);
+  border-bottom:1px solid rgba(var(--eg-ink-rgb),.10);
 }
 
 .multiSelectList{
@@ -520,8 +527,8 @@ select.input option:checked {
   align-items:center;
   padding:8px 10px;
   border-radius:12px;
-  border:1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
+  border:1px solid rgba(var(--eg-ink-rgb),.10);
+  background: rgba(var(--eg-ink-rgb),.04);
   cursor:pointer;
 }
 .multiSelectItem:hover{
@@ -538,8 +545,8 @@ select.input option:checked {
 .multiSelectHint{
   padding:10px;
   font-size:12px;
-  color: rgba(255,255,255,.72);
-  border-top:1px solid rgba(255,255,255,.10);
+  color: rgba(var(--eg-ink-rgb),.72);
+  border-top:1px solid rgba(var(--eg-ink-rgb),.10);
 }
 
 /* =========================
@@ -621,8 +628,8 @@ select.input option:checked {
 }
 
 .userCard{
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.72);
+  border: 1px solid rgba(var(--eg-ink-rgb),.12);
+  background: rgba(var(--eg-panel-rgb),.72);
   backdrop-filter: blur(8px);
   border-radius:18px;
   box-shadow: var(--shadow);
@@ -640,8 +647,8 @@ select.input option:checked {
   gap: 12px;
   padding: 12px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(var(--eg-ink-rgb),.10);
+  background: rgba(var(--eg-ink-rgb),.04);
 }
 .userRow.off{
   opacity: .62;
@@ -692,8 +699,8 @@ select.input option:checked {
   font-size:12px;
   padding:6px 10px;
   border-radius:999px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(0,0,0,.45);
+  border:1px solid rgba(var(--eg-ink-rgb),.12);
+  background: rgba(var(--eg-well-rgb),.45);
 }
 .userPill.off,
 .userBadge.off{
@@ -710,8 +717,8 @@ select.input option:checked {
   background: rgba(120, 200, 255, 0.16);
 }
 .role-CLIENT{
-  border-color: rgba(255,255,255,.18);
-  background: rgba(255,255,255,.06);
+  border-color: rgba(var(--eg-ink-rgb),.18);
+  background: rgba(var(--eg-ink-rgb),.06);
 }
 
 .userFields{
@@ -766,7 +773,7 @@ select.input option:checked {
 .userFoot{
   margin-top: 2px;
   padding: 12px;
-  border-top: 1px solid rgba(255,255,255,.10);
+  border-top: 1px solid rgba(var(--eg-ink-rgb),.10);
   display:flex;
   align-items:center;
   justify-content:space-between;
@@ -814,8 +821,8 @@ select.input option:checked {
   width: 44px;
   height: 44px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(var(--eg-ink-rgb),.14);
+  background: rgba(var(--eg-ink-rgb),.05);
   color: var(--txt);
   cursor: pointer;
   font-size: 20px;
@@ -838,8 +845,8 @@ select.input option:checked {
   min-width: 220px;
   z-index: 9999;
   border-radius:14px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.94);
+  border:1px solid rgba(var(--eg-ink-rgb),.12);
+  background: rgba(var(--eg-panel-rgb),.94);
   backdrop-filter: blur(10px);
   box-shadow: var(--shadow);
   overflow:hidden;
@@ -856,8 +863,8 @@ select.input option:checked {
   text-align: left;
   padding: 10px 10px;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(var(--eg-ink-rgb),.10);
+  background: rgba(var(--eg-ink-rgb),.04);
   color: var(--txt);
   cursor: pointer;
   font-weight: 700;
@@ -877,7 +884,7 @@ select.input option:checked {
 .kebabDivider{
   height: 1px;
   margin: 8px 0;
-  background: rgba(255,255,255,.10);
+  background: rgba(var(--eg-ink-rgb),.10);
 }
 
 .dotsItem,
@@ -892,7 +899,7 @@ select.input option:checked {
 }
 .dotsItem:hover,
 .sheetMenuItem:hover{
-  background: rgba(255,255,255,.06);
+  background: rgba(var(--eg-ink-rgb),.06);
 }
 .dotsItem.danger,
 .sheetMenuItem.danger{
@@ -918,8 +925,8 @@ select.input option:checked {
   gap:10px;
   padding:10px 12px;
   border-radius:14px;
-  border:1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
+  border:1px solid rgba(var(--eg-ink-rgb),.10);
+  background: rgba(var(--eg-ink-rgb),.04);
 }
 .permItem input{
   accent-color: var(--accent);
@@ -963,7 +970,7 @@ select.input option:checked {
 .roomsScroll::-webkit-scrollbar-thumb,
 .usersScroll::-webkit-scrollbar-thumb,
 .usersGridScroll::-webkit-scrollbar-thumb{
-  background: rgba(255,255,255,.14);
+  background: rgba(var(--eg-ink-rgb),.14);
   border-radius: 999px;
 }
 
@@ -975,8 +982,8 @@ select.input option:checked {
 
 .usersSheet{
   min-width: 1120px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(12,12,16,.72);
+  border: 1px solid rgba(var(--eg-ink-rgb),.12);
+  background: rgba(var(--eg-panel-rgb),.72);
   backdrop-filter: blur(8px);
   border-radius: 18px;
   box-shadow: var(--shadow);
@@ -988,7 +995,7 @@ select.input option:checked {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: rgba(10,10,14,.85);
+  background: rgba(var(--eg-panel-rgb),.85);
   backdrop-filter: blur(10px);
 }
 
@@ -1003,7 +1010,7 @@ select.input option:checked {
     200px
     130px;
   align-items:center;
-  border-bottom: 1px solid rgba(255,255,255,.10);
+  border-bottom: 1px solid rgba(var(--eg-ink-rgb),.10);
   padding-right: 62px;
   position: relative;
 }
@@ -1013,13 +1020,13 @@ select.input option:checked {
 .usersCell{
   padding: 10px 10px;
   min-width: 0;
-  border-right: 1px solid rgba(255,255,255,.08);
+  border-right: 1px solid rgba(var(--eg-ink-rgb),.08);
 }
 .usersCell:last-child{ border-right: 0; }
 
 .usersHeader .usersCell{
   font-size: 12px;
-  color: rgba(255,255,255,.75);
+  color: rgba(var(--eg-ink-rgb),.75);
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: .3px;
@@ -1029,8 +1036,8 @@ select.input option:checked {
 .sheetSelect{
   width:100%;
   border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(var(--eg-ink-rgb),.14);
+  background: rgba(var(--eg-well-rgb),.18);
   color: var(--txt);
   padding: 10px 10px;
   outline: none;

@@ -11,7 +11,6 @@ import {
   Card,
   DataTable,
   EmptyState,
-  Icon as UiIcon,
   Input,
   Modal,
   PageHeader,
@@ -21,7 +20,6 @@ import {
   Toggle,
   type DataTableColumn,
 } from "../ui";
-import { fetchAppConfig, setRatingUploadEnabled } from "../lib/appConfig";
 import {
   describeGoldenTicketSource,
   fetchGoldenTicketInfo,
@@ -414,52 +412,6 @@ export default function Users({ scope }: { scope: UsersScope }) {
 
   const [busy, setBusy] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
-
-  /** Kill switch del FAB del clip en la app cliente (app_config.rating_upload_enabled). */
-  const [ratingUpload, setRatingUpload] = useState(true);
-  const [ratingLoading, setRatingLoading] = useState(true);
-  const [ratingSaving, setRatingSaving] = useState(false);
-
-  useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      try {
-        const cfg = await fetchAppConfig();
-        if (mounted) setRatingUpload(cfg.ratingUploadEnabled);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        if (mounted) setRatingLoading(false);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const toggleRatingUpload = async () => {
-    if (ratingSaving || ratingLoading) return;
-
-    const next = !ratingUpload;
-    setRatingSaving(true);
-
-    try {
-      const applied = await setRatingUploadEnabled(next);
-      setRatingUpload(applied);
-
-      toast(
-        "success",
-        applied ? "Subida de capturas activada" : "Subida de capturas desactivada"
-      );
-    } catch (err: any) {
-      console.error(err);
-      toast("error", err?.message || "No pude cambiar la configuración.");
-    } finally {
-      setRatingSaving(false);
-    }
-  };
 
   useEffect(() => {
     document.body.classList.add("users-fullwidth");
@@ -1032,6 +984,7 @@ export default function Users({ scope }: { scope: UsersScope }) {
     {
       key: "mail",
       header: "Mail",
+      align: "center",
       className: "eg-users-table__mail-col",
       render: (user) => <span className="eg-users-mail" title={user.email}>{user.email || "—"}</span>,
     },
@@ -1046,6 +999,7 @@ export default function Users({ scope }: { scope: UsersScope }) {
     {
       key: "role",
       header: "Rol",
+      align: "center",
       render: (user) => <Badge tone={user.role === "ADMIN_GENERAL" ? "accent" : user.role === "GM" ? "info" : "neutral"} small>{roleLabelOf(user.role)}</Badge>,
     },
     {
@@ -1092,39 +1046,32 @@ export default function Users({ scope }: { scope: UsersScope }) {
       <div className="eg-users-page__inner">
         <PageHeader
           title={isClients ? "Clientes" : "Usuarios de sistema"}
-          subtitle={isClients ? "Clientes de la app: datos, contraseña y Golden Ticket." : "Administradores y Game Masters: roles, sucursal y permisos del panel."}
           action={canManageUsers ? <Button variant="primary" icon="plus" onClick={startCreate} disabled={busy}>{isClients ? "Nuevo cliente" : "Nuevo usuario"}</Button> : undefined}
         />
 
-        {isClients && <Card padding="sm" className="eg-users-config">
-          <div className="eg-users-config__copy">
-            <UiIcon name="ticket" size={18} />
-            <span><strong>Capturas de Golden Ticket</strong><small>Botón “Subir captura” para todos los clientes</small></span>
-          </div>
-          <Toggle
-            label={ratingLoading ? "Cargando..." : ratingUpload ? "Activado" : "Desactivado"}
-            checked={ratingUpload}
-            onChange={toggleRatingUpload}
-            disabled={ratingLoading || ratingSaving}
-          />
-        </Card>}
-
-        <Card padding="sm" className="eg-users-filters">
-          <SearchInput value={q} onChange={(event) => setQ(event.target.value)} placeholder={isClients ? "Buscar por nombre, mail o alias..." : "Buscar por nombre o mail..."} aria-label={isClients ? "Buscar clientes" : "Buscar usuarios de sistema"} />
-          {!isClients && <>
-            <Select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as UserRole | "")} aria-label="Filtrar por rol">
-              <option value="">Todos los roles</option>
-              <option value="GM">Game Master</option>
-              <option value="ADMIN_GENERAL">Admin General</option>
-            </Select>
-            <Select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value as Branch | "")} aria-label="Filtrar por sucursal">
-              <option value="">Todas las sucursales</option>
-              {BRANCHES.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
-            </Select>
-          </>}
-        </Card>
-
-        <div className="eg-users-stats">
+        {/* Buscador (y en Usuarios de sistema, los filtros de rol y sucursal) y
+            tarjetas, todo en un mismo renglón. El interruptor "Capturas de
+            Golden Ticket" se movió a Ajustes. */}
+        <div className={`eg-users-top${isClients ? "" : " is-system"}`}>
+          <Card padding="sm" className="eg-users-top__search">
+            <SearchInput
+              value={q}
+              onChange={(event) => setQ(event.target.value)}
+              placeholder={isClients ? "Buscar por nombre, mail o alias..." : "Buscar nombre o mail..."}
+              aria-label={isClients ? "Buscar clientes" : "Buscar usuarios de sistema"}
+            />
+            {!isClients && <>
+              <Select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as UserRole | "")} aria-label="Filtrar por rol">
+                <option value="">Todos los roles</option>
+                <option value="GM">Game Master</option>
+                <option value="ADMIN_GENERAL">Admin General</option>
+              </Select>
+              <Select value={branchFilter} onChange={(event) => setBranchFilter(event.target.value as Branch | "")} aria-label="Filtrar por sucursal">
+                <option value="">Todas las sucursales</option>
+                {BRANCHES.map((branch) => <option key={branch} value={branch}>{branch}</option>)}
+              </Select>
+            </>}
+          </Card>
           {isClients ? <>
             <StatCard value={totals.totalUsers} label="Clientes visibles" loading={loading} />
             <StatCard value={totals.activeUsers} label="Clientes activos" tone="success" loading={loading} />

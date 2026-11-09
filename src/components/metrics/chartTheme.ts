@@ -8,9 +8,9 @@
  * cambia el naranja de la marca, los gráficos cambian con él y acá no se toca
  * nada.
  *
- * Se resuelve una sola vez por carga porque el panel tiene un único tema fijo
- * (oscuro). Si algún día hay switch claro/oscuro, esto pasa a ser un hook con
- * suscripción y los componentes no se enteran.
+ * Se resuelve una vez por tema (oscuro / claro, ver src/lib/theme.ts) y se
+ * guarda: al cambiar de tema, el próximo render de un gráfico toma los colores
+ * nuevos.
  */
 
 const FALLBACK: Record<string, string> = {
@@ -28,7 +28,7 @@ const FALLBACK: Record<string, string> = {
   "--eg-border-strong": "rgba(255, 255, 255, 0.12)",
 };
 
-let cache: ChartTheme | null = null;
+const cache = new Map<string, ChartTheme>();
 
 export type ChartTheme = {
   consultas: string;
@@ -51,9 +51,11 @@ function token(name: string): string {
 }
 
 export function getChartTheme(): ChartTheme {
-  if (cache) return cache;
+  const themeKey = typeof document === "undefined" ? "dark" : document.documentElement.dataset.theme ?? "dark";
+  const cached = cache.get(themeKey);
+  if (cached) return cached;
 
-  cache = {
+  const theme: ChartTheme = {
     consultas: token("--eg-accent"),
     ventas: token("--eg-info"),
     channel: {
@@ -75,7 +77,8 @@ export function getChartTheme(): ChartTheme {
     border: token("--eg-border-strong"),
   };
 
-  return cache;
+  cache.set(themeKey, theme);
+  return theme;
 }
 
 /** Color de un canal, con reserva para claves nuevas que traiga el dato real. */

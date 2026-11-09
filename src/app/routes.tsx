@@ -16,7 +16,6 @@ import CalendarPage from ".././pages/CalendarPage";
 import ChatPage from ".././pages/ChatPage";
 import SettingsPage from ".././pages/SettingsPage";
 import RecontactosPage from ".././pages/RecontactosPage";
-import ReservasPage from ".././pages/ReservasPage";
 import type { MetricsSection } from ".././pages/metrics/MetricsPage";
 import SectionGuard from ".././components/SectionGuard";
 
@@ -296,19 +295,6 @@ export default function AppRoutes() {
         <Route path="/admin/intranet/respond-io" element={<SectionGuard section="intranet_respond_io"><IntranetPage section="respond-io" /></SectionGuard>} />
         <Route path="/admin/calendario" element={<SectionGuard section="calendar"><CalendarPage /></SectionGuard>} />
         <Route path="/admin/recontactos" element={<SectionGuard section="recontactos"><RecontactosPage /></SectionGuard>} />
-
-        {/* Reservas del día: el GM valida la sala de cada jugador. La base
-            limita a cada GM a su sucursal (admin_reservations_for_day). */}
-        <Route
-          path="/reservas"
-          element={
-            <RequireRole allow={["ADMIN_GENERAL", "ADMIN", "GM"]}>
-              <SectionGuard section="reservations">
-                <ReservasPage />
-              </SectionGuard>
-            </RequireRole>
-          }
-        />
 
         {/* Chat interno. Etapa de UI: no toca datos, así que su único gate es
             la habilitación de sección. */}

@@ -786,9 +786,9 @@ if (target === "TEST") {
   const inputStyle: React.CSSProperties = {
     height: 40,
     borderRadius: 12,
-    border: "1px solid rgba(255,255,255,.12)",
-    background: "rgba(0,0,0,.25)",
-    color: "rgba(255,255,255,.92)",
+    border: "1px solid rgba(var(--eg-ink-rgb),.12)",
+    background: "rgba(var(--eg-well-rgb),.25)",
+    color: "rgba(var(--eg-ink-rgb),.92)",
     padding: "0 12px",
     outline: "none",
   };
@@ -807,8 +807,8 @@ if (target === "TEST") {
     flexDirection: "column",
     borderRadius: 16,
     overflow: "hidden",
-    border: "1px solid rgba(255,255,255,.12)",
-    background: "rgba(0,0,0,.22)",
+    border: "1px solid rgba(var(--eg-ink-rgb),.12)",
+    background: "rgba(var(--eg-well-rgb),.22)",
   };
 
   const excelScrollerStyle: React.CSSProperties = {
@@ -835,9 +835,9 @@ if (target === "TEST") {
     gridTemplateColumns: GRID_COLS,
     gap: 0,
     alignItems: "stretch",
-    background: "rgba(0,0,0,.75)",
+    background: "rgba(var(--eg-well-rgb),.75)",
     backdropFilter: "blur(6px)",
-    borderBottom: "1px solid rgba(255,255,255,.12)",
+    borderBottom: "1px solid rgba(var(--eg-ink-rgb),.12)",
   };
 
 const headerCellBase: React.CSSProperties = {
@@ -847,7 +847,7 @@ const headerCellBase: React.CSSProperties = {
   fontWeight: 900,
   opacity: 0.95,
   userSelect: "none",
-  borderRight: "1px solid rgba(255,255,255,.10)",
+  borderRight: "1px solid rgba(var(--eg-ink-rgb),.10)",
   whiteSpace: "nowrap",
   overflow: "hidden",
   textOverflow: "ellipsis",
@@ -862,8 +862,8 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
   const cellBase: React.CSSProperties = {
     padding: "10px 10px",
     fontSize: 12,
-    color: "rgba(255,255,255,.85)",
-    borderRight: "1px solid rgba(255,255,255,.08)",
+    color: "rgba(var(--eg-ink-rgb),.85)",
+    borderRight: "1px solid rgba(var(--eg-ink-rgb),.08)",
     minWidth: 0,
   };
 
@@ -872,7 +872,7 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
     gridTemplateColumns: GRID_COLS,
     gap: 0,
     alignItems: "stretch",
-    borderBottom: "1px solid rgba(255,255,255,.08)",
+    borderBottom: "1px solid rgba(var(--eg-ink-rgb),.08)",
   };
 
   const renderHeader = () => (
@@ -934,16 +934,16 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
               key={n.id}
               style={{
                 ...rowBase,
-                background: isEven ? "rgba(255,255,255,.02)" : "rgba(255,255,255,.00)",
+                background: isEven ? "rgba(var(--eg-ink-rgb),.02)" : "rgba(var(--eg-ink-rgb),.00)",
                 transition: "background .12s ease",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,.05)";
+                (e.currentTarget as HTMLDivElement).style.background = "rgba(var(--eg-ink-rgb),.05)";
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLDivElement).style.background = isEven
-                  ? "rgba(255,255,255,.02)"
-                  : "rgba(255,255,255,.00)";
+                  ? "rgba(var(--eg-ink-rgb),.02)"
+                  : "rgba(var(--eg-ink-rgb),.00)";
               }}
             >
               <div style={{ ...cellBase, opacity: 0.9, textAlign: "center" }}>{fmtDateOnly(d)}</div>
@@ -1078,8 +1078,8 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
                     width: 240,
                     borderRadius: 12,
                     overflow: "hidden",
-                    border: "1px solid rgba(255,255,255,.14)",
-                    background: "rgba(0,0,0,.94)",
+                    border: "1px solid rgba(var(--eg-ink-rgb),.14)",
+                    background: "rgba(var(--eg-well-rgb),.94)",
                     boxShadow: "0 12px 34px rgba(0,0,0,.45)",
                   }}
                   onMouseDown={(e) => e.stopPropagation()}
@@ -1141,7 +1141,7 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
                           Enviar
                         </button>
 
-                        <div style={{ height: 1, background: "rgba(255,255,255,.10)" }} />
+                        <div style={{ height: 1, background: "rgba(var(--eg-ink-rgb),.10)" }} />
 
                         <button
                           className="dangerBtnInline"
@@ -1203,8 +1203,8 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
                       marginBottom: 12,
                       borderRadius: 14,
                       overflow: "hidden",
-                      border: "1px solid rgba(255,255,255,.12)",
-                      background: "rgba(0,0,0,.25)",
+                      border: "1px solid rgba(var(--eg-ink-rgb),.12)",
+                      background: "rgba(var(--eg-well-rgb),.25)",
                     }}
                   >
                     <img
@@ -1385,7 +1385,7 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
       <FIcon name="list" size={16} />
     </button>
 
-    <div style={{ width: 1, height: 22, background: "rgba(255,255,255,.12)", marginInline: 4 }} />
+    <div style={{ width: 1, height: 22, background: "rgba(var(--eg-ink-rgb),.12)", marginInline: 4 }} />
 
     {/* Emoji */}
     <button
@@ -1467,8 +1467,8 @@ const headerClickable = (_key: SortKey): React.CSSProperties => ({
                           marginTop: 10,
                           borderRadius: 14,
                           overflow: "hidden",
-                          border: "1px solid rgba(255,255,255,.12)",
-                          background: "rgba(0,0,0,.25)",
+                          border: "1px solid rgba(var(--eg-ink-rgb),.12)",
+                          background: "rgba(var(--eg-well-rgb),.25)",
                         }}
                       >
                         <img

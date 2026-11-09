@@ -362,7 +362,7 @@ const styles: Record<string, any> = {
   subtitle: {
     margin: "0 0 14px 0",
     fontSize: 13.5,
-    color: "#94a3b8",
+    color: "var(--eg-slate-muted)",
     lineHeight: 1.5,
   },
 
@@ -392,7 +392,7 @@ const styles: Record<string, any> = {
     aspectRatio: "1.8 / 1",
     objectFit: "cover",
     borderRadius: 14,
-    border: "1px solid #1f2937",
+    border: "1px solid var(--eg-slate-line)",
     display: "block",
   },
 
@@ -402,8 +402,8 @@ const styles: Record<string, any> = {
     justifyContent: "center",
     textAlign: "center",
     padding: 16,
-    background: "#0b1220",
-    color: "#94a3b8",
+    background: "var(--eg-slate-bg)",
+    color: "var(--eg-slate-muted)",
     fontSize: 12.5,
     lineHeight: 1.5,
   },
@@ -425,11 +425,11 @@ const styles: Record<string, any> = {
   },
 
   qrPlaceholder: {
-    border: "1px solid #1f2937",
+    border: "1px solid var(--eg-slate-line)",
     borderRadius: 14,
-    background: "#0b1220",
+    background: "var(--eg-slate-bg)",
     padding: 18,
-    color: "#cbd5e1",
+    color: "var(--eg-slate-text-2)",
     fontSize: 13.5,
     maxWidth: 320,
   },
@@ -447,14 +447,14 @@ const styles: Record<string, any> = {
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    color: "#94a3b8",
+    color: "var(--eg-slate-muted)",
     fontWeight: 700,
   },
 
   secretValue: {
     fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
     fontSize: 13,
-    color: "#cbd5e1",
+    color: "var(--eg-slate-text-2)",
     wordBreak: "break-all",
     width: "100%",
   },
@@ -491,7 +491,7 @@ const styles: Record<string, any> = {
   note: {
     margin: "14px 0 0 0",
     fontSize: 13,
-    color: "#94a3b8",
+    color: "var(--eg-slate-muted)",
     lineHeight: 1.55,
   },
 };
