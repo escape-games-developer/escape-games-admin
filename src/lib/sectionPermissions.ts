@@ -28,6 +28,7 @@ export type SectionKey =
   | "metrics"
   | "calendar"
   | "recontactos"
+  | "reservations"
   | "chat";
 
 /**
@@ -107,6 +108,7 @@ export const SECTION_DEFS: readonly SectionDef[] = [
   { key: "intranet_respond_io", label: "Instructivo Respond IO", parent: "intranet", path: "/admin/intranet/respond-io" },
   { key: "calendar", label: "Calendario", path: "/admin/calendario" },
   { key: "recontactos", label: "Recontactos", path: "/admin/recontactos" },
+  { key: "reservations", label: "Reservas del día", path: "/reservas" },
   { key: "chat", label: "Chat interno", path: "/chat" },
 ];
 

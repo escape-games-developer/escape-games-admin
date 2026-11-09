@@ -73,6 +73,8 @@ type User = {
   permissions: UserPermissions;
   goldenActive: boolean;
   goldenSource: GoldenTicketSource;
+  /** profiles.email_verified_at (sincronizado desde auth.users.email_confirmed_at). */
+  emailVerifiedAt: string | null;
   _isStaff: boolean;
 };
 
@@ -188,6 +190,7 @@ function newUserTemplate(scope: UsersScope): User {
     permissions: defaultPermsForRole(role),
     goldenActive: false,
     goldenSource: null,
+    emailVerifiedAt: null,
     _isStaff: isStaffRole(role),
   };
 }
@@ -515,7 +518,7 @@ export default function Users({ scope }: { scope: UsersScope }) {
       const { data: profs, error: e1 } = await supabase
         .from("profiles")
         .select(
-          "id,nombre,apellido,alias,mail,role,is_active,created_at,photo_url,golden_ticket_active,golden_ticket_source"
+          "id,nombre,apellido,alias,mail,role,is_active,created_at,photo_url,golden_ticket_active,golden_ticket_source,email_verified_at"
         )
         .order("created_at", { ascending: false });
       if (e1) throw e1;
@@ -555,6 +558,7 @@ export default function Users({ scope }: { scope: UsersScope }) {
           permissions: { ...defaultPermsForRole(role), ...(a.permissions || {}) },
           goldenActive: p?.golden_ticket_active === true,
           goldenSource: normalizeGoldenTicketSource(p?.golden_ticket_source),
+          emailVerifiedAt: p?.email_verified_at ?? null,
           _isStaff: true,
         };
       });
@@ -574,6 +578,7 @@ export default function Users({ scope }: { scope: UsersScope }) {
           permissions: defaultPermsForRole("CLIENT"),
           goldenActive: p?.golden_ticket_active === true,
           goldenSource: normalizeGoldenTicketSource(p?.golden_ticket_source),
+          emailVerifiedAt: p?.email_verified_at ?? null,
           _isStaff: false,
         }));
 
@@ -1029,6 +1034,14 @@ export default function Users({ scope }: { scope: UsersScope }) {
       header: "Mail",
       className: "eg-users-table__mail-col",
       render: (user) => <span className="eg-users-mail" title={user.email}>{user.email || "—"}</span>,
+    },
+    {
+      key: "verified",
+      header: "Mail validado",
+      align: "center",
+      render: (user) => user.emailVerifiedAt
+        ? <span title={`Validado el ${new Date(user.emailVerifiedAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}`}><Badge tone="success" dot small>Sí</Badge></span>
+        : <span title="Todavía no confirmó el mail"><Badge tone="warning" dot small>No</Badge></span>,
     },
     {
       key: "role",

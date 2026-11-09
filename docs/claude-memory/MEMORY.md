@@ -1,0 +1,4 @@
+- [Perfil del usuario](user-perfil.md) — dev de Escape Games, español rioplatense, piensa por sucursal
+- [Supabase por Chrome](feedback-supabase-por-chrome.md) — cambios de producción vía dashboard, no por MCP apply_migration
+- [Escape Games: repos, Supabase y ORIGEN](reference-escape-games.md) — ids, rutas y cómo leer la planilla
+- [Validación de salas con reservas](project-reservas-validacion.md) — estado al 09/11/2026 y qué falta instalar

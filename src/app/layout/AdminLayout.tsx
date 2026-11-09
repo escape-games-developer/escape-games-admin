@@ -68,6 +68,7 @@ const pageMeta: Record<string, { key: string; crumbs: Crumb[] }> = {
   "/admin/intranet/respond-io": { key: "intranet-respond-io", crumbs: [{ label: "Intranet" }, { label: "Instructivo Respond IO" }] },
   "/admin/calendario": { key: "calendar", crumbs: [{ label: "Calendario" }] },
   "/admin/recontactos": { key: "recontactos", crumbs: [{ label: "Recontactos" }, { label: "Cumpleaños" }] },
+  "/reservas": { key: "reservations", crumbs: [{ label: "Reservas del día" }] },
   "/chat": { key: "chat", crumbs: [{ label: "Chat interno" }, { label: "Conversaciones" }] },
   "/ajustes": { key: "settings", crumbs: [{ label: "Ajustes" }, { label: "Habilitación de secciones" }] },
 };
@@ -290,6 +291,9 @@ export default function AdminLayout() {
     const habilitada = (key: Parameters<typeof canAccessSection>[0]) =>
       canAccessSection(key, role, sectionPermissions);
 
+    if (habilitada("reservations")) {
+      nav.push({ key: "reservations", label: "Reservas del día", to: "/reservas", icon: "qr" });
+    }
     if ((role === "GM" || effective.canManageRooms || effective.canEditRankings) && habilitada("rooms")) {
       nav.push({ key: "rooms", label: "Salas", to: "/salas", icon: "rooms" });
     }

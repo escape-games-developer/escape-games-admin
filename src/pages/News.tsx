@@ -1709,23 +1709,21 @@ export default function News() {
         {editing && <div className="eg-news-form">
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFileChange} />
 
-          <section className="eg-news-form__section">
-            <div className="eg-news-form__heading"><span>Información</span><small>Contenido y publicación</small></div>
-            <div className="eg-news-form__grid">
+          <div className="eg-news-form__grid">
               <Input id="news-title" label="Título" value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} placeholder="Título de la novedad" />
               <Select id="news-type" label="Tipo" value={editing.type} onChange={(event) => { const type = event.target.value as NewsType; setEditing({ ...editing, type, ctaMode: type === "PROMO" ? "CONSULTAR" : "VER_DETALLE" }); }}>
                 <option value="PROMO">Promo</option><option value="DESTACADO">Destacado</option><option value="EVENTO">Evento</option><option value="PROXIMAMENTE">Próximamente</option>
               </Select>
               <Input ref={publishedRef} id="news-date" label="Fecha" type="date" value={editing.publishedAt} onChange={(event) => setEditing({ ...editing, publishedAt: event.target.value })} onFocus={() => openDatePicker(publishedRef.current)} />
               <Input id="news-link" label="Link CTA" value={editing.ctaLink} onChange={(event) => setEditing({ ...editing, ctaLink: event.target.value })} placeholder="https://..." />
-              <div className={`eg-news-schedule${scheduleOn ? " is-on" : ""}`}>
+              <div
+                className={`eg-news-schedule${scheduleOn ? " is-on" : ""}`}
+                title={scheduleOn
+                  ? `Queda oculta y se publica sola${sendPushOnSave ? ", con push," : ""} en la fecha y hora elegidas.`
+                  : "Dejala armada y elegí cuándo se activa en la app."}
+              >
                 <div className="eg-news-schedule__head">
-                  <span className="eg-news-schedule__copy">
-                    <strong><UiIcon name="calendar" size={15} /> Programar publicación</strong>
-                    <small>{scheduleOn
-                      ? `Queda oculta y se publica sola${sendPushOnSave ? ", con push," : ""} en la fecha y hora elegidas.`
-                      : "Dejala armada y elegí cuándo se activa en la app."}</small>
-                  </span>
+                  <label className="eg-field__label" htmlFor="news-schedule"><UiIcon name="calendar" size={14} /> Programar publicación</label>
                   <Toggle
                     label={scheduleOn ? "Sí" : "No"}
                     checked={scheduleOn}
@@ -1736,18 +1734,19 @@ export default function News() {
                     }}
                   />
                 </div>
-                {scheduleOn && (
-                  <Input
-                    id="news-schedule"
-                    label="Fecha y hora de publicación"
-                    type="datetime-local"
-                    value={scheduleLocal}
-                    min={isoToLocalInput(new Date().toISOString())}
-                    onChange={(event) => setScheduleLocal(event.target.value)}
-                    onFocus={(event) => openDatePicker(event.currentTarget)}
-                  />
-                )}
+                <Input
+                  id="news-schedule"
+                  type="datetime-local"
+                  value={scheduleOn ? scheduleLocal : ""}
+                  disabled={!scheduleOn}
+                  min={isoToLocalInput(new Date().toISOString())}
+                  onChange={(event) => setScheduleLocal(event.target.value)}
+                  onFocus={(event) => openDatePicker(event.currentTarget)}
+                />
               </div>
+          </div>
+
+          <div className="eg-news-form__bottom">
               <div className="eg-news-editor">
                 <div className="eg-news-editor__label"><span className="eg-field__label">Descripción</span><span>{htmlToPlainText(editing.description || "").length} / 113</span></div>
                 <div className="eg-news-editor__toolbar">
@@ -1759,11 +1758,9 @@ export default function News() {
                 </div>
                 <textarea ref={descRef} className="eg-input eg-news-editor__textarea" rows={3} value={editing.description || ""} onChange={(event) => setEditing({ ...editing, description: event.target.value })} placeholder="Escribí el contenido..." />
               </div>
-            </div>
-          </section>
 
-          <section className="eg-news-form__section eg-news-form__section--image">
-            <div className="eg-news-form__heading"><span>Imagen</span><small>{NEWS_SIZE_LABEL}</small></div>
+          <div className="eg-news-image">
+            <div className="eg-news-editor__label"><span className="eg-field__label">Imagen</span><span>{NEWS_SIZE_LABEL}</span></div>
             <div
               className={`eg-news-image-field${(tempPreviewUrl || editing.image) ? " has-image" : ""}`}
               role="button"
@@ -1781,7 +1778,8 @@ export default function News() {
             </div>
             {aspectWarn && <p className="eg-news-image-warning">{aspectWarn}</p>}
             {TEMPLATE_URLS.news && <a className="eg-news-template" href={TEMPLATE_URLS.news} download target="_blank" rel="noreferrer">Descargar plantilla</a>}
-          </section>
+          </div>
+          </div>
         </div>}
       </Modal>
 
